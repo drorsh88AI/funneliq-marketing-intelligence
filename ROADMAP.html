@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FunnelIQ — מפת ביצוע</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f7f8fa; --surface:#ffffff; --border:#e2e5ea; --text:#1a1d23; --text-dim:#5b6270;
+    --brand:#2456c9; --brand-dim:#eaf0fd;
+    --positive:#1a7f4b; --positive-dim:#e8f6ee;
+    --negative:#b3341f; --negative-dim:#fbeae6;
+    --amber:#96650a; --amber-dim:#fbf1de;
+    --gray:#7b8291; --gray-dim:#eef0f3;
+    --radius:10px; --shadow:0 1px 2px rgba(20,22,30,.06), 0 1px 12px rgba(20,22,30,.04);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Rubik','Segoe UI',Tahoma,Arial,sans-serif;
+    line-height:1.55; font-size:15px;
+    max-width:100%; overflow-x:hidden;
+  }
+  .ltr{ direction:ltr; unicode-bidi:embed; display:inline-block; }
+  a{color:inherit;}
+
+  header.top{
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:20px clamp(16px,4vw,48px);
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;
+    position:sticky; top:0; z-index:20;
+  }
+  header.top h1{margin:0; font-size:20px; font-weight:700;}
+  header.top .sub{color:var(--text-dim); font-size:13px; margin-top:2px;}
+  .status-pill{
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--amber-dim); color:var(--amber); border:1px solid #eddcb0;
+    padding:6px 12px; border-radius:999px; font-size:13px; font-weight:600;
+  }
+
+  nav.tabs{
+    display:flex; gap:4px; padding:0 clamp(16px,4vw,48px);
+    background:var(--surface); border-bottom:1px solid var(--border);
+    position:sticky; top:73px; z-index:19; overflow-x:auto;
+  }
+  nav.tabs button{
+    appearance:none; border:none; background:none; cursor:pointer;
+    font-family:inherit; font-size:14px; font-weight:600; color:var(--text-dim);
+    padding:14px 18px; border-bottom:3px solid transparent; white-space:nowrap;
+  }
+  nav.tabs button.active{color:var(--brand); border-bottom-color:var(--brand);}
+  nav.tabs button:hover{color:var(--text);}
+
+  main{padding:28px clamp(16px,4vw,48px) 80px; max-width:980px; margin:0 auto;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  /* ---- progress ---- */
+  .progress-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:20px 22px; margin-bottom:22px;
+  }
+  .progress-top{display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; margin-bottom:10px;}
+  .progress-top .count{font-size:22px; font-weight:700;}
+  .progress-top .count .ltr{font-variant-numeric:tabular-nums;}
+  .progress-bar-track{
+    height:10px; background:var(--gray-dim); border-radius:999px; overflow:hidden;
+  }
+  .progress-bar-fill{height:100%; background:var(--brand); border-radius:999px; transition:width .3s ease; width:0%;}
+  .progress-legend{display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:12.5px; color:var(--text-dim);}
+  .legend-dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-inline-end:5px; vertical-align:middle;}
+
+  /* ---- approval box ---- */
+  .approval-box{
+    background:var(--brand-dim); border:1px solid #cddaf7; border-radius:var(--radius);
+    padding:16px 18px; margin-bottom:22px; font-size:13.5px; color:#173a8f;
+  }
+  .approval-box strong{display:block; margin-bottom:6px; font-size:14px;}
+
+  /* ---- traceability table ---- */
+  .trace-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:20px 22px; margin-bottom:22px;
+  }
+  .trace-card h2{margin:0 0 4px; font-size:16px;}
+  .trace-card .trace-sub{color:var(--text-dim); font-size:13px; margin-bottom:14px;}
+  .trace-scroll{overflow-x:auto;}
+  table.trace-table{width:100%; border-collapse:collapse; font-size:12.5px; min-width:640px;}
+  table.trace-table th, table.trace-table td{border:1px solid var(--border); padding:8px 10px; text-align:right; vertical-align:top;}
+  table.trace-table th{background:var(--gray-dim); font-weight:600; white-space:nowrap;}
+  .inline-code{
+    font-family:'Consolas','SFMono-Regular',monospace; font-size:11px; color:var(--text-dim);
+    background:var(--gray-dim); padding:1px 6px; border-radius:5px; direction:ltr; display:inline-block;
+  }
+
+  /* ---- filters ---- */
+  .filters{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px;}
+  .filters button{
+    appearance:none; cursor:pointer; font-family:inherit; font-size:13px; font-weight:600;
+    border:1px solid var(--border); background:var(--surface); color:var(--text-dim);
+    padding:7px 14px; border-radius:999px;
+  }
+  .filters button.active{background:var(--text); color:#fff; border-color:var(--text);}
+
+  /* ---- timeline ---- */
+  .timeline{list-style:none; margin:0; padding:0; position:relative;}
+  .timeline::before{
+    content:""; position:absolute; top:6px; bottom:6px; right:23px;
+    width:2px; background:var(--border);
+  }
+  .phase-card{
+    position:relative; padding-right:56px; margin-bottom:12px;
+  }
+  .phase-card[hidden]{display:none;}
+  .phase-num{
+    position:absolute; right:0; top:2px; width:46px; height:46px; border-radius:50%;
+    background:var(--gray-dim); color:var(--gray); border:2px solid var(--surface);
+    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px;
+    z-index:1;
+  }
+  .phase-card[data-status="done"] .phase-num{background:var(--positive-dim); color:var(--positive);}
+  .phase-card[data-status="in_progress"] .phase-num{background:var(--brand-dim); color:var(--brand);}
+  .phase-card[data-status="awaiting_approval"] .phase-num{background:var(--amber-dim); color:var(--amber);}
+
+  details.phase-body{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow);
+  }
+  details.phase-body summary{
+    list-style:none; cursor:pointer; padding:14px 16px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  }
+  details.phase-body summary::-webkit-details-marker{display:none;}
+  .phase-title{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .phase-title h3{margin:0; font-size:15.5px; font-weight:600;}
+  .phase-branch{
+    font-family:'Consolas','SFMono-Regular',monospace; font-size:11.5px; color:var(--text-dim);
+    background:var(--gray-dim); padding:2px 8px; border-radius:5px; direction:ltr; display:inline-block;
+  }
+  .chevron{color:var(--text-dim); font-size:12px; transition:transform .15s;}
+  details[open] .chevron{transform:rotate(180deg);}
+
+  .status-chip{
+    display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600;
+    padding:4px 10px; border-radius:999px; white-space:nowrap;
+  }
+  .status-chip.done{background:var(--positive-dim); color:var(--positive);}
+  .status-chip.in_progress{background:var(--brand-dim); color:var(--brand);}
+  .status-chip.awaiting_approval{background:var(--amber-dim); color:var(--amber);}
+  .status-chip.not_started{background:var(--gray-dim); color:var(--gray);}
+
+  .phase-deliverables{padding:0 16px 16px; border-top:1px solid var(--border); margin-top:0;}
+  .phase-deliverables ul{margin:12px 0 0; padding-inline-start:20px; font-size:13.5px; color:var(--text-dim);}
+  .phase-deliverables li{margin-bottom:5px;}
+  .phase-note{
+    margin-top:10px; font-size:12.5px; background:var(--amber-dim); color:var(--amber);
+    border:1px solid #eddcb0; border-radius:8px; padding:8px 10px;
+  }
+  .phase-accept{
+    margin-top:12px; padding-top:10px; border-top:1px dashed var(--border);
+    font-size:12.5px; color:var(--text-dim); display:flex; flex-direction:column; gap:4px;
+  }
+  .phase-accept b{color:var(--text); font-weight:600;}
+
+  /* ---- mockup tab ---- */
+  .mock-note{
+    background:var(--gray-dim); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; font-size:13.5px; color:var(--text-dim); margin-bottom:24px;
+  }
+  .mock-screen{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:22px; margin-bottom:26px;
+  }
+  .mock-screen h2{margin:0 0 4px; font-size:16px;}
+  .mock-screen .mock-caption{color:var(--text-dim); font-size:13px; margin-bottom:18px;}
+  .tag{
+    display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600;
+    padding:2px 8px; border-radius:999px; margin-inline-start:6px; vertical-align:middle;
+  }
+  .tag.demo{background:var(--gray-dim); color:var(--gray);}
+  .tag.spec{background:var(--amber-dim); color:var(--amber);}
+
+  /* login mock */
+  .login-card{max-width:320px; margin:0 auto; border:1px solid var(--border); border-radius:var(--radius); padding:22px;}
+  .login-card h3{margin:0 0 4px; text-align:center;}
+  .login-card .brandline{text-align:center; color:var(--text-dim); font-size:12.5px; margin-bottom:18px;}
+  .login-card label{display:block; font-size:12.5px; color:var(--text-dim); margin:12px 0 4px;}
+  .login-card input{
+    width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:7px;
+    font-family:inherit; font-size:13.5px; background:var(--bg);
+  }
+  .login-card button{
+    width:100%; margin-top:16px; padding:10px; border:none; border-radius:7px;
+    background:var(--brand); color:#fff; font-family:inherit; font-weight:700; font-size:14px; cursor:default;
+  }
+  .login-fine{margin-top:14px; font-size:11.5px; color:var(--text-dim); text-align:center;}
+
+  /* prediction cards */
+  .predict-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px;}
+  .predict-card{border:1px solid var(--border); border-radius:var(--radius); padding:16px;}
+  .predict-card h4{margin:0 0 2px; font-size:12.5px; color:var(--text-dim); font-weight:600;}
+  .predict-main{font-size:26px; font-weight:700; margin:6px 0 2px;}
+  .predict-sub{font-size:12.5px; color:var(--text-dim); margin-bottom:10px;}
+  .badge-row{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
+  .badge{
+    display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600;
+    padding:3px 8px; border-radius:6px; border:1px solid transparent;
+  }
+  .badge.evidence-high{background:var(--positive-dim); color:var(--positive);}
+  .badge.evidence-med{background:var(--amber-dim); color:var(--amber);}
+  .badge.calibrated{background:var(--brand-dim); color:var(--brand);}
+  .badge.disclaimer{background:var(--gray-dim); color:var(--gray);}
+  .predict-disclaimer{font-size:11.5px; color:var(--text-dim); margin-top:8px; border-top:1px dashed var(--border); padding-top:8px;}
+
+  /* funnel svg */
+  .funnel-wrap{overflow-x:auto;}
+  .funnel-caption{font-size:12.5px; color:var(--text-dim); margin-top:8px;}
+  table.fallback{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px;}
+  table.fallback th, table.fallback td{border:1px solid var(--border); padding:6px 8px; text-align:center;}
+  table.fallback caption{caption-side:top; text-align:right; font-size:11.5px; color:var(--text-dim); padding-bottom:4px;}
+
+  /* budget ranking */
+  .strategy-row{display:flex; align-items:center; gap:12px; margin-bottom:14px;}
+  .strategy-label{width:118px; flex-shrink:0; font-size:13px;}
+  .strategy-label b{display:block; font-size:13.5px;}
+  .strategy-label span{color:var(--text-dim); font-size:11.5px;}
+  .strategy-bar-wrap{flex:1; position:relative; height:26px; background:var(--gray-dim); border-radius:5px;}
+  .strategy-bar{position:absolute; top:0; right:0; height:100%; background:var(--brand); border-radius:5px;}
+  .strategy-whisker{position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--amber);}
+  .strategy-whisker::before,.strategy-whisker::after{content:"";position:absolute; right:-3px; width:8px; height:2px; background:var(--amber);}
+  .strategy-whisker::before{top:0;} .strategy-whisker::after{bottom:0;}
+  .strategy-meta{width:150px; flex-shrink:0; font-size:11.5px; color:var(--text-dim); text-align:left;}
+
+  /* OOD */
+  .alert-box{
+    display:flex; gap:12px; align-items:flex-start;
+    background:var(--amber-dim); border:1px solid #eddcb0; border-radius:var(--radius);
+    padding:16px 18px;
+  }
+  .alert-box .icon{font-size:20px; line-height:1;}
+  .alert-box strong{display:block; margin-bottom:4px; color:var(--amber);}
+  .alert-box p{margin:0; color:#6b4c08; font-size:13.5px;}
+
+  footer{text-align:center; color:var(--text-dim); font-size:12px; padding:20px 0 40px;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <h1>FunnelIQ — מפת ביצוע</h1>
+    <div class="sub">מסמך חי המתעדכן ידנית לפי התקדמות בפועל — אינו קוד האפליקציה</div>
+  </div>
+  <span class="status-pill" id="headline-status">✅ פאזה 0 הושלמה · ● פאזה 1 בביצוע — החלק המקומי הושלם, החלק החיצוני ממתין לאישור</span>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="roadmap">מפת שלבי הביצוע</button>
+  <button class="tab-btn" data-tab="mockup">דוגמת ממשק — איך זה ייראה</button>
+</nav>
+
+<main>
+
+  <!-- ===================== TAB 1: ROADMAP ===================== -->
+  <section class="panel active" id="panel-roadmap">
+
+    <div class="progress-card">
+      <div class="progress-top">
+        <div class="count"><span class="ltr" id="progress-count">0 / 15</span> פאזות הושלמו</div>
+        <div style="color:var(--text-dim); font-size:12.5px;">עודכן ידנית ב-29.08.2026</div>
+      </div>
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
+      <div class="progress-legend">
+        <span><span class="legend-dot" style="background:var(--positive)"></span>הושלם</span>
+        <span><span class="legend-dot" style="background:var(--brand)"></span>בביצוע</span>
+        <span><span class="legend-dot" style="background:var(--amber)"></span>ממתין לאישור</span>
+        <span><span class="legend-dot" style="background:var(--gray)"></span>טרם התחיל</span>
+      </div>
+    </div>
+
+    <div class="approval-box">
+      <strong>⚠ אישור כפול — לא אישור בודד</strong>
+      כל פאזה, שינוי מסמך או פעולה חיצונית דורשים אישור ראשוני ולאחריו אישור
+      סופי נוסף. השלמת פאזה אינה מאשרת אוטומטית את הפאזה הבאה. <b>גם התחלת
+      כל פאזה עצמה כפופה לכך.</b> לדוגמה: פאזה 0 בוצעה רק אחרי אישור ראשוני
+      ("פאזה 0 מאושרת להרצה") ואישור סופי מפורש בהודעה נפרדת ("כן, מאשר
+      סופית — תתחיל") — לא הודעה אחת. אותו נוהל חל על כל פאזה הבאה.
+      <br><br>
+      עדכון הסטטוס במסמך הזה הוא ידני — נעשה על-ידי עריכת מערך
+      <code class="ltr" style="direction:ltr">PHASES</code> בקוד המקור של הדף
+      (מקור האמת היחיד), לא אוטומטית מ-git או מה-CI. <b>פאזה לא תסומן
+      "הושלם" רק משום שקבצים נוצרו</b> — נדרש ששלושת שדות הקבלה שלה (תוצר /
+      בדיקת קבלה / ראיה) התקיימו בפועל.
+    </div>
+
+    <div class="trace-card">
+      <h2>עקיבות לשש חבילות העבודה (הבריף)</h2>
+      <div class="trace-sub">מיפוי בין כל חבילה בבריף לפאזת הביצוע האחראית ולסעיף היציב ב-SPEC.md (הפניה לפי כותרת, לא מספר שורה)</div>
+      <div class="trace-scroll">
+      <table class="trace-table">
+        <thead><tr><th>חבילה</th><th>תוכן עיקרי</th><th>פאזת ביצוע</th><th>הפניה ב-SPEC.md</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>1 — ניקוי + EDA</td>
+            <td>חסרים · כפילויות + רגישות · קורלציה מול <span class="inline-code">cumulative_profit</span> · עקומת <span class="inline-code">ad_budget→leads</span> · המרה לפי tiers</td>
+            <td>פאזה 5 (ניתוח) · פאזה 9 (מימוש <span class="inline-code">/api/insights/budget-tiers</span>)</td>
+            <td>§ שש החבילות — חבילה 1</td>
+          </tr>
+          <tr>
+            <td>2 — P2 LTV</td>
+            <td>XGBoost / LightGBM / CatBoost · 5-fold CV · RMSE, R² · השוואת feature importance</td>
+            <td>פאזה 6 (מודלים) · פאזה 9 (<span class="inline-code">/api/predict/ltv</span>)</td>
+            <td>§ שש החבילות — חבילה 2 · § חמש שאלות המייסד</td>
+          </tr>
+          <tr>
+            <td>3 — P3 Upsell</td>
+            <td>3 מסווגים · stratified CV · Accuracy/Precision/Recall/F1/ROC-AUC מול majority baseline <span class="ltr">53.65%</span> · השוואת משקולות · שני כללים עסקיים</td>
+            <td>פאזה 6 · פאזה 9 (<span class="inline-code">/api/predict/upsell</span>)</td>
+            <td>§ שש החבילות — חבילה 3</td>
+          </tr>
+          <tr>
+            <td>4 — P4 הפניה</td>
+            <td>CatBoost עם <span class="inline-code">budget_tier</span> קטגוריאלי · CV מקונן · כיול sigmoid נעול מראש · ציון נטייה 0–100 · פרופיל סופר-לקוח</td>
+            <td>פאזה 6 · פאזה 9 (<span class="inline-code">/api/predict/referral</span>)</td>
+            <td>§ שש החבילות — חבילה 4</td>
+          </tr>
+          <tr>
+            <td>5 — P5 Follow-up</td>
+            <td>נשירה לכל שלב · <span class="inline-code">calls_to_closed</span> · מסקנה תיאורית + המלצה לניסוי תפעולי</td>
+            <td>פאזה 5 (חישוב) · פאזה 9 (<span class="inline-code">/api/insights/followup</span>)</td>
+            <td>§ שש החבילות — חבילה 5 · § מסקנת P5</td>
+          </tr>
+          <tr>
+            <td>6 — P6 סימולטור</td>
+            <td>מודל <span class="inline-code">cumulative_profit</span> · 4 אסטרטגיות ₪50,000 · פרופילי תקציב מ-fold · Bootstrap וטווחי אי-ודאות</td>
+            <td>פאזה 6 (מודל + Bootstrap) · פאזה 9 (<span class="inline-code">/api/simulate/budget</span>)</td>
+            <td>§ שש החבילות — חבילה 6</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="filters" id="filters">
+      <button class="active" data-filter="all">הכל (15)</button>
+      <button data-filter="done">הושלם</button>
+      <button data-filter="in_progress">בביצוע</button>
+      <button data-filter="awaiting_approval">ממתין לאישור</button>
+      <button data-filter="not_started">טרם התחיל</button>
+    </div>
+
+    <ul class="timeline" id="timeline"></ul>
+
+  </section>
+
+  <!-- ===================== TAB 2: MOCKUP ===================== -->
+  <section class="panel" id="panel-mockup">
+
+    <div class="mock-note">
+      <strong style="display:block; margin-bottom:4px;">מוקאפ סטטי, לא אפליקציה חיה.</strong>
+      כל מספר כאן מסומן <span class="tag demo">נתוני הדגמה</span> — בדוי להמחשת פריסה,
+      למעט שני שיעורי הבסיס שמסומנים <span class="tag spec">מהאפיון — אומת בפאזה 0</span>,
+      שנמדדו מול ה-CSV ואומתו במדויק (ר' docs/planning/PHASE0.md). אין כאן מודל, API או חיבור לנתונים אמיתיים.
+    </div>
+
+    <!-- LOGIN -->
+    <div class="mock-screen">
+      <h2>מסך 1 — התחברות</h2>
+      <div class="mock-caption">הרשמה ציבורית כבויה · משתמשים נוצרים ידנית · משתמש דמו מאומת מראש</div>
+      <div class="login-card">
+        <h3>FunnelIQ</h3>
+        <div class="brandline">כלי פנימי — צוות Northbound בלבד</div>
+        <label>אימייל</label>
+        <input type="text" placeholder="demo@northbound.internal" disabled>
+        <label>סיסמה</label>
+        <input type="text" placeholder="••••••••" disabled>
+        <button disabled>התחברות</button>
+        <div class="login-fine">שכחת סיסמה? פנייה למנהל המערכת בלבד</div>
+      </div>
+    </div>
+
+    <!-- PREDICTION FORM -->
+    <div class="mock-screen">
+      <h2>מסך 2 — טופס חיזוי משותף</h2>
+      <div class="mock-caption">P2 + P3 + P4 · אותו snapshot, אותה אוכלוסייה, prefill חובה מפרופיל היסטורי</div>
+      <div class="predict-grid">
+
+        <div class="predict-card">
+          <h4>P2 · כמה זמן יישאר לקוח</h4>
+          <div class="predict-main"><span class="ltr">24</span> חודשים <span class="tag demo">הדגמה</span></div>
+          <div class="predict-sub">טווח חיזוי משוער: <span class="ltr">18–31</span> חודשים</div>
+          <div class="badge-row">
+            <span class="badge evidence-high">✓ ראיות גבוהות</span>
+            <span class="badge disclaimer">ℹ interval_method: split_conformal</span>
+          </div>
+        </div>
+
+        <div class="predict-card">
+          <h4>P3 · נטייה לאפסייל</h4>
+          <div class="predict-main"><span class="ltr">62%</span> <span class="tag demo">הדגמה</span></div>
+          <div class="predict-sub">
+            גבוהה בכ-16 נקודות משיעור האפסייל הבסיסי
+            (<span class="ltr">46.35%</span><span class="tag spec">מהאפיון — אומת בפאזה 0</span>)
+          </div>
+          <div class="badge-row">
+            <span class="badge evidence-high">✓ נטייה גבוהה</span>
+          </div>
+        </div>
+
+        <div class="predict-card">
+          <h4>P4 · נטייה להפניה</h4>
+          <div class="predict-main"><span class="ltr">71</span> <span style="font-size:14px; color:var(--text-dim);">/ 100</span> <span class="tag demo">הדגמה</span></div>
+          <div class="predict-sub">
+            שיעור בסיס: <span class="ltr">42.71%</span><span class="tag spec">מהאפיון — אומת בפאזה 0</span>
+          </div>
+          <div class="badge-row">
+            <span class="badge calibrated">☑ calibrated</span>
+            <span class="badge evidence-med">◐ ראיות בינוניות</span>
+          </div>
+          <div class="predict-disclaimer">
+            ⚠ המודל מנבא הפניה בלבד; זהו Proxy מוקדם ללקוח-על — לא הסתברות לעמוד
+            בשלושת התנאים במקביל. גרסת מודל: <span class="ltr">v0.1-eval</span>.
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- BUDGET SIMULATOR -->
+    <div class="mock-screen">
+      <h2>מסך 3 — סימולטור תקציב</h2>
+      <div class="mock-caption">₪50,000 מחולק בארבע אסטרטגיות · דירוג "מועדפת לפי המודל", לא הבטחת רווח <span class="tag demo">הדגמה</span></div>
+
+      <div class="strategy-row">
+        <div class="strategy-label"><b>2×20K+10K</b><span>ריכוז גבוה</span></div>
+        <div class="strategy-bar-wrap"><div class="strategy-bar" style="width:82%"></div><div class="strategy-whisker" style="right:70%"></div></div>
+        <div class="strategy-meta"><span class="ltr">₪118,400</span> · n=12 · ראיות נמוכות</div>
+      </div>
+      <div class="strategy-row">
+        <div class="strategy-label"><b>10×5,000</b><span>בינוני</span></div>
+        <div class="strategy-bar-wrap"><div class="strategy-bar" style="width:91%"></div><div class="strategy-whisker" style="right:82%"></div></div>
+        <div class="strategy-meta"><span class="ltr">₪131,900</span> · n=64 · ראיות בינוניות</div>
+      </div>
+      <div class="strategy-row">
+        <div class="strategy-label"><b>25×2,000</b><span>מפוזר</span></div>
+        <div class="strategy-bar-wrap"><div class="strategy-bar" style="width:88%"></div><div class="strategy-whisker" style="right:79%"></div></div>
+        <div class="strategy-meta"><span class="ltr">₪127,300</span> · n=140 · ראיות גבוהות</div>
+      </div>
+      <div class="strategy-row">
+        <div class="strategy-label"><b>100×500</b><span>פיזור מרבי</span></div>
+        <div class="strategy-bar-wrap"><div class="strategy-bar" style="width:68%"></div><div class="strategy-whisker" style="right:52%"></div></div>
+        <div class="strategy-meta"><span class="ltr">₪98,700</span> · n=210 · ראיות גבוהות</div>
+      </div>
+      <div class="alert-box" style="margin-top:16px;">
+        <span class="icon">⚠</span>
+        <div><strong>שתי האסטרטגיות המובילות חופפות</strong>
+        <p>הטווחים של "10×5,000" ו-"25×2,000" חופפים באופן מהותי — אין מנצחת ודאית. מומלץ ניסוי מבוקר.</p></div>
+      </div>
+    </div>
+
+    <!-- FOLLOW-UP -->
+    <div class="mock-screen">
+      <h2>מסך 4 — נשירה במעקבים</h2>
+      <div class="mock-caption">מ-Supabase, שיעורי נשירה מצטברים לכל שלב <span class="tag spec">מהאפיון — אומת בפאזה 0</span></div>
+
+      <div class="funnel-wrap">
+        <svg viewBox="0 0 460 190" width="100%" height="190" role="img" aria-label="Follow-up drop-off chart">
+          <!-- bars: fu1 21.7, fu2 25.7, fu3 18.6, fu4 10.4, fu5 29.2 (as % height of 140px max) -->
+          <g font-family="Consolas, monospace" font-size="10" fill="#5b6270">
+            <line x1="40" y1="150" x2="440" y2="150" stroke="#e2e5ea"/>
+            <!-- fu1: 21.7% -->
+            <rect x="55" y="42" width="55" height="108" fill="#b3341f" rx="3"></rect>
+            <text x="82" y="145" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">21.7%</text>
+            <text x="82" y="166" text-anchor="middle">Follow-up 1</text>
+            <!-- fu2: 25.7% -->
+            <rect x="135" y="22" width="55" height="128" fill="#b3341f" rx="3"></rect>
+            <text x="162" y="145" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">25.7%</text>
+            <text x="162" y="166" text-anchor="middle">Follow-up 2</text>
+            <!-- fu3: 18.6% -->
+            <rect x="215" y="57" width="55" height="93" fill="#b3341f" rx="3"></rect>
+            <text x="242" y="145" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">18.6%</text>
+            <text x="242" y="166" text-anchor="middle">Follow-up 3</text>
+            <!-- fu4: 10.4% (lowest — no early-stop signal) -->
+            <rect x="295" y="98" width="55" height="52" fill="#1a7f4b" rx="3"></rect>
+            <text x="322" y="140" text-anchor="middle" fill="#1a7f4b" font-weight="700" font-size="11">10.4%</text>
+            <text x="322" y="166" text-anchor="middle">Follow-up 4</text>
+            <!-- fu5: 29.2% -->
+            <rect x="375" y="4" width="55" height="146" fill="#b3341f" rx="3"></rect>
+            <text x="402" y="20" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">29.2%</text>
+            <text x="402" y="166" text-anchor="middle">Follow-up 5</text>
+          </g>
+        </svg>
+      </div>
+      <div class="funnel-caption">
+        שיעור הנשירה בשלב הרביעי הוא הנמוך בשרשרת (<span class="ltr">10.4%</span>) — הנתונים
+        אינם תומכים בעצירה אוטומטית אחרי המעקב השלישי. מסקנה תיאורית, לא סיבתית.
+      </div>
+      <table class="fallback">
+        <caption>טבלת נתונים נגישה (fallback לגרף)</caption>
+        <thead><tr><th>שלב</th><th>שיעור נשירה</th></tr></thead>
+        <tbody>
+          <tr><td>Follow-up 1</td><td><span class="ltr">21.7%</span></td></tr>
+          <tr><td>Follow-up 2</td><td><span class="ltr">25.7%</span></td></tr>
+          <tr><td>Follow-up 3</td><td><span class="ltr">18.6%</span></td></tr>
+          <tr><td>Follow-up 4</td><td><span class="ltr">10.4%</span></td></tr>
+          <tr><td>Follow-up 5</td><td><span class="ltr">29.2%</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- OOD -->
+    <div class="mock-screen">
+      <h2>מסך 5 — מצב מחוץ לתחום (OOD)</h2>
+      <div class="mock-caption">קלט שחורג מתחום האימון המתועד — לא תלוי בסתירת ה-16 ערכים <span class="tag demo">הדגמה</span></div>
+      <div class="alert-box">
+        <span class="icon">⚠</span>
+        <div>
+          <strong>אין מספיק נתונים לחיזוי אמין</strong>
+          <p>
+            תקציב שהוזן (<span class="ltr">₪25,000</span>) חורג מהטווח שנצפה באימון
+            (<span class="ltr">500–20,000 ₪</span>) — חריגה מתחום האימון המתועד
+            (<span class="ltr">training domain</span>), לא תלויה בהכרעה עתידית
+            כלשהי. לא מוצג חיזוי מספרי.
+          </p>
+        </div>
+      </div>
+      <div class="phase-note" style="margin-top:12px;">
+        ✅ <b>המקרה הגבולי הוכרע.</b> תקציב <em>בתוך</em> הטווח
+        (<span class="ltr">500–20,000 ₪</span>) שאינו אחד מ-16 הערכים שנצפו —
+        למשל <span class="ltr">₪3,500</span> — <b>אינו Hard OOD</b>. הוא אינו
+        מפר Data invariant, ו-16 הערכים הם Snapshot expectation ולא חוק עסקי.
+        לכן מוחזר עבורו <b>חיזוי</b> עם <span class="inline-code">evidence_level = low</span>,
+        אזהרה שהערך לא נצפה באימון, וטווח תקף. אם לא ניתן לחשב טווח תקף — אין
+        המלצה חד-משמעית. ההכרעה תוקנה ב-<span class="inline-code">SPEC.md</span>
+        באישור כפול ונרשמה ביומן ההכרעות.
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<footer>FunnelIQ · מסמך פנימי, אינו חלק מהאפליקציה · נוצר לפני תחילת הביצוע</footer>
+
+<script>
+/* =====================================================================
+   מקור האמת היחיד למפת השלבים. עדכון התקדמות = עריכת שדה status כאן,
+   בלי מקור נתונים מקביל (אין localStorage, אין קריאה מ-git/CI).
+   status: 'done' | 'in_progress' | 'awaiting_approval' | 'not_started'
+   ===================================================================== */
+const PHASES = [
+  { num:0, name:"צ'קליסט אימות", branch:"—", status:"done",
+    note:"בוצע ואושר ב-29.08.2026. ספירה: 67 בדיקות חיוביות עברו · 2 אי-התאמות אמיתיות · 3 negative controls התנהגו כמצופה · סה\"כ 72 מקרי בדיקה. שלושת הממצאים תוקנו ב-SPEC.md באישור כפול: חציוני closed≥2 → 4,000/47 ברמת רשומה (המשוקלל 5,000/52 בטבלה נפרדת, 52.5 הוסר) · מדיניות OOD עם ארבעה מונחים נפרדים · חסרי יעד ב-P2 → 0. ההכרעות נרשמו ביומן ההכרעות. קבלת התוצרים אושרה. ⚠ פאזה 1 אינה נפתחת אוטומטית — נדרש אישור כפול נפרד.",
+    items:["SHA-256 של funnel_marketing_data.csv + כל המספרים באפיון","הפרדת Invariants מ-Snapshot expectations","סתירת ה-OOD מול 16 התקציבים אותרה והוכרעה: ערך פנימי חוקי שלא נצפה (למשל 3,500) אינו Hard OOD — מוחזר עבורו חיזוי עם אזהרה ורמת ראיות נמוכה","רשימת עבודה מדויקת לפאזה 1 (pytest, תלויות, prefix)","תוצר: docs/planning/PHASE0.md"],
+    accept:{product:"docs/planning/PHASE0.md עם כל טבלאות האימות",
+      test:"כל טענה בסעיף ב' נבדקה בפועל מול ה-CSV (לא רק תוכננה) והניבה ✓/✗ מתועד",
+      evidence:"PHASE0.md + פלט הרצת סקריפט האימות + SHA-256 של הקובץ"} },
+  { num:1, name:"שלד + CI", branch:"chore/skeleton", status:"in_progress",
+    note:"עודכן 30.08.2026. **החלק המקומי בוצע ואומת; החלק החיצוני לא בוצע.** בוצע: git init · .gitignore · .gitattributes · requirements.txt נעול (Python 3.12.14) · pytest 9.1.1 הותקן · prefix: הוסר מ-environment.yml · app/main.py עם /health · tests/test_health.py עובר (1 passed) · .github/workflows/ci.yml · scripts/verify_phase0.py נשמר בגרסה ניידת. **ניקוי לפני פרסום (אושר סופית 30.08.2026):** funnel_marketing_data.csv הוסר מכל ההיסטוריה ונוסף ל-.gitignore — נשאר מקומית, לא tracked; כל נתיב אישי (נתיב משתמש מוחלט, נתיב סביבת Conda, נתיב תוכניות Claude) הוחלף ב-placeholders &lt;PROJECT_ROOT&gt; / &lt;CONDA_ENV&gt; / &lt;CLAUDE_PLAN_PATH&gt; ב-CLAUDE.md, PHASE0.md, codex-history.md, codex-review.md, .vscode/settings.json ו-verify_phase0.py. ⚠ הסקריפט **אינו עוד עותק זהה-בתים**: המקורי 782fca93…addc9 אינו בגיט, הגרסה שבגיט היא 6aa9b4b2…fc666b ומוסיפה --csv PATH ובדיקת SHA-256 מקדימה (exit 2 קובץ חסר, exit 3 hash לא תואם); לוגיקת האימות לא שונתה. הורץ כבדיקת רגרסיה בלבד — שיחזר 69/3 (67 positive-pass + 2 mismatch + 3 negative-controls), ושני מסלולי השגיאה הניבו את הקוד המצופה; אף מספר בפאזה 0 לא נגזר מהריצה. חמשת ה-commits קיימים בסדר המקובע: main מכיל את commit 1, chore/skeleton את 2–5 מעליו; git status נקי. **לא בוצע:** יצירת repository ציבורי, remote, push, PR, ו-CI ירוק בענן — כולם ממתינים לאישור כפול נפרד. שתי סטיות מכוונות מרשימת העבודה: (1) .gitattributes נכנס ל-commit 1 יחד עם .gitignore — * text=auto עם החרגת -text ל-verify_phase0.py, אחרת נרמול סופי-שורה משנה את ה-SHA-256 שלו בין פלטפורמות; (2) ה-CI מריץ python -m pytest ולא pytest חשוף — נבדק בפועל ש-pytest חשוף נכשל באיסוף כי שורש ה-repo אינו ב-sys.path. shap לא נכלל ב-requirements.txt במכוון — יותקן ויינעל בפאזה 6 לפני השימוש. ✅ נפתר: SPEC.md § מדיניות ה-CSV ב-repo היפך לקבוע שהקובץ מקומי ו-ignored (אושר סופית 30.08.2026); יומן ההכרעות ב-codex-review.md מתעד את הביטול. פסקת מצב הפתיחה ב-SPEC סומנה כתצלום זמן שאינו מתעדכן.",
+    items:["git init, .gitignore, requirements.txt נעול","pip install pytest — החבילה היחידה שחסרה בסביבת pro1_FunnelIQ (httpx כבר מותקן, 0.28.1)","הסרת prefix: מ-environment.yml","FastAPI עם /health, CI ירוק","יצירת repository ציבורי ב-GitHub (או חיבור לתיקייה הנוכחית) + הגדרת remote","רצף commits מקובע — 1) chore: init repo + gitignore (.gitignore בלבד, לפני הכל) · 2) docs: planning artifacts and phase 0 verification (SPEC, codex-review, codex-history, PHASE0, ROADMAP, CLAUDE.md, הבריף, scripts/verify_phase0.py הנייד) — ה-CSV אינו נכלל · 3) chore: pin dependencies (requirements.txt, הסרת prefix) · 4) feat: FastAPI skeleton with /health · 5) ci: GitHub Actions on push. המסמכים נכנסים לפני הקוד — ההיסטוריה מראה תכנון שקדם למימוש, כדרישת הבריף","GitHub Actions שרץ אוטומטית על כל push","לפחות Pull Request אחד מתוכנן — אם העבודה מפוצלת, לא רק בפאזת הדשבורד","scripts/verify_phase0.py — נשמר כגרסה ניידת, לא כעותק זהה-בתים. המקורי (782fca93aa9db5cdcb90ef4b30821c71da89d1bfd8be9d9f3c590bfd6a4addc9) אינו בגיט: נתיב ה-CSV בו היה מוחלט והכיל שם משתמש. הגרסה שבגיט: 6aa9b4b2e3ebb5c45878d96731f63562f51f07bf6bd7a4631695bc6019fc666b, מוסיפה --csv PATH ובדיקת SHA-256 מקדימה מול EXPECTED_SHA256 (exit 2 קובץ חסר, exit 3 hash לא תואם). לוגיקת האימות לא שונתה. משויך ל-commit 2; הורץ כבדיקת רגרסיה בלבד ושיחזר את הפיצול המתועד; אף מספר בפאזה 0 לא נגזר מהריצה"],
+    accept:{product:"שלד FastAPI + repo מחובר ל-GitHub + הגרסה הניידת של scripts/verify_phase0.py שמורה בגיט, וה-CSV מחוץ ל-repo (ignored)",
+      test:"CI ירוק על push, /health מגיב 200 מקומית, רצף חמשת ה-commits נשמר לפי הסדר — ה-docs לפני הקוד; git ls-files funnel_marketing_data.csv מחזיר ריק בעוד הקובץ קיים מקומית; סריקת נתיבים אישיים בכל חמשת ה-commits מחזירה אפס מופעים",
+      evidence:"פלט GitHub Actions + כתובת ה-repo + שני ה-hash-ים של verify_phase0.py (מקורי 782fca93…addc9 מול נייד 6aa9b4b2…c666b) + פלט git ls-files וסריקת הנתיבים האישיים + פלט שלוש הרצות הרגרסיה (ברירת מחדל, --csv חסר, --csv עם hash שונה)"} },
+  { num:2, name:"פריסה ל-Render", branch:"feat/deploy", status:"not_started",
+    items:["חשבון Render, render.yaml","שלד עם health-check עובד בענן","redeploy אוטומטי מ-GitHub"],
+    accept:{product:"שירות חי ב-Render",
+      test:"/health זמין לאחר restart של השירות",
+      evidence:"URL חי + צילום/פלט בדיקה אחרי restart"} },
+  { num:3, name:"Supabase + RLS", branch:"feat/supabase-data", status:"not_started",
+    note:"SQL לא משמש לאימון, CV, SHAP, conformal, bootstrap או כיול — כל אלה ב-Python בלבד (פאזה 6).",
+    items:["schema.sql — טיפוסי עמודות, PK, source_row_id","views.sql — רק אם ייבחרו views בפועל; אחרת הכול ב-schema.sql","CHECK מינימלי (רק NOT NULL מדוד) — לא מוחק חריגות מקור (155/333 שורות)","אינדקסים רק לפי שאילתות Runtime אמיתיות + EXPLAIN, לא אוטומטי לכל עמודה","RLS + policies לפי app_metadata.organization=northbound","שאילתות Runtime מתועדות ל-insights/followup ו-insights/budget-tiers","בדיקות SQL/Data-Contract — מדווחות חריגות, לא מוחקות","בדיקות RLS: anon חסום · authenticated בלי organization חסום · Northbound מורשה","בדיקת parity — הגדרת budget_tier זהה ב-SQL וב-Python, אם קיימת בשתיהן"],
+    accept:{product:"טבלה + RLS + טעינת 3,500 השורות",
+      test:"RLS חוסם anon ומשתמש מאומת בלי organization; Northbound מורשה",
+      evidence:"תוצאות שלוש בדיקות RLS + פלט בדיקות Data-Contract"} },
+  { num:4, name:"Auth", branch:"feat/auth", status:"not_started",
+    items:["login עברי, הרשמה ציבורית כבויה","משתמש דמו מאומת מראש למנחה","session + sign-out, בדיקות שליליות (401/403)"],
+    accept:{product:"login עברי + session",
+      test:"401 בלי token, 403 בלי הרשאה, session שורד רענון דף",
+      evidence:"תיעוד שלוש הבדיקות השליליות + sign-out שמנקה"} },
+  { num:5, name:"ניקוי + EDA", branch:"feat/analysis", status:"not_started",
+    note:"אין כאן מימוש API — /api/insights/budget-tiers ויתר ה-endpoints ממומשים בפאזה 9 בלבד.",
+    items:["scripts/analysis.py — חישוב שחזורי מהמקור, אין מספרים מוקלדים ידנית","Data Contract, מטריצת זמינות פיצ'רים","docs/FINDINGS.md — ממצאים וגרפים (חבילה 1 + חבילה 5)","סדר ניקוי: בדיקות דטרמיניסטיות לפני הפיצול; כל transformer נלמד בתוך fold","מדיניות ערכי קצה: סימון לבדיקה, לא מחיקה; מחיקה רק על ראיה מתועדת","M1–M6: ספירת אפסים ב-cumulative_profit · לגיטימיות האפסים · עשירון עליון · רווח לפי טייר · ספירת outliers · התפלגות הכפילויות","הפרדת dataset description מ-model-development analysis ב-REPORT","רגישות כפילויות: P6 + חבילה 1 (טייר Low) + חבילה 5 (משפך ונשירה); מדווח גם אם השינוי זניח","סכמת נתונים / חוזה מוצע ל-/api/insights/budget-tiers — לא מומש כאן"],
+    accept:{product:"FINDINGS.md + מטריצת זמינות + חוזה endpoint מוצע",
+      test:"כל מספר ב-FINDINGS משוחזר מ-scripts/analysis.py, אין הקלדה ידנית",
+      evidence:"scripts/analysis.py + docs/FINDINGS.md + docs/feature_matrix.md"} },
+  { num:6, name:"מודלים", branch:"feat/models", status:"not_started",
+    items:["P2/P3/P4/P6 — 5-fold CV, ממוצע ± סטיית תקן","train/calibration/holdout, כיול sigmoid נעול מראש","Split Conformal (P2), Bootstrap על רשומות (P6)","SHAP למודל הזוכה בלבד, offline","פיצול per-task: P2/P3/P4 = 64/16/20 · P6 = 80/20 בלי calibration; seed מתועד","Baselines: Dummy + Linear/Logistic מול מודלי הבריף; LogReg מחייב ב-P4","מדד ראשי מראש: MAE (P2) · ROC-AUC (P3/P4) · RMSE (P6); One-SE = std(ddof=1)/sqrt(5) על המדד הראשי בלבד","Guardrail עשירון ל-P6: ווטו רק ב-4/5 folds וגם mean(D) > std(D, ddof=1)/sqrt(5); פוסל בלבד","Lift@10% — מדד עסקי משני לדיווח בלבד, לא ראשי ולא Guardrail; base_rate = שיעור סט ההערכה","referred — פילוח לדיווח בלבד; אסור כפיצ\'ר ב-P4 שבו הוא היעד","Reference_P6 = XGBRegressor(reg:squarederror); RandomizedSearchCV n_iter=20, cv=5, random_state=42, n_jobs=1","Dummy = benchmark בלבד — אינו בר-פריסה ואינו ב-One-SE; Linear/Logistic בני-פריסה","log1p+Duan מחוץ לתקציב הבחירה (5 התאמות); תקציב: P6 400, פרויקט 1,100","Tweedie כמועמד מומלץ ל-P6, נבחן ב-CV; Gamma נדחתה (אפסים ביעד)","M7: Lift@10% — מדד עסקי משני לדיווח בלבד, לא מדד ראשי ולא Guardrail","learning curves · יציבות בין folds · seeds קבועים מתועדים","Conformal/כיול/Bootstrap/SHAP — offline בלבד; ה-API עושה lookup"],
+    accept:{product:"ארטיפקטים מאומנים (P2/P3/P4/P6) + calibrator",
+      test:"metrics, Holdout וארטיפקטים נטענים ותואמים ל-metadata השמור; ה-Holdout נפתח פעם אחת; כל Baseline קיבל אותו split ואותו פרוטוקול; אין חישוב אי-ודאות בזמן בקשה; One-SE שימש לבחירה בלבד ולא כסף עסקי",
+      evidence:"metrics.json + עקומת כיול + גרף SHAP"} },
+  { num:7, name:"עיצוב מבני", branch:"design/ia", status:"not_started",
+    items:["מסכי יעד, היררכיית מידע","מצבי loading/empty/error/OOD","הצגת נקודה+טווח, שיעורי בסיס, רמת ראיות"],
+    accept:{product:"מפרט מסכי יעד ומצבים",
+      test:"לכל מסך מוגדר מצב loading/empty/error/OOD + הצגת נקודה+טווח",
+      evidence:"מסמך IA / הפקת Stitch (קריאה בלבד)"} },
+  { num:8, name:"נעילת חוזה API", branch:"feat/api-contract", status:"not_started",
+    items:["סכמות OpenAPI לפי צרכי המסכים מפאזה 7","14 שדות חוזה התגובה, לכל טווח interval_method","interval_method כבר קנוני ב-SPEC (split_conformal / bootstrap_percentile) — הפאזה מקבעת בסכמה ואינה מכריעה"],
+    accept:{product:"סכמות OpenAPI נעולות",
+      test:"כל אחד מ-14 שדות חוזה התגובה ממופה לפחות ל-endpoint אחד",
+      evidence:"openapi.json / קובץ הסכמה הנעול"} },
+  { num:9, name:"מימוש API", branch:"feat/api", status:"not_started",
+    items:["מימוש לפי החוזה הנעול בפאזה 8","/api/predict/ltv (P2) · /api/predict/upsell (P3) · /api/predict/referral (P4)","/api/simulate/budget (P6) · /api/insights/followup (P5) · /api/insights/budget-tiers (חבילה 1)","ולידציית קלט מול metadata הארטיפקט השמור · 401 בלי token · 403 בלי הרשאה"],
+    accept:{product:"6 ה-endpoints ממומשים",
+      test:"כל endpoint עסקי מחזיר 401/403 נכון ותשובה תואמת לסכמה הנעולה",
+      evidence:"pytest מול הסכמה + לוג בדיקות"} },
+  { num:10, name:"עיצוב חזותי", branch:"feat/design", status:"not_started",
+    items:["פרויקט Stitch חדש (דורש אישור כתיבה נפרד)","design tokens: evidence-*, prediction-range, calibrated/uncalibrated"],
+    accept:{product:"design tokens + עיצוב חזותי מ-Stitch",
+      test:"ניגודיות ונגישות עוברות בדיקה ידנית",
+      evidence:"צילומי מסך + ייצוא Stitch (בכפוף לאישור כתיבה נפרד)"} },
+  { num:11, name:"דשבורד", branch:"feat/dashboard", status:"not_started",
+    items:["דשבורד עברי RTL עם prefill חובה","דרך Pull Request"],
+    accept:{product:"דשבורד חי עברי RTL",
+      test:"חמש שאלות המייסד נגישות אחרי login",
+      evidence:"צילומי מסך ומבחן קבלה"} },
+  { num:12, name:"קבלה", branch:"test/acceptance", status:"not_started",
+    items:["restart, ביצועים, אבטחה","מבחן קבלה ממחשב אחר"],
+    accept:{product:"מערכת שעברה קבלה מלאה",
+      test:"restart מלא + מבחן קבלה ממחשב אחר עוברים; ראיה שכל הכרעות הרגישות ננעלו לפני פתיחת ה-Holdout; ראיה שה-Backtest נרשם מראש כחלק מהפתיחה היחידה; השוואת Baseline דווחה ביושר גם אם הפער זניח; מדידת RSS בפועל מול 512MB; אם לא הוכח ערך מעבר ל-Dummy — דווח כמגבלה מהותית",
+      evidence:"צ'קליסט הקבלה ב-REPORT.md"} },
+  { num:13, name:"README + REPORT", branch:"docs/report", status:"not_started",
+    items:["README.md — אנגלית","REPORT.md — עברית + metrics.json, עקומת כיול, SHAP"],
+    accept:{product:"README.md + REPORT.md",
+      test:"כל מספר ב-REPORT מגיע מ-metrics.json/תוצרי סקריפט, לא מוקלד ידנית",
+      evidence:"README.md, REPORT.md, metrics.json"} },
+  { num:14, name:"מצגת סיכום", branch:"—", status:"not_started",
+    items:["מצגת סיכום למנחה, בלי סרטון דמו"],
+    accept:{product:"מצגת סיכום למנחה",
+      test:"המצגת מכסה את חמש שאלות המייסד ואת המגבלות המוצהרות",
+      evidence:"קובץ המצגת"} },
+];
+
+const STATUS_META = {
+  done:            { label:"הושלם",          icon:"✓", num:"✓" },
+  in_progress:     { label:"בביצוע",          icon:"●", num:null },
+  awaiting_approval:{ label:"ממתין לאישור",   icon:"⏳", num:null },
+  not_started:     { label:"טרם התחיל",       icon:"○", num:null },
+};
+
+function render(){
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = '';
+  PHASES.forEach(p=>{
+    const meta = STATUS_META[p.status];
+    const li = document.createElement('li');
+    li.className = 'phase-card';
+    li.setAttribute('data-status', p.status);
+
+    const noteHtml = p.note ? `<div class="phase-note">${p.note}</div>` : '';
+    li.innerHTML = `
+      <div class="phase-num">${meta.num || p.num}</div>
+      <details class="phase-body">
+        <summary>
+          <div class="phase-title">
+            <h3>${p.num}. ${p.name}</h3>
+            <span class="phase-branch">${p.branch}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="status-chip ${p.status}">${meta.icon} ${meta.label}</span>
+            <span class="chevron">▾</span>
+          </div>
+        </summary>
+        <div class="phase-deliverables">
+          <ul>${p.items.map(i=>`<li>${i}</li>`).join('')}</ul>
+          <div class="phase-accept">
+            <div><b>תוצר:</b> ${p.accept.product}</div>
+            <div><b>בדיקת קבלה:</b> ${p.accept.test}</div>
+            <div><b>ראיה שנשמרת:</b> ${p.accept.evidence}</div>
+          </div>
+          ${noteHtml}
+        </div>
+      </details>`;
+    tl.appendChild(li);
+  });
+  updateProgress();
+}
+
+function updateProgress(){
+  const done = PHASES.filter(p=>p.status==='done').length;
+  document.getElementById('progress-count').textContent = `${done} / ${PHASES.length}`;
+  document.getElementById('progress-fill').style.width = (done/PHASES.length*100)+'%';
+}
+
+document.getElementById('filters').addEventListener('click', e=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  document.querySelectorAll('#filters button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const f = btn.dataset.filter;
+  document.querySelectorAll('.phase-card').forEach(card=>{
+    card.hidden = (f!=='all' && card.dataset.status!==f);
+  });
+});
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+render();
+</script>
+</body>
+</html>
