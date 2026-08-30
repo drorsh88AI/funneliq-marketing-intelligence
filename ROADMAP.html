@@ -166,6 +166,62 @@
   }
   .phase-accept b{color:var(--text); font-weight:600;}
 
+  /* ---- planning vs execution ---- */
+  .plan-scale{margin-top:14px; padding-top:14px; border-top:1px dashed var(--border);}
+  .scale-head{display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font-size:12.5px; color:var(--text-dim); margin-bottom:6px;}
+  .scale-head b{color:var(--text); font-weight:600;}
+  .progress-bar-fill.plan{background:var(--amber);}
+  .scale-note{margin-top:12px; font-size:12px; color:var(--text-dim);}
+
+  .policy-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:20px 22px; margin-bottom:22px;
+  }
+  .policy-card h2{margin:0 0 4px; font-size:16px;}
+  .policy-card .policy-sub{color:var(--text-dim); font-size:13px; margin-bottom:14px;}
+  .policy-card ol{margin:0; padding-inline-start:20px; font-size:13.5px; color:var(--text-dim);}
+  .policy-card ol li{margin-bottom:4px;}
+  .policy-card .policy-fine{
+    margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);
+    font-size:12.5px; color:var(--text-dim);
+  }
+  .policy-card .policy-fine b{color:var(--text);}
+
+  .plan-chip{
+    display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600;
+    padding:4px 10px; border-radius:999px; white-space:nowrap; border:1px solid transparent;
+  }
+  .plan-chip.outline_only{background:var(--gray-dim); color:var(--gray);}
+  .plan-chip.planning_in_progress{background:var(--brand-dim); color:var(--brand);}
+  .plan-chip.under_review{background:var(--amber-dim); color:var(--amber);}
+  .plan-chip.approved_for_execution{background:var(--positive-dim); color:var(--positive);}
+
+  .plan-banner{
+    margin-top:12px; font-size:12.5px; background:var(--amber-dim); color:var(--amber);
+    border:1px solid #eddcb0; border-radius:8px; padding:8px 10px;
+  }
+  .consistency-warn{
+    margin-top:12px; font-size:12.5px; background:var(--negative-dim); color:var(--negative);
+    border:1px solid #f0c8bf; border-radius:8px; padding:8px 10px; font-weight:600;
+  }
+  .exec-progress{
+    margin-top:12px; font-size:12.5px; color:var(--text-dim);
+    display:flex; flex-wrap:wrap; gap:4px 14px;
+  }
+  .exec-progress b{color:var(--text); font-weight:600;}
+  .gate-box{
+    margin-top:14px; padding:10px 12px; font-size:12.5px; color:var(--text-dim);
+    background:var(--gray-dim); border:1px solid var(--border); border-radius:8px;
+  }
+  .gate-box h4{margin:0 0 6px; font-size:12.5px; color:var(--text); font-weight:600;}
+  .gate-box ul{margin:6px 0 0; padding-inline-start:18px;}
+  .gate-box .gate-state{margin-top:6px;}
+  .gate-decision{
+    margin-top:8px; background:var(--amber-dim); color:var(--amber);
+    border:1px solid #eddcb0; border-radius:6px; padding:6px 8px;
+  }
+
   /* ---- mockup tab ---- */
   .mock-note{
     background:var(--gray-dim); border:1px solid var(--border); border-radius:var(--radius);
@@ -270,8 +326,8 @@
 
     <div class="progress-card">
       <div class="progress-top">
-        <div class="count"><span class="ltr" id="progress-count">0 / 15</span> פאזות הושלמו</div>
-        <div style="color:var(--text-dim); font-size:12.5px;">עודכן ידנית ב-29.08.2026</div>
+        <div class="count"><span class="ltr" id="progress-count">0 / 15</span> פאזות הביצוע הושלמו</div>
+        <div style="color:var(--text-dim); font-size:12.5px;">עודכן ידנית ב-30.08.2026</div>
       </div>
       <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
       <div class="progress-legend">
@@ -279,6 +335,19 @@
         <span><span class="legend-dot" style="background:var(--brand)"></span>בביצוע</span>
         <span><span class="legend-dot" style="background:var(--amber)"></span>ממתין לאישור</span>
         <span><span class="legend-dot" style="background:var(--gray)"></span>טרם התחיל</span>
+      </div>
+
+      <div class="plan-scale">
+        <div class="scale-head">
+          <span><b>התקדמות תכנון</b> — פאזות שהתכנון המפורט שלהן אושר לביצוע</span>
+          <span class="ltr" id="plan-count" style="font-variant-numeric:tabular-nums;">0 / 15</span>
+        </div>
+        <div class="progress-bar-track"><div class="progress-bar-fill plan" id="plan-fill"></div></div>
+      </div>
+
+      <div class="scale-note">
+        שתי סקאלות נפרדות במכוון — הסרגל העליון הוא <b>ביצוע</b> והתחתון הוא <b>תכנון</b>.
+        אין אחוז משולב אחד לשניהם — הוא היה מטעה.
       </div>
     </div>
 
@@ -295,6 +364,40 @@
       (מקור האמת היחיד), לא אוטומטית מ-git או מה-CI. <b>פאזה לא תסומן
       "הושלם" רק משום שקבצים נוצרו</b> — נדרש ששלושת שדות הקבלה שלה (תוצר /
       בדיקת קבלה / ראיה) התקיימו בפועל.
+    </div>
+
+    <div class="policy-card" id="policy-gate">
+      <h2>מדיניות מעבר — שער תכנון ואישור לפני כל פאזה</h2>
+      <div class="policy-sub">
+        חלה על כל המעברים ללא יוצא מן הכלל: <span class="ltr">0→1, 1→2, 2→3, 3→4</span> וכן הלאה עד <span class="ltr">13→14</span>.
+        התכנון של פאזות עתידיות הוא <b>תכנון-על בלבד</b> — רשימת תתי-המשימות שלהן אינה תוכנית
+        ביצוע סופית, משום שתוצאות הפאזה הקודמת עשויות לשנות אותה.
+      </div>
+      <div style="font-size:13px; font-weight:600; margin-bottom:6px;">
+        לאחר השלמת כל פאזה <span class="ltr">N</span> ולפני תחילת ביצוע פאזה <span class="ltr">N+1</span>:
+      </div>
+      <ol>
+        <li>המשתמש מאשר במפורש את תוצרי פאזה <span class="ltr">N</span>.</li>
+        <li>נבדק המצב בפועל לאחר הפאזה: קבצים ותוצרים שנוצרו · תוצאות בדיקות · סטיות מהתכנון · החלטות חדשות · סיכונים או חסמים שהתגלו.</li>
+        <li>מתבצע תכנון מפורט מחדש של פאזה <span class="ltr">N+1</span> על בסיס המצב בפועל.</li>
+        <li>תתי-המשימות, התלויות, ההרשאות, הסיכונים, הראיות וקריטריוני הקבלה של פאזה <span class="ltr">N+1</span> מתעדכנים ב-ROADMAP ובמסמכי התכנון הרלוונטיים.</li>
+        <li>Codex מנסח פרומפט ביקורת לקלוד.</li>
+        <li>קלוד עובר באופן עצמאי על התכנון ומחזיר ביקורת בלבד.</li>
+        <li>המלצות קלוד נדונות עם המשתמש; אין לקבל אותן אוטומטית.</li>
+        <li>חוזרים על סבבי הביקורת לפי הצורך.</li>
+        <li>רק לאחר אישור מפורש וסופי של המשתמש נכתבת לקלוד הוראת ביצוע.</li>
+        <li>רק אז מותר לשנות את סטטוס הביצוע של הפאזה הבאה מ-<span class="inline-code">not_started</span>.</li>
+      </ol>
+      <div class="policy-fine">
+        <b>שלבי המעבר אינם חלק מלאכותי מהפאזה.</b>
+        השער הוא תהליך מעבר — לא תת-משימת ביצוע של הפאזה הקודמת ולא תוצר מקצועי שלה.
+        לכן אינו נספר באחוז השלמת משימות הביצוע שלה, ופאזה אינה מסומנת כלא-מושלמת רק משום
+        שתכנון הפאזה הבאה טרם הסתיים. הוא מוצג בנפרד באזור “שער מעבר לפאזה הבאה” שבכל פאזה.
+        <br><br>
+        <b>מצב נוכחי:</b> פאזות 0 ו-1 הושלמו ואושרו · פאזה 2 בתכנון מפורט ועדיין אינה בביצוע ·
+        פאזות 3–14 מכילות תכנון-על בלבד, ואין להרחיב אותן כעת לתוכניות ביצוע סופיות על בסיס ניחושים.
+        כל אחת מהן תעבור תכנון מפורט לאחר אישור הפאזה הקודמת.
+      </div>
     </div>
 
     <div class="trace-card">
@@ -548,86 +651,96 @@
 
 <script>
 /* =====================================================================
-   מקור האמת היחיד למפת השלבים. עדכון התקדמות = עריכת שדה status כאן,
+   מקור האמת היחיד למפת השלבים. עדכון התקדמות = עריכת השדות כאן,
    בלי מקור נתונים מקביל (אין localStorage, אין קריאה מ-git/CI).
-   status: 'done' | 'in_progress' | 'awaiting_approval' | 'not_started'
+
+   שני סטטוסים נפרדים לכל פאזה — אין לערבב ביניהם:
+   planning_status:  'outline_only' | 'planning_in_progress' | 'under_review' | 'approved_for_execution'
+   execution_status: 'done' | 'in_progress' | 'awaiting_approval' | 'not_started'
+
+   פאזה אינה יכולה לעבור ל-execution_status:'in_progress' כל עוד
+   planning_status !== 'approved_for_execution' — סתירה כזו מוצגת כאזהרת עקביות.
+
+   items: מחרוזת = יורשת את סטטוס הביצוע של הפאזה (done כשהפאזה done, אחרת not_started).
+   לפירוט ברמת תת-משימה יש להחליף מחרוזת באובייקט: {t:"...", s:"in_progress"}
    ===================================================================== */
 const PHASES = [
-  { num:0, name:"צ'קליסט אימות", branch:"—", status:"done",
+  { num:0, name:"צ'קליסט אימות", branch:"—", execution_status:"done", planning_status:"approved_for_execution",
     note:"בוצע ואושר ב-29.08.2026. ספירה: 67 בדיקות חיוביות עברו · 2 אי-התאמות אמיתיות · 3 negative controls התנהגו כמצופה · סה\"כ 72 מקרי בדיקה. שלושת הממצאים תוקנו ב-SPEC.md באישור כפול: חציוני closed≥2 → 4,000/47 ברמת רשומה (המשוקלל 5,000/52 בטבלה נפרדת, 52.5 הוסר) · מדיניות OOD עם ארבעה מונחים נפרדים · חסרי יעד ב-P2 → 0. ההכרעות נרשמו ביומן ההכרעות. קבלת התוצרים אושרה. ⚠ פאזה 1 אינה נפתחת אוטומטית — נדרש אישור כפול נפרד.",
     items:["SHA-256 של funnel_marketing_data.csv + כל המספרים באפיון","הפרדת Invariants מ-Snapshot expectations","סתירת ה-OOD מול 16 התקציבים אותרה והוכרעה: ערך פנימי חוקי שלא נצפה (למשל 3,500) אינו Hard OOD — מוחזר עבורו חיזוי עם אזהרה ורמת ראיות נמוכה","רשימת עבודה מדויקת לפאזה 1 (pytest, תלויות, prefix)","תוצר: docs/planning/PHASE0.md"],
     accept:{product:"docs/planning/PHASE0.md עם כל טבלאות האימות",
       test:"כל טענה בסעיף ב' נבדקה בפועל מול ה-CSV (לא רק תוכננה) והניבה ✓/✗ מתועד",
       evidence:"PHASE0.md + פלט הרצת סקריפט האימות + SHA-256 של הקובץ"} },
-  { num:1, name:"שלד + CI", branch:"chore/skeleton", status:"done",
+  { num:1, name:"שלד + CI", branch:"chore/skeleton", execution_status:"done", planning_status:"approved_for_execution",
     note:"עודכן 30.08.2026. **החלק המקומי בוצע ואומת; החלק החיצוני לא בוצע.** בוצע: git init · .gitignore · .gitattributes · requirements.txt נעול (Python 3.12.14) · pytest 9.1.1 הותקן · prefix: הוסר מ-environment.yml · app/main.py עם /health · tests/test_health.py עובר (1 passed) · .github/workflows/ci.yml · scripts/verify_phase0.py נשמר בגרסה ניידת. **ניקוי לפני פרסום (אושר סופית 30.08.2026):** funnel_marketing_data.csv הוסר מכל ההיסטוריה ונוסף ל-.gitignore — נשאר מקומית, לא tracked; כל נתיב אישי (נתיב משתמש מוחלט, נתיב סביבת Conda, נתיב תוכניות Claude) הוחלף ב-placeholders &lt;PROJECT_ROOT&gt; / &lt;CONDA_ENV&gt; / &lt;CLAUDE_PLAN_PATH&gt; ב-CLAUDE.md, PHASE0.md, codex-history.md, codex-review.md, .vscode/settings.json ו-verify_phase0.py. ⚠ הסקריפט **אינו עוד עותק זהה-בתים**: המקורי 782fca93…addc9 אינו בגיט, הגרסה שבגיט היא 6aa9b4b2…fc666b ומוסיפה --csv PATH ובדיקת SHA-256 מקדימה (exit 2 קובץ חסר, exit 3 hash לא תואם); לוגיקת האימות לא שונתה. הורץ כבדיקת רגרסיה בלבד — שיחזר 69/3 (67 positive-pass + 2 mismatch + 3 negative-controls), ושני מסלולי השגיאה הניבו את הקוד המצופה; אף מספר בפאזה 0 לא נגזר מהריצה. חמשת ה-commits קיימים בסדר המקובע: main מכיל את commit 1, chore/skeleton את 2–5 מעליו; git status נקי. **לא בוצע:** יצירת repository ציבורי, remote, push, PR, ו-CI ירוק בענן — כולם ממתינים לאישור כפול נפרד. שתי סטיות מכוונות מרשימת העבודה: (1) .gitattributes נכנס ל-commit 1 יחד עם .gitignore — * text=auto עם החרגת -text ל-verify_phase0.py, אחרת נרמול סופי-שורה משנה את ה-SHA-256 שלו בין פלטפורמות; (2) ה-CI מריץ python -m pytest ולא pytest חשוף — נבדק בפועל ש-pytest חשוף נכשל באיסוף כי שורש ה-repo אינו ב-sys.path. shap לא נכלל ב-requirements.txt במכוון — יותקן ויינעל בפאזה 6 לפני השימוש. ✅ נפתר: SPEC.md § מדיניות ה-CSV ב-repo היפך לקבוע שהקובץ מקומי ו-ignored (אושר סופית 30.08.2026); יומן ההכרעות ב-codex-review.md מתעד את הביטול. פסקת מצב הפתיחה ב-SPEC סומנה כתצלום זמן שאינו מתעדכן. ✅ **פאזה 1 הושלמה ואושרה — 30.08.2026.** repository ציבורי funneliq-marketing-intelligence נוצר · main ו-chore/skeleton נדחפו (5 commits) · PR #1 נפתח, שתי הרצות CI (push + PR) הסתיימו success · PR #1 מוזג ל-main בשיטת rebase (fast-forward אמיתי — אין commit מיזוג נוסף; ה-tree של כל commit זהה למקור, רק ה-SHA-ים השתנו כי GitHub מחבר מחדש; אומת בהשוואת tree hash) · chore/skeleton נשמר, לא נמחק · קבלת התוצרים אושרה על ידי המשתמש.",
     items:["git init, .gitignore, requirements.txt נעול","pip install pytest — החבילה היחידה שחסרה בסביבת pro1_FunnelIQ (httpx כבר מותקן, 0.28.1)","הסרת prefix: מ-environment.yml","FastAPI עם /health, CI ירוק","יצירת repository ציבורי ב-GitHub (או חיבור לתיקייה הנוכחית) + הגדרת remote","רצף commits מקובע — 1) chore: init repo + gitignore (.gitignore בלבד, לפני הכל) · 2) docs: planning artifacts and phase 0 verification (SPEC, codex-review, codex-history, PHASE0, ROADMAP, CLAUDE.md, הבריף, scripts/verify_phase0.py הנייד) — ה-CSV אינו נכלל · 3) chore: pin dependencies (requirements.txt, הסרת prefix) · 4) feat: FastAPI skeleton with /health · 5) ci: GitHub Actions on push. המסמכים נכנסים לפני הקוד — ההיסטוריה מראה תכנון שקדם למימוש, כדרישת הבריף","GitHub Actions שרץ אוטומטית על כל push","לפחות Pull Request אחד מתוכנן — אם העבודה מפוצלת, לא רק בפאזת הדשבורד","scripts/verify_phase0.py — נשמר כגרסה ניידת, לא כעותק זהה-בתים. המקורי (782fca93aa9db5cdcb90ef4b30821c71da89d1bfd8be9d9f3c590bfd6a4addc9) אינו בגיט: נתיב ה-CSV בו היה מוחלט והכיל שם משתמש. הגרסה שבגיט: 6aa9b4b2e3ebb5c45878d96731f63562f51f07bf6bd7a4631695bc6019fc666b, מוסיפה --csv PATH ובדיקת SHA-256 מקדימה מול EXPECTED_SHA256 (exit 2 קובץ חסר, exit 3 hash לא תואם). לוגיקת האימות לא שונתה. משויך ל-commit 2; הורץ כבדיקת רגרסיה בלבד ושיחזר את הפיצול המתועד; אף מספר בפאזה 0 לא נגזר מהריצה"],
     accept:{product:"שלד FastAPI + repo מחובר ל-GitHub + הגרסה הניידת של scripts/verify_phase0.py שמורה בגיט, וה-CSV מחוץ ל-repo (ignored)",
       test:"CI ירוק על push, /health מגיב 200 מקומית, רצף חמשת ה-commits נשמר לפי הסדר — ה-docs לפני הקוד; git ls-files funnel_marketing_data.csv מחזיר ריק בעוד הקובץ קיים מקומית; סריקת נתיבים אישיים בכל חמשת ה-commits מחזירה אפס מופעים",
       evidence:"פלט GitHub Actions + כתובת ה-repo + שני ה-hash-ים של verify_phase0.py (מקורי 782fca93…addc9 מול נייד 6aa9b4b2…c666b) + פלט git ls-files וסריקת הנתיבים האישיים + פלט שלוש הרצות הרגרסיה (ברירת מחדל, --csv חסר, --csv עם hash שונה)"} },
-  { num:2, name:"פריסה ל-Render", branch:"feat/deploy", status:"not_started",
+  { num:2, name:"פריסה ל-Render", branch:"feat/deploy", execution_status:"not_started", planning_status:"planning_in_progress",
     items:["חשבון Render, render.yaml","שלד עם health-check עובד בענן","redeploy אוטומטי מ-GitHub"],
     accept:{product:"שירות חי ב-Render",
       test:"/health זמין לאחר restart של השירות",
       evidence:"URL חי + צילום/פלט בדיקה אחרי restart"} },
-  { num:3, name:"Supabase + RLS", branch:"feat/supabase-data", status:"not_started",
+  { num:3, name:"Supabase + RLS", branch:"feat/supabase-data", execution_status:"not_started", planning_status:"outline_only",
     note:"SQL לא משמש לאימון, CV, SHAP, conformal, bootstrap או כיול — כל אלה ב-Python בלבד (פאזה 6).",
     items:["schema.sql — טיפוסי עמודות, PK, source_row_id","views.sql — רק אם ייבחרו views בפועל; אחרת הכול ב-schema.sql","CHECK מינימלי (רק NOT NULL מדוד) — לא מוחק חריגות מקור (155/333 שורות)","אינדקסים רק לפי שאילתות Runtime אמיתיות + EXPLAIN, לא אוטומטי לכל עמודה","RLS + policies לפי app_metadata.organization=northbound","שאילתות Runtime מתועדות ל-insights/followup ו-insights/budget-tiers","בדיקות SQL/Data-Contract — מדווחות חריגות, לא מוחקות","בדיקות RLS: anon חסום · authenticated בלי organization חסום · Northbound מורשה","בדיקת parity — הגדרת budget_tier זהה ב-SQL וב-Python, אם קיימת בשתיהן"],
+    gate_decisions:["אופן מסירת גישת משתמש הדמו למנחה — הצגה במסך, README או מסירה נפרדת. אין לנחש. ההכרעה אינה חוסמת את ביצוע פאזה 3, אך חוסמת את אישור הביצוע של פאזה 4."],
     accept:{product:"טבלה + RLS + טעינת 3,500 השורות",
       test:"RLS חוסם anon ומשתמש מאומת בלי organization; Northbound מורשה",
       evidence:"תוצאות שלוש בדיקות RLS + פלט בדיקות Data-Contract"} },
-  { num:4, name:"Auth", branch:"feat/auth", status:"not_started",
+  { num:4, name:"Auth", branch:"feat/auth", execution_status:"not_started", planning_status:"outline_only",
     items:["login עברי, הרשמה ציבורית כבויה","משתמש דמו מאומת מראש למנחה","session + sign-out, בדיקות שליליות (401/403)"],
     accept:{product:"login עברי + session",
       test:"401 בלי token, 403 בלי הרשאה, session שורד רענון דף",
       evidence:"תיעוד שלוש הבדיקות השליליות + sign-out שמנקה"} },
-  { num:5, name:"ניקוי + EDA", branch:"feat/analysis", status:"not_started",
+  { num:5, name:"ניקוי + EDA", branch:"feat/analysis", execution_status:"not_started", planning_status:"outline_only",
     note:"אין כאן מימוש API — /api/insights/budget-tiers ויתר ה-endpoints ממומשים בפאזה 9 בלבד.",
     items:["scripts/analysis.py — חישוב שחזורי מהמקור, אין מספרים מוקלדים ידנית","Data Contract, מטריצת זמינות פיצ'רים","docs/FINDINGS.md — ממצאים וגרפים (חבילה 1 + חבילה 5)","סדר ניקוי: בדיקות דטרמיניסטיות לפני הפיצול; כל transformer נלמד בתוך fold","מדיניות ערכי קצה: סימון לבדיקה, לא מחיקה; מחיקה רק על ראיה מתועדת","M1–M6: ספירת אפסים ב-cumulative_profit · לגיטימיות האפסים · עשירון עליון · רווח לפי טייר · ספירת outliers · התפלגות הכפילויות","הפרדת dataset description מ-model-development analysis ב-REPORT","רגישות כפילויות: P6 + חבילה 1 (טייר Low) + חבילה 5 (משפך ונשירה); מדווח גם אם השינוי זניח","סכמת נתונים / חוזה מוצע ל-/api/insights/budget-tiers — לא מומש כאן"],
     accept:{product:"FINDINGS.md + מטריצת זמינות + חוזה endpoint מוצע",
       test:"כל מספר ב-FINDINGS משוחזר מ-scripts/analysis.py, אין הקלדה ידנית",
       evidence:"scripts/analysis.py + docs/FINDINGS.md + docs/feature_matrix.md"} },
-  { num:6, name:"מודלים", branch:"feat/models", status:"not_started",
+  { num:6, name:"מודלים", branch:"feat/models", execution_status:"not_started", planning_status:"outline_only",
     items:["P2/P3/P4/P6 — 5-fold CV, ממוצע ± סטיית תקן","train/calibration/holdout, כיול sigmoid נעול מראש","Split Conformal (P2), Bootstrap על רשומות (P6)","SHAP למודל הזוכה בלבד, offline","פיצול per-task: P2/P3/P4 = 64/16/20 · P6 = 80/20 בלי calibration; seed מתועד","Baselines: Dummy + Linear/Logistic מול מודלי הבריף; LogReg מחייב ב-P4","מדד ראשי מראש: MAE (P2) · ROC-AUC (P3/P4) · RMSE (P6); One-SE = std(ddof=1)/sqrt(5) על המדד הראשי בלבד","Guardrail עשירון ל-P6: ווטו רק ב-4/5 folds וגם mean(D) > std(D, ddof=1)/sqrt(5); פוסל בלבד","Lift@10% — מדד עסקי משני לדיווח בלבד, לא ראשי ולא Guardrail; base_rate = שיעור סט ההערכה","referred — פילוח לדיווח בלבד; אסור כפיצ\'ר ב-P4 שבו הוא היעד","Reference_P6 = XGBRegressor(reg:squarederror); RandomizedSearchCV n_iter=20, cv=5, random_state=42, n_jobs=1","Dummy = benchmark בלבד — אינו בר-פריסה ואינו ב-One-SE; Linear/Logistic בני-פריסה","log1p+Duan מחוץ לתקציב הבחירה (5 התאמות); תקציב: P6 400, פרויקט 1,100","Tweedie כמועמד מומלץ ל-P6, נבחן ב-CV; Gamma נדחתה (אפסים ביעד)","M7: Lift@10% — מדד עסקי משני לדיווח בלבד, לא מדד ראשי ולא Guardrail","learning curves · יציבות בין folds · seeds קבועים מתועדים","Conformal/כיול/Bootstrap/SHAP — offline בלבד; ה-API עושה lookup"],
     accept:{product:"ארטיפקטים מאומנים (P2/P3/P4/P6) + calibrator",
       test:"metrics, Holdout וארטיפקטים נטענים ותואמים ל-metadata השמור; ה-Holdout נפתח פעם אחת; כל Baseline קיבל אותו split ואותו פרוטוקול; אין חישוב אי-ודאות בזמן בקשה; One-SE שימש לבחירה בלבד ולא כסף עסקי",
       evidence:"metrics.json + עקומת כיול + גרף SHAP"} },
-  { num:7, name:"עיצוב מבני", branch:"design/ia", status:"not_started",
+  { num:7, name:"עיצוב מבני", branch:"design/ia", execution_status:"not_started", planning_status:"outline_only",
     items:["מסכי יעד, היררכיית מידע","מצבי loading/empty/error/OOD","הצגת נקודה+טווח, שיעורי בסיס, רמת ראיות"],
     accept:{product:"מפרט מסכי יעד ומצבים",
       test:"לכל מסך מוגדר מצב loading/empty/error/OOD + הצגת נקודה+טווח",
       evidence:"מסמך IA / הפקת Stitch (קריאה בלבד)"} },
-  { num:8, name:"נעילת חוזה API", branch:"feat/api-contract", status:"not_started",
+  { num:8, name:"נעילת חוזה API", branch:"feat/api-contract", execution_status:"not_started", planning_status:"outline_only",
     items:["סכמות OpenAPI לפי צרכי המסכים מפאזה 7","14 שדות חוזה התגובה, לכל טווח interval_method","interval_method כבר קנוני ב-SPEC (split_conformal / bootstrap_percentile) — הפאזה מקבעת בסכמה ואינה מכריעה"],
     accept:{product:"סכמות OpenAPI נעולות",
       test:"כל אחד מ-14 שדות חוזה התגובה ממופה לפחות ל-endpoint אחד",
       evidence:"openapi.json / קובץ הסכמה הנעול"} },
-  { num:9, name:"מימוש API", branch:"feat/api", status:"not_started",
+  { num:9, name:"מימוש API", branch:"feat/api", execution_status:"not_started", planning_status:"outline_only",
     items:["מימוש לפי החוזה הנעול בפאזה 8","/api/predict/ltv (P2) · /api/predict/upsell (P3) · /api/predict/referral (P4)","/api/simulate/budget (P6) · /api/insights/followup (P5) · /api/insights/budget-tiers (חבילה 1)","ולידציית קלט מול metadata הארטיפקט השמור · 401 בלי token · 403 בלי הרשאה"],
     accept:{product:"6 ה-endpoints ממומשים",
       test:"כל endpoint עסקי מחזיר 401/403 נכון ותשובה תואמת לסכמה הנעולה",
       evidence:"pytest מול הסכמה + לוג בדיקות"} },
-  { num:10, name:"עיצוב חזותי", branch:"feat/design", status:"not_started",
+  { num:10, name:"עיצוב חזותי", branch:"feat/design", execution_status:"not_started", planning_status:"outline_only",
     items:["פרויקט Stitch חדש (דורש אישור כתיבה נפרד)","design tokens: evidence-*, prediction-range, calibrated/uncalibrated"],
     accept:{product:"design tokens + עיצוב חזותי מ-Stitch",
       test:"ניגודיות ונגישות עוברות בדיקה ידנית",
       evidence:"צילומי מסך + ייצוא Stitch (בכפוף לאישור כתיבה נפרד)"} },
-  { num:11, name:"דשבורד", branch:"feat/dashboard", status:"not_started",
+  { num:11, name:"דשבורד", branch:"feat/dashboard", execution_status:"not_started", planning_status:"outline_only",
     items:["דשבורד עברי RTL עם prefill חובה","דרך Pull Request"],
     accept:{product:"דשבורד חי עברי RTL",
       test:"חמש שאלות המייסד נגישות אחרי login",
       evidence:"צילומי מסך ומבחן קבלה"} },
-  { num:12, name:"קבלה", branch:"test/acceptance", status:"not_started",
+  { num:12, name:"קבלה", branch:"test/acceptance", execution_status:"not_started", planning_status:"outline_only",
     items:["restart, ביצועים, אבטחה","מבחן קבלה ממחשב אחר"],
     accept:{product:"מערכת שעברה קבלה מלאה",
       test:"restart מלא + מבחן קבלה ממחשב אחר עוברים; ראיה שכל הכרעות הרגישות ננעלו לפני פתיחת ה-Holdout; ראיה שה-Backtest נרשם מראש כחלק מהפתיחה היחידה; השוואת Baseline דווחה ביושר גם אם הפער זניח; מדידת RSS בפועל מול 512MB; אם לא הוכח ערך מעבר ל-Dummy — דווח כמגבלה מהותית",
       evidence:"צ'קליסט הקבלה ב-REPORT.md"} },
-  { num:13, name:"README + REPORT", branch:"docs/report", status:"not_started",
+  { num:13, name:"README + REPORT", branch:"docs/report", execution_status:"not_started", planning_status:"outline_only",
     items:["README.md — אנגלית","REPORT.md — עברית + metrics.json, עקומת כיול, SHAP"],
     accept:{product:"README.md + REPORT.md",
       test:"כל מספר ב-REPORT מגיע מ-metrics.json/תוצרי סקריפט, לא מוקלד ידנית",
       evidence:"README.md, REPORT.md, metrics.json"} },
-  { num:14, name:"מצגת סיכום", branch:"—", status:"not_started",
+  { num:14, name:"מצגת סיכום", branch:"—", execution_status:"not_started", planning_status:"outline_only",
     items:["מצגת סיכום למנחה, בלי סרטון דמו"],
     accept:{product:"מצגת סיכום למנחה",
       test:"המצגת מכסה את חמש שאלות המייסד ואת המגבלות המוצהרות",
@@ -641,16 +754,81 @@ const STATUS_META = {
   not_started:     { label:"טרם התחיל",       icon:"○", num:null },
 };
 
+/* סטטוס התכנון — נפרד לחלוטין מסטטוס הביצוע */
+const PLAN_META = {
+  outline_only:           { label:"תכנון ראשוני", icon:"◌" },
+  planning_in_progress:   { label:"בתכנון מפורט", icon:"✎" },
+  under_review:           { label:"בביקורת",       icon:"⚖" },
+  approved_for_execution: { label:"מאושר לביצוע",  icon:"✓" },
+};
+
+const PLAN_NOTICE = "תכנון ראשוני בלבד — הפירוט יעודכן לאחר השלמת ואישור הפאזה הקודמת, " +
+                    "יעבור ביקורת Codex–Claude וידרוש אישור משתמש לפני ביצוע.";
+
+function itemText(it){ return (typeof it === 'string') ? it : it.t; }
+function itemStatus(p, it){
+  if(typeof it !== 'string' && it.s) return it.s;
+  return p.execution_status === 'done' ? 'done' : 'not_started';
+}
+function execTally(p){
+  const c = {done:0, in_progress:0, awaiting_approval:0, not_started:0};
+  p.items.forEach(it => c[itemStatus(p, it)]++);
+  c.total = p.items.length;
+  c.pct = c.total ? Math.round(c.done / c.total * 100) : 0;
+  return c;
+}
+
+/* שער המעבר מ-N ל-N+1. מצבו נגזר מ-planning_status של הפאזה הבאה,
+   לא משדה נפרד — שער סגור = הפאזה הבאה מאושרת לביצוע. */
+function gateHtml(p, next){
+  if(!next){
+    return '<div class="gate-box"><h4>שער מעבר — אין פאזה הבאה</h4>' +
+           '<div>פאזה 14 היא האחרונה — אין שער מעבר אחריה.</div></div>';
+  }
+  const closed = next.planning_status === 'approved_for_execution';
+  const nm = PLAN_META[next.planning_status];
+  const decisions = (p.gate_decisions || [])
+    .map(d => `<div class="gate-decision">⚠ הכרעה ייעודית בשער הזה: ${d}</div>`).join('');
+  return `
+    <div class="gate-box">
+      <h4>שער מעבר לפאזה ${next.num} — ${next.name}</h4>
+      <div>מה חייב לקרות לאחר סיום פאזה ${p.num} ולפני פתיחת פאזה ${next.num}:
+        אישור מפורש של תוצרי פאזה ${p.num} ← בדיקת המצב בפועל ← תכנון מפורט מחדש של פאזה ${next.num}
+        ← עדכון ROADMAP ומסמכי התכנון ← פרומפט ביקורת של Codex ← ביקורת עצמאית של קלוד
+        ← דיון והכרעה עם המשתמש ← אישור סופי ← הוראת ביצוע.
+        <a href="#policy-gate">המדיניות המלאה</a>.</div>
+      <div class="gate-state">${closed ? '✓ השער נסגר' : '⏳ השער פתוח'} ·
+        סטטוס התכנון של פאזה ${next.num}:
+        <span class="plan-chip ${next.planning_status}">${nm.icon} ${nm.label}</span></div>
+      <div class="gate-state">תהליך מעבר, לא תת-משימה של פאזה ${p.num} — אינו נספר באחוז השלמת הביצוע שלה.</div>
+      ${decisions}
+    </div>`;
+}
+
 function render(){
   const tl = document.getElementById('timeline');
   tl.innerHTML = '';
-  PHASES.forEach(p=>{
-    const meta = STATUS_META[p.status];
+  PHASES.forEach((p, i)=>{
+    const meta = STATUS_META[p.execution_status];
+    const pmeta = PLAN_META[p.planning_status];
     const li = document.createElement('li');
     li.className = 'phase-card';
-    li.setAttribute('data-status', p.status);
+    li.setAttribute('data-status', p.execution_status);
 
     const noteHtml = p.note ? `<div class="phase-note">${p.note}</div>` : '';
+    const noticeHtml = p.planning_status === 'approved_for_execution' ? '' :
+      `<div class="plan-banner">${PLAN_NOTICE}</div>`;
+    const warnHtml = (p.execution_status === 'in_progress' && p.planning_status !== 'approved_for_execution') ?
+      `<div class="consistency-warn">⚠ אזהרת עקביות: הפאזה מסומנת “בביצוע” אף שתכנונה אינו מאושר לביצוע
+         (<span class="ltr">planning_status ≠ approved_for_execution</span>). מצב זה אסור — יש לתקן אחד משני השדות.</div>` : '';
+    const t = execTally(p);
+    const execHtml = `
+      <div class="exec-progress">
+        <span><b>התקדמות ביצוע:</b> <span class="ltr">${t.pct}%</span> מתתי-המשימות <span class="ltr">(${t.done}/${t.total})</span></span>
+        <span>בביצוע: <b class="ltr">${t.in_progress}</b></span>
+        <span>ממתינות לאישור: <b class="ltr">${t.awaiting_approval}</b></span>
+      </div>`;
+
     li.innerHTML = `
       <div class="phase-num">${meta.num || p.num}</div>
       <details class="phase-body">
@@ -659,19 +837,29 @@ function render(){
             <h3>${p.num}. ${p.name}</h3>
             <span class="phase-branch">${p.branch}</span>
           </div>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <span class="status-chip ${p.status}">${meta.icon} ${meta.label}</span>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span class="plan-chip ${p.planning_status}" title="סטטוס תכנון">${pmeta.icon} תכנון: ${pmeta.label}</span>
+            <span class="status-chip ${p.execution_status}" title="סטטוס ביצוע">${meta.icon} ביצוע: ${meta.label}</span>
             <span class="chevron">▾</span>
           </div>
         </summary>
         <div class="phase-deliverables">
-          <ul>${p.items.map(i=>`<li>${i}</li>`).join('')}</ul>
+          ${noticeHtml}
+          ${warnHtml}
+          <ul>${p.items.map(it=>{
+            const st = itemStatus(p, it);
+            const chip = (typeof it === 'string') ? '' :
+              ` <span class="status-chip ${st}" style="font-size:11px; padding:1px 7px;">${STATUS_META[st].icon} ${STATUS_META[st].label}</span>`;
+            return `<li>${itemText(it)}${chip}</li>`;
+          }).join('')}</ul>
+          ${execHtml}
           <div class="phase-accept">
             <div><b>תוצר:</b> ${p.accept.product}</div>
             <div><b>בדיקת קבלה:</b> ${p.accept.test}</div>
             <div><b>ראיה שנשמרת:</b> ${p.accept.evidence}</div>
           </div>
           ${noteHtml}
+          ${gateHtml(p, PHASES[i+1])}
         </div>
       </details>`;
     tl.appendChild(li);
@@ -679,10 +867,15 @@ function render(){
   updateProgress();
 }
 
+/* שתי סקאלות נפרדות — אסור למזג לאחוז משולב אחד. */
 function updateProgress(){
-  const done = PHASES.filter(p=>p.status==='done').length;
+  const done = PHASES.filter(p=>p.execution_status==='done').length;
   document.getElementById('progress-count').textContent = `${done} / ${PHASES.length}`;
   document.getElementById('progress-fill').style.width = (done/PHASES.length*100)+'%';
+
+  const planned = PHASES.filter(p=>p.planning_status==='approved_for_execution').length;
+  document.getElementById('plan-count').textContent = `${planned} / ${PHASES.length}`;
+  document.getElementById('plan-fill').style.width = (planned/PHASES.length*100)+'%';
 }
 
 document.getElementById('filters').addEventListener('click', e=>{
