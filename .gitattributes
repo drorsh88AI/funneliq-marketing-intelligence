@@ -1,0 +1,4 @@
+# No EOL normalization for the verification script: its SHA-256 is quoted as
+# evidence in docs/planning/PHASE0.md and must stay identical on every platform.
+* text=auto
+scripts/verify_phase0.py -text
