@@ -1062,6 +1062,15 @@ upsert בטרנזקציה: טעינה חד-פעמית של CSV סטטי בן 3,5
 5. **בדיקות שליליות:** אנונימי · מאומת בלי `organization=northbound` ·
    token פג תוקף.
 
+### שער החלטה לפני פאזה 4 — מסירת גישת הדמו
+
+לפני תחילת ביצוע פאזה 4 חייבת להיסגר באישור המשתמש הדרך שבה בוחן חיצוני
+מקבל את פרטי משתמש הדמו. אין לנחש או לקבע מראש אם הפרטים יוצגו במסך
+ההתחברות, יתועדו ב-README או יימסרו למנחה בערוץ נפרד. ההחלטה משפיעה על נוסח
+מסך ההתחברות, מסירת credentials, גבול ההרשאה ובדיקת הקבלה. הרשמה ציבורית
+נשארת כבויה בכל החלופות, ומשתמש הדמו נשאר משתמש מאומת מראש עם
+`organization=northbound`.
+
 ### מטריצת הרשאות ל-endpoints
 
 | Endpoint | הרשאה | תוכן |
@@ -1198,9 +1207,9 @@ SHAP · צילומי מסך · URL חי · תרשים ארכיטקטורה · ה
 |---|---|---|
 | 0 | — | **צ'קליסט אימות**: החלטות סגורות + Data Contract. אין החלטה חוסמת פתוחה |
 | 1 | `chore/skeleton` | `git init`, `.gitignore`, `requirements.txt` נעול, `pytest`, הסרת `prefix`, FastAPI עם `/health`, CI ירוק |
-| 2 | `feat/deploy` | חשבון Render, `render.yaml`, **שלד עם health-check עובד בענן** + redeploy אוטומטי |
+| 2 | `feat/deploy` | חשבון Render, `render.yaml`, URL ציבורי, **שלד עם health-check עובד בענן**, redeploy אוטומטי מ-GitHub + אימות שהשירות חוזר ועובר `/health` לאחר restart יזום |
 | 3 | `feat/supabase-data` | `schema.sql` (+`views.sql` אם ייבחרו), RLS + `app_metadata`, טעינה, שאילתות Runtime מתועדות, בדיקות SQL/Data-Contract ובדיקות RLS בשלושה מצבי משתמש |
-| 4 | `feat/auth` | login עברי, הרשמה מכובה, משתמש דמו, session, sign-out, בדיקות שליליות |
+| 4 | `feat/auth` | *(הכרעת מסירת גישת הדמו היא הכרעה ייעודית **בשער 3→4**, לא תוצר של הפאזה)*; login עברי, הרשמה מכובה, משתמש דמו, session, sign-out, בדיקות שליליות |
 | 5 | `feat/analysis` | ניקוי, Data Contract, מטריצת זמינות, חבילות 1+5 |
 | 6 | `feat/models` | P2/P3/P4/P6 עם CV, calibration set, Holdout, כיול, conformal, bootstrap, SHAP, גרסה מוקדמת כניסוי |
 | 7 | `design/ia` | **עיצוב מבני קודם ל-API**: מסכי יעד, היררכיית מידע, מצבי loading/empty/error/**OOD**, הצגת נקודה+טווח, שיעורי בסיס, רמת ראיות והסתייגויות |
@@ -1208,8 +1217,8 @@ SHAP · צילומי מסך · URL חי · תרשים ארכיטקטורה · ה
 | 9 | `feat/api` | מימוש ה-API לפי החוזה הנעול |
 | 10 | `feat/design` | פרויקט Stitch **חדש** ל-FunnelIQ → design tokens והשלמת העיצוב החזותי |
 | 11 | `feat/dashboard` | דשבורד עברי RTL עם prefill — **דרך PR** |
-| 12 | `test/acceptance` | קבלה, restart, ביצועים, אבטחה |
-| 13 | `docs/report` | `README.md` (EN) + `REPORT.md` (HE) + ראיות |
+| 12 | `test/acceptance` | קבלה, restart, ביצועים ואבטחה + מסע מלא ממחשב אחר: פתיחת ה-URL, התחברות ללא התערבות המפתח, תחזית ללקוח חדש, תובנות follow-up ותקציב וקריאת ההמלצות |
+| 13 | `docs/report` | `README.md` (EN) עם סקירה, ארכיטקטורה, התקנה מקומית ו-URL חי + `REPORT.md` (HE) + ראיות |
 | 14 | — | מצגת סיכום למנחה |
 
 ### שער תכנון ואישור בין כל שתי פאזות — מדיניות אחידה
