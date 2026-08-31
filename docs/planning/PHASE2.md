@@ -66,8 +66,18 @@ services:
 
 ---
 
-## ג. שער 3 — בדיקת auto-redeploy, restart והתאוששות
+## ג. שער 3 — בדיקת auto-redeploy
 
-*(טרם בוצע. ייכתב לאחר מיזוג המסמך הזה — אותו מיזוג הוא ה-push האמיתי
-ל-`main` שמפעיל את בדיקת ה-auto-redeploy. תיעוד ה-deploy השני, ה-SHA
-שהפעיל אותו ו-`GET /health` שלאחריו יתווספו כאן ב-commit נפרד.)*
+| פריט | ערך |
+|---|---|
+| הטריגר | מיזוג PR [#7](https://github.com/drorsh88AI/funneliq-marketing-intelligence/pull/7) ל-`main` (rebase), merge commit `9d7a975` — `docs: record phase 2 gate 1-2 evidence` |
+| SHA שנפרס | `9d7a975b9a9d59397ae2cd635c8c8ae6cf5a3d3b`, מאומת ידנית בדשבורד Render מול deploy חדש שנוצר **אוטומטית** (`autoDeployTrigger: commit`, בלי פעולה ידנית ב-Render) |
+| סטטוס ה-deploy | **Live** — אומת ידנית בדשבורד |
+| `GET /health` לאחר האימות | `200 OK`, `{"status":"ok"}` · `Date: Mon, 31 Aug 2026 19:53:29 GMT` · `rndr-id: ef193bef-b33f-4c7c` · `CF-RAY: a33e94e90e537d3c-TLV` |
+
+**מסקנה:** push ל-`main` (דרך מיזוג PR) מפעיל redeploy אוטומטי ב-Render ללא כל
+פעולה ידנית בצד השירות — דרישת סעיף 04 בבריף מאומתת.
+
+### שער 4 — restart יזום והתאוששות
+
+*(טרם אושר. ייכתב לאחר אישור נפרד לבדיקת restart.)*
