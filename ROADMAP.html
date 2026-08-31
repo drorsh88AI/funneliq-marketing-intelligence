@@ -156,6 +156,7 @@
   .phase-deliverables{padding:0 16px 16px; border-top:1px solid var(--border); margin-top:0;}
   .phase-deliverables ul{margin:12px 0 0; padding-inline-start:20px; font-size:13.5px; color:var(--text-dim);}
   .phase-deliverables li{margin-bottom:5px;}
+  .item-meta{font-size:11px; color:var(--gray); margin-top:2px;}
   .phase-note{
     margin-top:10px; font-size:12.5px; background:var(--amber-dim); color:var(--amber);
     border:1px solid #eddcb0; border-radius:8px; padding:8px 10px;
@@ -662,7 +663,10 @@
    planning_status !== 'approved_for_execution' — סתירה כזו מוצגת כאזהרת עקביות.
 
    items: מחרוזת = יורשת את סטטוס הביצוע של הפאזה (done כשהפאזה done, אחרת not_started).
-   לפירוט ברמת תת-משימה יש להחליף מחרוזת באובייקט: {t:"...", s:"in_progress"}
+   לפירוט ברמת תת-משימה יש להחליף מחרוזת באובייקט:
+   {t:"...", s:"in_progress", u:"YYYY-MM-DD HH:mm", e:"ראיה קצרה"}.
+   כל checkpoint שבוצע ואומת מחייב עדכון מיידי כאן. פעולה ידנית מתעדכנת רק
+   לאחר אישור המשתמש. אין להסיק השלמה מעצם קיום commit או קובץ.
    ===================================================================== */
 const PHASES = [
   { num:0, name:"צ'קליסט אימות", branch:"—", execution_status:"done", planning_status:"approved_for_execution",
@@ -677,8 +681,26 @@ const PHASES = [
     accept:{product:"שלד FastAPI + repo מחובר ל-GitHub + הגרסה הניידת של scripts/verify_phase0.py שמורה בגיט, וה-CSV מחוץ ל-repo (ignored)",
       test:"CI ירוק על push, /health מגיב 200 מקומית, רצף חמשת ה-commits נשמר לפי הסדר — ה-docs לפני הקוד; git ls-files funnel_marketing_data.csv מחזיר ריק בעוד הקובץ קיים מקומית; סריקת נתיבים אישיים בכל חמשת ה-commits מחזירה אפס מופעים",
       evidence:"פלט GitHub Actions + כתובת ה-repo + שני ה-hash-ים של verify_phase0.py (מקורי 782fca93…addc9 מול נייד 6aa9b4b2…c666b) + פלט git ls-files וסריקת הנתיבים האישיים + פלט שלוש הרצות הרגרסיה (ברירת מחדל, --csv חסר, --csv עם hash שונה)"} },
-  { num:2, name:"פריסה ל-Render", branch:"feat/deploy", execution_status:"not_started", planning_status:"planning_in_progress",
-    items:["חשבון Render, render.yaml ו-URL ציבורי","שלד עם health-check עובד בענן","redeploy אוטומטי מ-GitHub","restart יזום ואימות שהשירות חוזר ללא התערבות מקומית"],
+  { num:2, name:"פריסה ל-Render", branch:"feat/deploy", execution_status:"awaiting_approval", planning_status:"approved_for_execution",
+    note:"עודכן 31.08.2026: שלב א׳ הושלם ונבדק. PR #3 פתוח עם CI ירוק וממתין לאישור מיזוג. חשבון Render נפתח ידנית דרך GitHub; טרם נוצר שירות וטרם חובר repository ל-Render.",
+    items:[
+      {t:"בדיקת פתיחה: main מסונכרן, עץ עבודה נקי ותגי הגיבוי מקומיים בלבד", s:"done", u:"2026-08-31 21:38", e:"נבדק לפני יצירת feat/deploy"},
+      {t:"פתיחת חשבון Render דרך GitHub — ללא כרטיס אשראי וללא יצירת שירות", s:"done", u:"2026-08-31 21:48", e:"אושר ידנית על ידי המשתמש"},
+      {t:"יצירת branch בשם feat/deploy", s:"done", u:"2026-08-31 21:38", e:"נוצר מ-main מסונכרן"},
+      {t:"הוספת .python-version עם Python 3.12.14", s:"done", u:"2026-08-31 21:38", e:"commit acbbaae"},
+      {t:"הוספת render.yaml: free, Frankfurt, main, auto-deploy ו-/health", s:"done", u:"2026-08-31 21:39", e:"commit de51113"},
+      {t:"בדיקות מקומיות, YAML, סודות ו-git diff --check", s:"done", u:"2026-08-31 21:40", e:"pytest: 1 passed; רק שני הקבצים המאושרים השתנו"},
+      {t:"פתיחת PR #3 והרצת CI ב-push וב-pull request", s:"done", u:"2026-08-31 21:40", e:"שתי ריצות CI הסתיימו SUCCESS"},
+      {t:"אישור ומיזוג PR #3 ל-main בשיטת rebase", s:"awaiting_approval", u:"2026-08-31 21:42", e:"PR פתוח ו-mergeable; ממתין לאישור משתמש"},
+      {t:"חיבור repository ל-Render ויצירת Blueprint מ-main", s:"not_started"},
+      {t:"deploy ראשון וקבלת URL ציבורי", s:"not_started"},
+      {t:"GET /health בענן מחזיר 200 ו-status ok", s:"not_started"},
+      {t:"יצירת docs/planning/PHASE2.md עם ראיות הפריסה הראשונית", s:"not_started"},
+      {t:"הוכחת redeploy אוטומטי מ-main באמצעות שינוי תיעוד אמיתי", s:"not_started"},
+      {t:"restart יזום, מדידת התאוששות ובדיקת /health מחדש", s:"not_started"},
+      {t:"בדיקה ממכשיר או רשת אחרת כשהמחשב המקומי אינו משתתף", s:"not_started"},
+      {t:"השלמת ראיות, PR סגירה ואישור סופי של פאזה 2", s:"not_started"}
+    ],
     accept:{product:"שירות חי ב-Render",
       test:"/health מחזיר 200 ב-URL הציבורי; push ל-GitHub מפעיל redeploy; /health חוזר להיות זמין לאחר restart יזום של השירות",
       evidence:"URL חי + ראיית redeploy אוטומטי + צילום/פלט בדיקה אחרי restart"} },
@@ -850,7 +872,10 @@ function render(){
             const st = itemStatus(p, it);
             const chip = (typeof it === 'string') ? '' :
               ` <span class="status-chip ${st}" style="font-size:11px; padding:1px 7px;">${STATUS_META[st].icon} ${STATUS_META[st].label}</span>`;
-            return `<li>${itemText(it)}${chip}</li>`;
+            const itemMeta = (typeof it === 'string') ? '' :
+              `${it.u ? `<div class="item-meta">עודכן: <span class="ltr">${it.u}</span></div>` : ''}` +
+              `${it.e ? `<div class="item-meta">ראיה: ${it.e}</div>` : ''}`;
+            return `<li>${itemText(it)}${chip}${itemMeta}</li>`;
           }).join('')}</ul>
           ${execHtml}
           <div class="phase-accept">
