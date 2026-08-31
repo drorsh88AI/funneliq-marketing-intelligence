@@ -695,8 +695,8 @@ const PHASES = [
       {t:"חיבור repository ל-Render ויצירת Blueprint מ-main", s:"done", u:"2026-08-31 22:38", e:"שער 2 אושר על ידי המשתמש ובוצע; שירות funneliq נוצר, plan free, region frankfurt"},
       {t:"deploy ראשון וקבלת URL ציבורי", s:"done", u:"2026-08-31 22:38", e:"סטטוס Live; https://funneliq.onrender.com; אין שגיאות ב-Logs"},
       {t:"GET /health בענן מחזיר 200 ו-status ok", s:"done", u:"2026-08-31 22:38", e:"curl -i https://funneliq.onrender.com/health → HTTP/1.1 200 OK, {\"status\":\"ok\"}"},
-      {t:"יצירת docs/planning/PHASE2.md עם ראיות הפריסה הראשונית", s:"not_started"},
-      {t:"הוכחת redeploy אוטומטי מ-main באמצעות שינוי תיעוד אמיתי", s:"not_started"},
+      {t:"יצירת docs/planning/PHASE2.md עם ראיות הפריסה הראשונית", s:"done", u:"2026-08-31 22:47", e:"commit 72287bc (PR #7), הורחב ב-commit 422d171 (PR #8) עם ראיות שער 3"},
+      {t:"הוכחת redeploy אוטומטי מ-main באמצעות שינוי תיעוד אמיתי", s:"done", u:"2026-08-31 22:53", e:"מיזוג PR #7 → commit 9d7a975; deploy Live ל-9d7a975 אומת ידנית בדשבורד Render (אוטומטי, בלי פעולה ידנית); GET /health לאחר מכן → 200 OK, {\"status\":\"ok\"}"},
       {t:"restart יזום, מדידת התאוששות ובדיקת /health מחדש", s:"not_started"},
       {t:"בדיקה ממכשיר או רשת אחרת כשהמחשב המקומי אינו משתתף", s:"not_started"},
       {t:"השלמת ראיות, PR סגירה ואישור סופי של פאזה 2", s:"not_started"}
