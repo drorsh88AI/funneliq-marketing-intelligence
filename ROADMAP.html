@@ -681,8 +681,8 @@ const PHASES = [
     accept:{product:"שלד FastAPI + repo מחובר ל-GitHub + הגרסה הניידת של scripts/verify_phase0.py שמורה בגיט, וה-CSV מחוץ ל-repo (ignored)",
       test:"CI ירוק על push, /health מגיב 200 מקומית, רצף חמשת ה-commits נשמר לפי הסדר — ה-docs לפני הקוד; git ls-files funnel_marketing_data.csv מחזיר ריק בעוד הקובץ קיים מקומית; סריקת נתיבים אישיים בכל חמשת ה-commits מחזירה אפס מופעים",
       evidence:"פלט GitHub Actions + כתובת ה-repo + שני ה-hash-ים של verify_phase0.py (מקורי 782fca93…addc9 מול נייד 6aa9b4b2…c666b) + פלט git ls-files וסריקת הנתיבים האישיים + פלט שלוש הרצות הרגרסיה (ברירת מחדל, --csv חסר, --csv עם hash שונה)"} },
-  { num:2, name:"פריסה ל-Render", branch:"feat/deploy", execution_status:"awaiting_approval", planning_status:"approved_for_execution",
-    note:"עודכן 31.08.2026: שערים 2–5 אושרו ובוצעו. ה-repository חובר ל-Render, Blueprint נוצר מ-main, deploy ראשון עלה בהצלחה ל-https://funneliq.onrender.com, GET /health מאומת (כולל ממכשיר נייד ברשת סלולרית, ללא תלות במחשב המקומי), auto-redeploy מ-push ל-main אומת (commit 9d7a975), ו-restart יזום אומת (התאוששות ~7 שניות). כל 16 המשימות וכל קריטריוני הקבלה מתקיימים עם ראיה — פאזה 2 מוכנה לסגירה, ממתינה לאישור מיזוג ואישור סופי נפרד.",
+  { num:2, name:"פריסה ל-Render", branch:"feat/deploy", execution_status:"done", planning_status:"approved_for_execution",
+    note:"עודכן 31.08.2026: שערים 2–5 אושרו ובוצעו. ה-repository חובר ל-Render, Blueprint נוצר מ-main, deploy ראשון עלה בהצלחה ל-https://funneliq.onrender.com, GET /health מאומת (כולל ממכשיר נייד ברשת סלולרית, ללא תלות במחשב המקומי), auto-redeploy מ-push ל-main אומת (commit 9d7a975), ו-restart יזום אומת (התאוששות ~7 שניות). אישור סופי לסגירת הפאזה ניתן ב-2026-08-31T20:13:58Z UTC. פאזה 2 הושלמה.",
     items:[
       {t:"בדיקת פתיחה: main מסונכרן, עץ עבודה נקי ותגי הגיבוי מקומיים בלבד", s:"done", u:"2026-08-31 21:38", e:"נבדק לפני יצירת feat/deploy"},
       {t:"פתיחת חשבון Render דרך GitHub — ללא כרטיס אשראי וללא יצירת שירות", s:"done", u:"2026-08-31 21:48", e:"אושר ידנית על ידי המשתמש"},
@@ -699,7 +699,7 @@ const PHASES = [
       {t:"הוכחת redeploy אוטומטי מ-main באמצעות שינוי תיעוד אמיתי", s:"done", u:"2026-08-31 22:53", e:"מיזוג PR #7 → commit 9d7a975; deploy Live ל-9d7a975 אומת ידנית בדשבורד Render (אוטומטי, בלי פעולה ידנית); GET /health לאחר מכן → 200 OK, {\"status\":\"ok\"}"},
       {t:"restart יזום, מדידת התאוששות ובדיקת /health מחדש", s:"done", u:"2026-08-31 23:01", e:"Restart service בדשבורד, בוצע ידנית; חזר ל-Live מיד; GET /health ראשון 7 שניות אחרי הלחיצה → 200 OK; 4 בדיקות המשך על פני כדקה, כולן 200 OK"},
       {t:"בדיקה ממכשיר או רשת אחרת כשהמחשב המקומי אינו משתתף", s:"done", u:"2026-08-31 23:09", e:"אומת ידנית על ידי המשתמש ממכשיר נייד ברשת סלולרית; https://funneliq.onrender.com/health נגיש, {\"status\":\"ok\"}; בדיקה מקבילה מהצד השני 20:09:35Z UTC — 200 OK"},
-      {t:"השלמת ראיות, PR סגירה ואישור סופי של פאזה 2", s:"awaiting_approval", u:"2026-08-31 23:09", e:"כל 16 המשימות + כל קריטריוני הקבלה מתקיימים עם ראיה (docs/planning/PHASE2.md §ו); ממתין לאישור מיזוג PR ולאישור סגירה סופי"}
+      {t:"השלמת ראיות, PR סגירה ואישור סופי של פאזה 2", s:"done", u:"2026-08-31 23:13", e:"אישור סופי מפורש של המשתמש ב-2026-08-31T20:13:58Z UTC (\"אני מאשר סופית את סגירת פאזה 2\"); כל 16 המשימות וכל קריטריוני הקבלה מתקיימים עם ראיה — docs/planning/PHASE2.md §ו; ממתין למיזוג PR #10 בלבד"}
     ],
     accept:{product:"שירות חי ב-Render",
       test:"/health מחזיר 200 ב-URL הציבורי; push ל-GitHub מפעיל redeploy; /health חוזר להיות זמין לאחר restart יזום של השירות",
