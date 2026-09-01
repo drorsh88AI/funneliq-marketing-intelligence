@@ -312,7 +312,7 @@
     <h1>FunnelIQ — מפת ביצוע</h1>
     <div class="sub">מסמך חי המתעדכן ידנית לפי התקדמות בפועל — אינו קוד האפליקציה</div>
   </div>
-  <span class="status-pill" id="headline-status">✅ פאזה 0 הושלמה · ✅ פאזה 1 הושלמה ואושרה — PR #1 מוזג</span>
+  <span class="status-pill" id="headline-status">✅ פאזות 0–2 הושלמו ואושרו · ✎ פאזה 3 בתכנון מפורט</span>
 </header>
 
 <nav class="tabs">
@@ -328,7 +328,7 @@
     <div class="progress-card">
       <div class="progress-top">
         <div class="count"><span class="ltr" id="progress-count">0 / 15</span> פאזות הביצוע הושלמו</div>
-        <div style="color:var(--text-dim); font-size:12.5px;">עודכן ידנית ב-30.08.2026</div>
+        <div style="color:var(--text-dim); font-size:12.5px;">עודכן ידנית ב-01.09.2026</div>
       </div>
       <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
       <div class="progress-legend">
@@ -704,13 +704,25 @@ const PHASES = [
     accept:{product:"שירות חי ב-Render",
       test:"/health מחזיר 200 ב-URL הציבורי; push ל-GitHub מפעיל redeploy; /health חוזר להיות זמין לאחר restart יזום של השירות",
       evidence:"URL חי + ראיית redeploy אוטומטי + צילום/פלט בדיקה אחרי restart"} },
-  { num:3, name:"Supabase + RLS", branch:"feat/supabase-data", execution_status:"not_started", planning_status:"outline_only",
-    note:"SQL לא משמש לאימון, CV, SHAP, conformal, bootstrap או כיול — כל אלה ב-Python בלבד (פאזה 6).",
-    items:["schema.sql — טיפוסי עמודות, PK, source_row_id","views.sql — רק אם ייבחרו views בפועל; אחרת הכול ב-schema.sql","CHECK מינימלי (רק NOT NULL מדוד) — לא מוחק חריגות מקור (155/333 שורות)","אינדקסים רק לפי שאילתות Runtime אמיתיות + EXPLAIN, לא אוטומטי לכל עמודה","RLS + policies לפי app_metadata.organization=northbound","שאילתות Runtime מתועדות ל-insights/followup ו-insights/budget-tiers","בדיקות SQL/Data-Contract — מדווחות חריגות, לא מוחקות","בדיקות RLS: anon חסום · authenticated בלי organization חסום · Northbound מורשה","בדיקת parity — הגדרת budget_tier זהה ב-SQL וב-Python, אם קיימת בשתיהן"],
-    gate_decisions:["אופן מסירת גישת משתמש הדמו למנחה — הצגה במסך, README או מסירה נפרדת. אין לנחש. ההכרעה אינה חוסמת את ביצוע פאזה 3, אך חוסמת את אישור הביצוע של פאזה 4."],
-    accept:{product:"טבלה + RLS + טעינת 3,500 השורות",
-      test:"RLS חוסם anon ומשתמש מאומת בלי organization; Northbound מורשה",
-      evidence:"תוצאות שלוש בדיקות RLS + פלט בדיקות Data-Contract"} },
+  { num:3, name:"Supabase + RLS", branch:"feat/supabase-data", execution_status:"not_started", planning_status:"planning_in_progress",
+    note:"SQL לא משמש לאימון, CV, SHAP, conformal, bootstrap או כיול — כל אלה ב-Python בלבד (פאזה 6). עודכן 01.09.2026: התכנון המפורט נכתב מחדש ב-docs/planning/PHASE3.md על בסיס בדיקת מצב בפועל, שהפריכה ארבע הנחות של הטיוטה הקודמת — לא היה פרויקט Supabase (נוצר היום, ref zbxqwcwiirnrfnkzpwri, eu-central-1); הטיפוסים הם integer ולא numeric כי כל הערכים הלא-חסרים שלמים; אין Docker ולכן אין pgTAP מקומי ובדיקות ה-RLS רצות מול הפרויקט המרוחק; ו-aggregate ללא group by מחזיר שורת NULL גם למשתמש חסום ולכן followup_insight מסונן ב-where n>0. הפאזה טרם אושרה לביצוע.",
+    items:[
+      {t:"יצירת פרויקט Supabase ידנית ואימות מצבו", s:"done", u:"2026-09-01 15:36", e:"funneliq · ref zbxqwcwiirnrfnkzpwri · eu-central-1 · ACTIVE_HEALTHY · PG 17.6.1.166 · מסלול free, $0 · סכמת public ריקה (list_tables → []) · Data API דלוק, auto-expose כבוי, automatic RLS דלוק, בלי אינטגרציית GitHub"},
+      {t:"יצירת branch feat/supabase-data והרצת supabase init", s:"not_started", u:"", e:""},
+      {t:"כתיבת שתי המיגרציות, .env.example ועדכון .gitignore", s:"not_started", u:"", e:""},
+      {t:"supabase link ו-db push — סכמה, טיפוסים, grants מפורשים, RLS ו-policy", s:"not_started", u:"", e:""},
+      {t:"בדיקות RLS ו-grants לפני טעינת נתונים — סימולציית claims ב-SQL + בדיקת anon אמיתית ב-HTTP", s:"not_started", u:"", e:""},
+      {t:"load_data.py — ריצה ראשונה של 3,500 השורות וספירה", s:"not_started", u:"", e:""},
+      {t:"ריצה שנייה של ה-loader — חייבת להישאר 3,500 בדיוק", s:"not_started", u:"", e:""},
+      {t:"Data Contract מול Supabase + EXPLAIN על שתי שאילתות ה-Runtime", s:"not_started", u:"", e:""},
+      {t:"בדיקות RLS מחדש דרך שני ה-views לאחר שיש נתונים", s:"not_started", u:"", e:""},
+      {t:"pytest מקומי, סריקת secrets, PR ו-CI ירוק", s:"not_started", u:"", e:""},
+      {t:"תיעוד ראיות ב-PHASE3.md, ביקורת ואישור סגירה נפרד", s:"not_started", u:"", e:""}
+    ],
+    gate_decisions:["אופן מסירת גישת משתמש הדמו למנחה — הצגה במסך, README או מסירה נפרדת. אין לנחש. ההכרעה אינה חוסמת את ביצוע פאזה 3, אך חוסמת את אישור הביצוע של פאזה 4.","שלושה תיקוני SPEC.md ממתינים לאישור כפול נפרד: שורה 22 (\"קיים: פרויקט Supabase\") · עץ הארכיטקטורה (schema.sql בשורש מול supabase/migrations/) · מטריצת ההרשאות (anon key → publishable key)."],
+    accept:{product:"טבלה + RLS + grants מפורשים + טעינה שחזורית של 3,500 השורות + שני views מאובטחים",
+      test:"שתי הרצות loader נשארות על 3,500 שורות; Data Contract תואם למקור; anon נדחה; משתמש בלי organization מקבל אפס שורות; Northbound קורא בלבד; אותה אכיפה ובאותה סמנטיקה דרך שני ה-views",
+      evidence:"פלט שתי הרצות loader + מטריצת RLS/grants + בדיקת anon ב-HTTP + Data-Contract + EXPLAIN + CI ירוק"} },
   { num:4, name:"Auth", branch:"feat/auth", execution_status:"not_started", planning_status:"outline_only",
     items:["login עברי, הרשמה ציבורית כבויה","משתמש דמו מאומת מראש למנחה","session + sign-out, בדיקות שליליות (401/403)"],
     accept:{product:"login עברי + session",
