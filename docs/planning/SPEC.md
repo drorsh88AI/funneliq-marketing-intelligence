@@ -1,6 +1,7 @@
 # FunnelIQ — אפיון מלא (Project 1)
 
-> **מצב:** אפיון בלבד. לא בוצעו קוד, פריסה, חיבור שירותים או שינוי בפרויקט.
+> **מצב:** אפיון-העל הושלם; פאזות 0–2 הושלמו ואושרו, ופאזות ההמשך מתוכננות
+> ומאושרות בהדרגה לפי שער המעבר האחיד. המצב החי מתועד ב-`ROADMAP.html`.
 > **גרסה:** לאחר סבבי ביקורת Codex והכרעות המשתמש עליהם.
 
 ## Context
@@ -19,7 +20,8 @@
 **סביבה:** conda `pro1_FunnelIQ` עם כל התלויות. **חסר `pytest`.**
 `environment.yml` מכיל `prefix:` בשורה 167 עם נתיב מקומי — להסיר, לא נייד.
 
-**קיים:** GitHub, פרויקט Supabase. **אין חשבון Render** — נפתח בפאזה 2.
+**קיים:** GitHub וחשבון Supabase, ללא פרויקט ייעודי ל-FunnelIQ. **אין חשבון
+Render** — הוא נפתח בפאזה 2.
 
 ---
 
@@ -990,7 +992,8 @@ Project 1/                       ← git init כאן
 ├─ models/                       # Pipeline + metadata לכל משימה
 ├─ docs/                         # FINDINGS.md, feature_matrix.md, metrics.json, גרפים
 ├─ tests/
-├─ schema.sql (+ views.sql אם ייבחרו views) · requirements.txt
+├─ supabase/{config.toml, migrations/}   # migration לסכמה+RLS+grants · migration ל-2 views
+├─ requirements.txt
 ├─ render.yaml · .env.example · .gitignore
 ├─ README.md (EN) · REPORT.md (HE)
 └─ FunnelIQ_Assignment.html   (funnel_marketing_data.csv — מקומי, ignored, לא ב-repo)
@@ -1009,7 +1012,7 @@ checksum**. ה-API מוודא כל קלט מול הסכמה השמורה ונכ�
 **טבלה** `funnel_records`: `id bigserial pk`, `source_row_id int`, + 19 העמודות
 (`referred` כ-`text`).
 
-**טעינה** — `scripts/load_data.py`, service key מ-`.env`, batches, ניתן להרצה
+**טעינה** — `scripts/load_data.py`, secret key (`sb_secret_…`) מ-`.env`, batches, ניתן להרצה
 חוזרת עם `source_row_id` כמפתח יציב. **הכפילויות נשמרות.** *נדחתה הצעת staging /
 upsert בטרנזקציה: טעינה חד-פעמית של CSV סטטי בן 3,500 שורות, בלי ingestion
 מתמשך.*
@@ -1019,8 +1022,8 @@ upsert בטרנזקציה: טעינה חד-פעמית של CSV סטטי בן 3,5
 **SQL לאחסון, שליפה, הרשאות ואגרגציות יציבות. Python לניקוי אנליטי, סטטיסטיקה
 ו-ML.** אין להעביר ל-SQL אימון, CV, SHAP, conformal, bootstrap או כיול.
 
-**`schema.sql`** — יצירת `funnel_records`, טיפוסי עמודות, primary key,
-`source_row_id` כמפתח יציב · **policies של RLS** לפי
+**`supabase/migrations/<ts>_schema.sql`** — יצירת `funnel_records`, טיפוסי
+עמודות, primary key, `source_row_id` כמפתח יציב · **policies של RLS** לפי
 `auth.jwt() -> 'app_metadata' ->> 'organization' = 'northbound'`.
 
 **שאילתות Runtime מתועדות** לפחות לפיצ'ר אחד שהאפליקציה צורכת בפועל מ-Supabase
@@ -1040,8 +1043,8 @@ upsert בטרנזקציה: טעינה חד-פעמית של CSV סטטי בן 3,5
 - **`CHECK` constraints — מינימליים.** האפיון **שומר** במכוון כפילויות ורשומות
   חריגות (155 `closed > 0` עם `purchased = 0`, 333 עם `ltv > 0`). constraint
   שידחה אותן יסתור את מדיניות הניקוי. רק `NOT NULL` היכן שנמדד שאין חסרים.
-- **`views.sql` — רק אם ייבחרו views בפועל.** אחרת הכול ב-`schema.sql`,
-  וההחלטה מתועדת.
+- **Views — נבחרו בפועל.** שניים, ב-`supabase/migrations/<ts>_views.sql`,
+  עם `security_invoker = true`. ההגדרות והנימוק ב-`PHASE3.md` §ה.
 - **בלי stored procedures ובלי שכבת ETL.**
 
 **Auth — לסגור, לא לסנן.** "רק צוות Northbound יכול להיכנס" הוא טיעון *נגד*
@@ -1076,7 +1079,7 @@ upsert בטרנזקציה: טעינה חד-פעמית של CSV סטטי בן 3,5
 | Endpoint | הרשאה | תוכן |
 |---|---|---|
 | `GET /health` | **ציבורי** | health-check קל |
-| `GET /api/config` | **ציבורי** | `SUPABASE_URL` + **anon key בלבד**. לעולם לא service key או סוד אחר |
+| `GET /api/config` | **ציבורי** | `SUPABASE_URL` + **publishable key בלבד** (`sb_publishable_…`). לעולם לא secret key או סוד אחר |
 | כל השאר (`/api/predict/*`, `/api/simulate/*`, `/api/insights/*`) | **JWT תקף + `organization=northbound`** | 401 בלי token, 403 בלי ההרשאה |
 
 ⚠ *הניסוח הקודם "כל `/api/*` דורש Bearer" סתר את זרימת ההתחברות — הדפדפן חייב
@@ -1085,7 +1088,12 @@ upsert בטרנזקציה: טעינה חד-פעמית של CSV סטטי בן 3,5
 *נדחה: rate limiting עצמי. ה-API לא נוגע בסיסמאות; supabase-js מדבר ישירות מול
 Supabase שכבר מגביל את endpoints האימות שלו. CORS מוגבל — כן.*
 
-קריאות הדשבורד ל-Supabase נושאות את ה-JWT של המשתמש, **לא** service key.
+קריאות הדשבורד ל-Supabase נושאות את ה-JWT של המשתמש, **לא** secret key.
+
+**שני מפתחות.** `sb_publishable_…` — ציבורי, לדפדפן, ממופה לתפקיד `anon`
+ב-DB. `sb_secret_…` — **עוקף RLS**, רק ב-loader המקומי מ-`.env`; לעולם לא
+בדפדפן, בגיט או בפלט. אינם מבוססי JWT signing key ומנוהלים בנפרד. קריאות
+הנתונים נושאות את ה-JWT של המשתמש כדי ש-RLS תיאכף.
 
 ---
 
@@ -1187,7 +1195,7 @@ responsive desktop/mobile · התאמה בין העיצוב למימוש.
 
 **pytest:** Data Contract (הזהויות שנמדדו) · סכמת קלט לכל endpoint מול metadata
 הארטיפקט · טעינת ארטיפקטים · `/health` ציבורי · `/api/config` ציבורי ולא מכיל
-service key · endpoint עסקי ללא token = 401 · endpoint עסקי עם token בלי הרשאה
+secret key · endpoint עסקי ללא token = 401 · endpoint עסקי עם token בלי הרשאה
 = 403 · **סכום כל אסטרטגיית תקציב = 50,000** · דירוג הסימולטור · חישוב הנשירה.
 
 *הגנה על "אין fit על Holdout" היא **מבנית** — הכל בתוך `Pipeline` — ולא בדיקה
@@ -1208,7 +1216,7 @@ SHAP · צילומי מסך · URL חי · תרשים ארכיטקטורה · ה
 | 0 | — | **צ'קליסט אימות**: החלטות סגורות + Data Contract. אין החלטה חוסמת פתוחה |
 | 1 | `chore/skeleton` | `git init`, `.gitignore`, `requirements.txt` נעול, `pytest`, הסרת `prefix`, FastAPI עם `/health`, CI ירוק |
 | 2 | `feat/deploy` | חשבון Render, `render.yaml`, URL ציבורי, **שלד עם health-check עובד בענן**, redeploy אוטומטי מ-GitHub + אימות שהשירות חוזר ועובר `/health` לאחר restart יזום |
-| 3 | `feat/supabase-data` | `schema.sql` (+`views.sql` אם ייבחרו), RLS + `app_metadata`, טעינה, שאילתות Runtime מתועדות, בדיקות SQL/Data-Contract ובדיקות RLS בשלושה מצבי משתמש |
+| 3 | `feat/supabase-data` | `supabase/migrations/` — סכמה, טיפוסים, grants מפורשים, RLS לפי `app_metadata` + שני views, טעינה, שאילתות Runtime מתועדות, בדיקות Data-Contract ובדיקות RLS בשלושה מצבי משתמש |
 | 4 | `feat/auth` | *(הכרעת מסירת גישת הדמו היא הכרעה ייעודית **בשער 3→4**, לא תוצר של הפאזה)*; login עברי, הרשמה מכובה, משתמש דמו, session, sign-out, בדיקות שליליות |
 | 5 | `feat/analysis` | ניקוי, Data Contract, מטריצת זמינות, חבילות 1+5 |
 | 6 | `feat/models` | P2/P3/P4/P6 עם CV, calibration set, Holdout, כיול, conformal, bootstrap, SHAP, גרסה מוקדמת כניסוי |
@@ -1255,8 +1263,11 @@ SHAP · צילומי מסך · URL חי · תרשים ארכיטקטורה · ה
 מסירת גישת משתמש הדמו — בשער `3→4`, חוסמת את אישור הביצוע של פאזה 4 אך
 **אינה** חוסמת את ביצוע פאזה 3 (§ שער החלטה לפני פאזה 4).
 
-**מצב נוכחי:** פאזות 0–1 הושלמו ואושרו · פאזה 2 בתכנון מפורט, טרם בביצוע ·
-פאזות 3–14 בתכנון-על בלבד, ואין להרחיבן כעת לתוכניות ביצוע סופיות.
+**מצב נוכחי — תצלום מתוארך 01.09.2026. המקור החי הוא `ROADMAP.html`:**
+פאזות 0–2 הושלמו ואושרו · פאזה 3 ב-`planning_status: under_review` ו-
+`execution_status: not_started`, כל 11 ה-checkpoints `not_started` · שער
+`2→3` **פתוח**, ונסגר רק ב-`approved_for_execution` · פאזות 4–14 בתכנון-על
+בלבד. ⚠ **אין להסיק מכאן שפאזה 3 אושרה לביצוע.**
 
 ⚠ **העיצוב המבני (7) מקדים את ה-API (8–9)** — אם התצוגה הנכונה היא טווח ולא
 מספר, ה-API חייב להחזיר טווח. זה שינוי בסכמת התגובה, לא בעיצוב. אין צורך לסיים

@@ -312,7 +312,7 @@
     <h1>FunnelIQ — מפת ביצוע</h1>
     <div class="sub">מסמך חי המתעדכן ידנית לפי התקדמות בפועל — אינו קוד האפליקציה</div>
   </div>
-  <span class="status-pill" id="headline-status">✅ פאזות 0–2 הושלמו ואושרו · ✎ פאזה 3 בתכנון מפורט</span>
+  <span class="status-pill" id="headline-status">✅ פאזות 0–2 הושלמו ואושרו · ⚖ פאזה 3 בביקורת תכנון</span>
 </header>
 
 <nav class="tabs">
@@ -704,25 +704,25 @@ const PHASES = [
     accept:{product:"שירות חי ב-Render",
       test:"/health מחזיר 200 ב-URL הציבורי; push ל-GitHub מפעיל redeploy; /health חוזר להיות זמין לאחר restart יזום של השירות",
       evidence:"URL חי + ראיית redeploy אוטומטי + צילום/פלט בדיקה אחרי restart"} },
-  { num:3, name:"Supabase + RLS", branch:"feat/supabase-data", execution_status:"not_started", planning_status:"planning_in_progress",
-    note:"SQL לא משמש לאימון, CV, SHAP, conformal, bootstrap או כיול — כל אלה ב-Python בלבד (פאזה 6). עודכן 01.09.2026: התכנון המפורט נכתב מחדש ב-docs/planning/PHASE3.md על בסיס בדיקת מצב בפועל, שהפריכה ארבע הנחות של הטיוטה הקודמת — לא היה פרויקט Supabase (נוצר היום, ref zbxqwcwiirnrfnkzpwri, eu-central-1); הטיפוסים הם integer ולא numeric כי כל הערכים הלא-חסרים שלמים; אין Docker ולכן אין pgTAP מקומי ובדיקות ה-RLS רצות מול הפרויקט המרוחק; ו-aggregate ללא group by מחזיר שורת NULL גם למשתמש חסום ולכן followup_insight מסונן ב-where n>0. הפאזה טרם אושרה לביצוע.",
+  { num:3, name:"Supabase + RLS", branch:"feat/supabase-data", execution_status:"not_started", planning_status:"under_review",
+    note:"SQL לא משמש לאימון, CV, SHAP, conformal, bootstrap או כיול — כל אלה ב-Python בלבד (פאזה 6). עודכן 01.09.2026: התכנון המפורט נכתב מחדש ב-docs/planning/PHASE3.md על בסיס בדיקת מצב בפועל, שהפריכה ארבע הנחות של הטיוטה הקודמת — לא היה פרויקט Supabase (נוצר היום, ref zbxqwcwiirnrfnkzpwri, eu-central-1); הטיפוסים הם integer ולא numeric כי כל הערכים הלא-חסרים שלמים; אין Docker ולכן אין pgTAP מקומי ובדיקות ה-RLS רצות מול הפרויקט המרוחק; ו-aggregate ללא group by מחזיר שורת NULL גם למשתמש חסום ולכן followup_insight מסונן ב-having count(*)>0. ⚠ יצירת הפרויקט בוצעה בתוך שער 2→3 כחלק מבדיקת המצב, ולכן היא ראיית שער ולא תת-משימת ביצוע — לפי SPEC השער אינו נספר באחוז השלמת הביצוע, וכל 11 המשימות נשארות not_started. סבב ביקורת Codex–Claude הראשון הסתיים 01.09.2026 ותיקן: יחידת היחס 0–1 עם סובלנות 1e-9 במקום השוואה למספר מעוגל; בדיקות RLS דטרמיניסטיות בחמש שכבות עם expected/actual/pass; revoke מפורש גם מ-authenticated כדי שמצב ההרשאות ייקבע במיגרציה; stage_order ו-tier_order מפורשים; והשוואת מיפוי מלאה לפי source_row_id. סבב ביקורת שני תיקן שתי אי-עקביויות: בדיקת anon חסרה ב-SQL (נוספה E1, שלוש קריאות מבודדות עם 42501) ושורה כפולה ביומן ההכרעות. סבב שלישי תיקן נוהל ניקוי שגוי אחרי בדיקות D/E1 (transaction נשאר aborted; MCP חסר session affinity; לא לאפס claims למחרוזת ריקה) לנוהל SQL Editor באותו session עם אימות pid/current_user=session_user/role_reset/claims_safe. המשתמש אישר 01.09.2026 שביקורת התכנון נסגרה בהצלחה — planning_status עודכן ל-under_review. ⚠ זה עדיין אינו אישור לביצוע פאזה 3; execution_status נשאר not_started עד אישור סופי נפרד בשער.",
     items:[
-      {t:"יצירת פרויקט Supabase ידנית ואימות מצבו", s:"done", u:"2026-09-01 15:36", e:"funneliq · ref zbxqwcwiirnrfnkzpwri · eu-central-1 · ACTIVE_HEALTHY · PG 17.6.1.166 · מסלול free, $0 · סכמת public ריקה (list_tables → []) · Data API דלוק, auto-expose כבוי, automatic RLS דלוק, בלי אינטגרציית GitHub"},
+      {t:"בדיקת פתיחה: main מסונכרן, עץ עבודה נקי, פרויקט Supabase זמין ומאומת", s:"not_started", u:"", e:""},
       {t:"יצירת branch feat/supabase-data והרצת supabase init", s:"not_started", u:"", e:""},
       {t:"כתיבת שתי המיגרציות, .env.example ועדכון .gitignore", s:"not_started", u:"", e:""},
       {t:"supabase link ו-db push — סכמה, טיפוסים, grants מפורשים, RLS ו-policy", s:"not_started", u:"", e:""},
-      {t:"בדיקות RLS ו-grants לפני טעינת נתונים — סימולציית claims ב-SQL + בדיקת anon אמיתית ב-HTTP", s:"not_started", u:"", e:""},
+      {t:"שכבות A+B+E לפני טעינה — מטריצת grants 24/24, relrowsecurity ו-security_invoker, ודחיית anon בשני המסלולים: שלוש קריאות SQL מבודדות (42501) ובדיקת HTTP אמיתית", s:"not_started", u:"", e:""},
       {t:"load_data.py — ריצה ראשונה של 3,500 השורות וספירה", s:"not_started", u:"", e:""},
       {t:"ריצה שנייה של ה-loader — חייבת להישאר 3,500 בדיוק", s:"not_started", u:"", e:""},
-      {t:"Data Contract מול Supabase + EXPLAIN על שתי שאילתות ה-Runtime", s:"not_started", u:"", e:""},
-      {t:"בדיקות RLS מחדש דרך שני ה-views לאחר שיש נתונים", s:"not_started", u:"", e:""},
+      {t:"Data Contract מול Supabase, בדיקת parity בסובלנות 1e-9 ו-EXPLAIN על שתי שאילתות ה-Runtime", s:"not_started", u:"", e:""},
+      {t:"שכבות C+D וחזרה על E אחרי הטעינה — ספירות RLS בשני מצבי משתמש, ושלושה ניסיונות כתיבה שנדחים", s:"not_started", u:"", e:""},
       {t:"pytest מקומי, סריקת secrets, PR ו-CI ירוק", s:"not_started", u:"", e:""},
       {t:"תיעוד ראיות ב-PHASE3.md, ביקורת ואישור סגירה נפרד", s:"not_started", u:"", e:""}
     ],
-    gate_decisions:["אופן מסירת גישת משתמש הדמו למנחה — הצגה במסך, README או מסירה נפרדת. אין לנחש. ההכרעה אינה חוסמת את ביצוע פאזה 3, אך חוסמת את אישור הביצוע של פאזה 4.","שלושה תיקוני SPEC.md ממתינים לאישור כפול נפרד: שורה 22 (\"קיים: פרויקט Supabase\") · עץ הארכיטקטורה (schema.sql בשורש מול supabase/migrations/) · מטריצת ההרשאות (anon key → publishable key)."],
+    gate_decisions:["אופן מסירת גישת משתמש הדמו למנחה — הצגה במסך, README או מסירה נפרדת. אין לנחש. ההכרעה אינה חוסמת את ביצוע פאזה 3, אך חוסמת את אישור הביצוע של פאזה 4."],
     accept:{product:"טבלה + RLS + grants מפורשים + טעינה שחזורית של 3,500 השורות + שני views מאובטחים",
-      test:"שתי הרצות loader נשארות על 3,500 שורות; Data Contract תואם למקור; anon נדחה; משתמש בלי organization מקבל אפס שורות; Northbound קורא בלבד; אותה אכיפה ובאותה סמנטיקה דרך שני ה-views",
-      evidence:"פלט שתי הרצות loader + מטריצת RLS/grants + בדיקת anon ב-HTTP + Data-Contract + EXPLAIN + CI ירוק"} },
+      test:"שתי הרצות loader נשארות על 3,500 שורות; לכל k השורה source_row_id=k זהה לשורת ה-CSV ה-k בכל 19 העמודות; ערכי שני ה-views (יחס 0–1, לא אחוז) זהים לחישוב מה-CSV בהפרש קטן מ-1e-9; מטריצת grants 24/24; anon נדחה ב-42501 בשלוש קריאות SQL וגם ב-HTTP; משתמש בלי organization מקבל אפס שורות בלי שגיאה; Northbound קורא 3,500/5/3 ושלושת ניסיונות הכתיבה שלו נדחים",
+      evidence:"פלט חמש שכבות הבדיקה עם expected/actual/pass + relacl גולמי + שגיאות 42501 המלאות + אימות session ומצב נקי (pid/role/claims) אחרי כל בדיקת שגיאה + שתי הרצות loader + Data-Contract + parity + EXPLAIN + סריקת secrets + CI ירוק"} },
   { num:4, name:"Auth", branch:"feat/auth", execution_status:"not_started", planning_status:"outline_only",
     items:["login עברי, הרשמה ציבורית כבויה","משתמש דמו מאומת מראש למנחה","session + sign-out, בדיקות שליליות (401/403)"],
     accept:{product:"login עברי + session",
