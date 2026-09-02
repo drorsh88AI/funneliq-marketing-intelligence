@@ -1,6 +1,7 @@
 # פאזה 3 — Supabase + RLS
 
-> **סטטוס:** תכנון מפורט · טרם אושר לביצוע
+> **סטטוס:** מאושר לביצוע (`approved_for_execution`) · בביצוע — checkpoints
+> 1–2 הושלמו; checkpoint 3 בתיקון לאחר ביקורת, טרם `db push`
 > **Branch מתוכנן:** `feat/supabase-data`
 > **גבול הפאזה:** שכבת נתונים והרשאות בלבד. אין Auth UI, אין יצירת משתמשים,
 > אין endpoints עסקיים, אין EDA ואין מודלים.
@@ -179,12 +180,30 @@ create table public.funnel_records (
 
 alter table public.funnel_records enable row level security;
 
-revoke all    on public.funnel_records from anon, authenticated, public;
+revoke all    on public.funnel_records from anon, authenticated, service_role, public;
 grant  select on public.funnel_records to   authenticated;
 
 create policy funnel_records_northbound_select
   on public.funnel_records for select to authenticated
   using (auth.jwt() -> 'app_metadata' ->> 'organization' = 'northbound');
+
+-- service_role (הסקריפט המקומי, secret key): BYPASSRLS עוקף policies,
+-- לא GRANT/REVOKE. Automatically-expose כבוי ⇒ בלי grant מפורש, ה-loader
+-- נכשל ב-permission denied. select/insert/update בלבד — upsert לא מוחק,
+-- ובדיקת Data Contract (checkpoint 8) קוראת מהטבלה, לא מ-view.
+grant select, insert, update
+  on public.funnel_records
+  to service_role;
+
+-- הרשאות sequence הן מרחב ACL נפרד מהרשאות טבלה; nextval()/currval() של
+-- ה-bigserial ב-INSERT דורש אותן במפורש. revoke קודם, מאותה סיבת דטרמיניזם —
+-- המצב הסופי לא יכול להסתמך על ברירות המחדל של פרויקט כלשהו.
+revoke all on sequence public.funnel_records_id_seq
+  from anon, authenticated, service_role, public;
+
+grant usage, select
+  on sequence public.funnel_records_id_seq
+  to service_role;
 ```
 
 `enable row level security` נכתב במפורש ואינו מסתמך על מתג ה-Automatic RLS
@@ -196,6 +215,61 @@ create policy funnel_records_northbound_select
 ואחריו `grant select`, **מצב ההרשאות הסופי נקבע על ידי המיגרציה** ולא יורש
 מהגדרת הפרויקט — ומטריצת הבדיקה בסעיף ו' מוכיחה מצב שנקבע, לא מצב מקרי.
 הסדר מהותי: `revoke` קודם, `grant` אחריו.
+
+**`service_role` אינו פטור מ-grants, למרות `BYPASSRLS`.** `BYPASSRLS` היא
+תכונת role שעוקפת **policies** — שכבת ה-RLS. היא אינה עוקפת בדיקת ACL ברמת
+האובייקט (GRANT/REVOKE) — שכבה נפרדת ב-Postgres שנבדקת לפני ה-policies.
+Automatically-expose כבוי משפיע גם עליו, ולכן המיגרציה כוללת grants מפורשים
+ל-`service_role` על הטבלה ועל ה-sequence — בלעדיהם `scripts/load_data.py`
+(checkpoint 6) נכשל ב-`permission denied`. אין grant ל-`service_role` על
+שני ה-views — הסקריפטים המקומיים לא צורכים אותם.
+
+**`revoke` על הטבלה, ה-sequence ושני ה-views כולל את `service_role`
+במפורש, מאותה סיבת דטרמיניזם כמו ב-`authenticated` (לעיל).** לא מדובר בהרשאות
+עודפות שקיימות כרגע — בפרויקט הזה `service_role` מתחיל נקי, בדיוק כמו
+`authenticated`. הטענה היא שהמיגרציה כטקסט SQL לא יכולה להניח זאת: אם היא
+תרוץ אי-פעם על פרויקט שבו Automatically-expose היה דלוק בזמן יצירת הטבלה, או
+שברירות המחדל ישתנו, `service_role` עלול לרשת `DELETE` על הטבלה או הרשאות על
+ה-views — בדיוק מה שמטריצה A מצפה שיהיה `false`. `revoke` מלא הופך את המצב
+הסופי לתלוי רק במיגרציה, לא בהיסטוריה של הפרויקט שעליו היא רצה.
+
+### ד.1 — תיקון Advisors, אחרי checkpoint 4
+
+לאחר ש-migration 1–2 הוחלו על הפרויקט החי, `get_advisors` (Security +
+Performance) העלה שני ממצאים אמיתיים, שאומתו במלואם מול הפלט — לא הונחו:
+
+| ממצא | סוג | ראיה מ-advisors |
+|---|---|---|
+| `funnel_records_northbound_select` מריץ `auth.jwt()` מחדש לכל שורה | Performance — `auth_rls_initplan` | "re-evaluates current_setting() or auth.<function>() for each row" |
+| `public.rls_auto_enable()` — `SECURITY DEFINER`, `proacl null` | Security — `anon_security_definer_function_executable` + `authenticated_...` | "can be executed by the `anon` role... via `/rest/v1/rpc/rls_auto_enable`", ואותו דבר עבור `authenticated` |
+
+**`rls_auto_enable()` לא נוצרה באף אחת משתי המיגרציות שלנו.** מקורה מסתבר
+במתג "Automatic RLS" שהפעלנו ביצירת הפרויקט (§ב) — מנגנון פלטפורמה שמפעיל
+RLS אוטומטית על טבלאות חדשות, לא קוד שלנו. ה-`proacl` הריק שלה פירושו
+שהיא נגישה ל-`anon`/`authenticated` רק דרך ברירת המחדל של Postgres
+(`EXECUTE` ל-`PUBLIC` בכל פונקציה חדשה), לא grant מפורש.
+
+**התיקון — migration שלישית, לא עריכה של הראשונות שכבר הוחלו:**
+`supabase/migrations/20260901172942_fix_advisors.sql`:
+
+```sql
+alter policy funnel_records_northbound_select
+  on public.funnel_records
+  using ((select auth.jwt()) -> 'app_metadata' ->> 'organization' = 'northbound');
+
+revoke execute on function public.rls_auto_enable()
+  from public, anon, authenticated;
+```
+
+`(select auth.jwt())` הופך את ההערכה מ-per-row ל-initplan יחיד לכל שאילתה.
+ה-`revoke` סוגר את חשיפת ה-RPC בלי לגעת בהפעלה הפנימית של הפונקציה על ידי
+מנגנון הפלטפורמה עצמו — טריגרים רצים בהרשאות הבעלים, לא דרך grants ל-roles.
+
+**✅ אומת 01.09.2026 אחרי `db push` חוזר.** `get_advisors` (security + performance)
+חזרו ריקים לחלוטין. אימות נוסף ישירות מהקטלוג: `pg_policy.polqual` על
+`funnel_records_northbound_select` מציג `(SELECT auth.jwt() AS jwt)` עטוף
+כ-subquery; `pg_proc.proacl` של `rls_auto_enable()` הוא `{postgres=X/postgres}`
+בלבד — אין `anon`, `authenticated` או `PUBLIC`. checkpoint 4 סגור.
 
 ---
 
@@ -258,7 +332,7 @@ from public.funnel_records
 group by 1, 2;
 
 revoke all    on   public.followup_insight, public.budget_tier_insight
-              from anon, authenticated, public;
+              from anon, authenticated, service_role, public;
 grant  select on   public.followup_insight, public.budget_tier_insight
               to   authenticated;
 ```
@@ -266,7 +340,9 @@ grant  select on   public.followup_insight, public.budget_tier_insight
 **על צורת ה-`union all`.** גם `cross join lateral (values …)` תקין ב-PostgreSQL
 והיה עובד. הבחירה כאן היא **קריאוּת בלבד** — חמישה `select` זהים במבנה שכל אחד
 מהם מובן בפני עצמו. חמש סריקות על 3,500 שורות אינן שיקול ביצועים לכאן ולכאן.
-ה-`revoke` כולל את `authenticated` מאותה סיבה שהוסברה בסעיף ד'.
+ה-`revoke` כולל את `authenticated` ואת `service_role` מאותה סיבת דטרמיניזם
+שהוסברה בסעיף ד' — `service_role` לא צריך גישה לשני ה-views, וה-`revoke`
+מוודא שהמצב הזה נקבע במיגרציה ולא נשען על ברירות מחדל.
 
 **הגדרת הטיירים אינה ממציאה טייר לפער 1501–1999.** ערך בפער ייפול ל-`NULL`
 ויופיע כשורה נפרדת ב-view — כלומר ה-view **מדווח** על ערך שלא נצפה במקור במקום
@@ -285,7 +361,7 @@ grant  select on   public.followup_insight, public.budget_tier_insight
 | 2 | `git switch -c feat/supabase-data` מ-`main` מסונכרן; `supabase init` |
 | 3 | כתיבת שתי המיגרציות + `.env.example` + עדכון `.gitignore` |
 | 4 | `supabase link` ו-`supabase db push` — סכמה, grants ו-RLS |
-| 5 | **שכבות A + B + E** — grants, דגלי אובייקטים ובדיקת `anon` ב-HTTP, לפני טעינה |
+| 5 | **שכבות A + B + E** — grants (כולל `service_role` וה-sequence), דגלי אובייקטים ובדיקת `anon` ב-HTTP, לפני טעינה |
 | 6 | `load_data.py` — ריצה ראשונה; ספירת שורות |
 | 7 | ריצה שנייה — חייבת להישאר 3,500 בדיוק |
 | 8 | Data Contract מול Supabase, בדיקת parity ו-`EXPLAIN` על שתי שאילתות ה-Runtime |
@@ -315,21 +391,52 @@ pgTAP מקומי אינו זמין. **העיקרון המנחה:** לבדוק ה
 
 **שכבה A — מטריצת grants** (checkpoint 5; אינה תלויה בנתונים):
 
+כולל `service_role`, כי `BYPASSRLS` עוקף policies ולא GRANT/REVOKE — ראו סעיף
+ד'. ה-`expected` הפך מהשוואה בוליאנית יחידה ל-`case`, כי לשלושת התפקידים יש
+כעת ציפיות שונות זו מזו:
+
 ```sql
 select r.rolname, o.obj, p.priv,
        has_table_privilege(r.rolname, o.obj, p.priv) as actual,
-       (r.rolname = 'authenticated' and p.priv = 'SELECT') as expected,
-       has_table_privilege(r.rolname, o.obj, p.priv)
-         = (r.rolname = 'authenticated' and p.priv = 'SELECT') as pass
-from   (values ('anon'),('authenticated')) as r(rolname)
+       case
+         when r.rolname = 'authenticated' and p.priv = 'SELECT'
+           then true
+         when r.rolname = 'service_role' and o.obj = 'public.funnel_records'
+              and p.priv in ('SELECT','INSERT','UPDATE')
+           then true
+         else false
+       end as expected,
+       has_table_privilege(r.rolname, o.obj, p.priv) = case
+         when r.rolname = 'authenticated' and p.priv = 'SELECT'
+           then true
+         when r.rolname = 'service_role' and o.obj = 'public.funnel_records'
+              and p.priv in ('SELECT','INSERT','UPDATE')
+           then true
+         else false
+       end as pass
+from   (values ('anon'),('authenticated'),('service_role')) as r(rolname)
 cross join (values ('public.funnel_records'),
                    ('public.followup_insight'),
                    ('public.budget_tier_insight')) as o(obj)
 cross join (values ('SELECT'),('INSERT'),('UPDATE'),('DELETE')) as p(priv);
 ```
 
-2 תפקידים × 3 אובייקטים × 4 פעולות = **24 שורות**, כל אחת עם `pass` מפורש.
-הקבלה: 24/24 `true`. זו ההוכחה שמצב ההרשאות הוא מה שהמיגרציה קבעה. נשמר גם
+3 תפקידים × 3 אובייקטים × 4 פעולות = **36 שורות**. `service_role` מצופה
+`true` רק על הטבלה ורק ב-SELECT/INSERT/UPDATE — **לא** על שני ה-views (הם
+לא נצרכים משם), **ולא** DELETE (ה-loader לא מוחק).
+
+`has_table_privilege` אינו חל על sequences — נדרשת בדיקה נפרדת לאותה שכבה:
+
+```sql
+select 'service_role' as rolname, 'public.funnel_records_id_seq' as obj, priv,
+       has_sequence_privilege('service_role', 'public.funnel_records_id_seq', priv) as actual,
+       true as expected,
+       has_sequence_privilege('service_role', 'public.funnel_records_id_seq', priv) as pass
+from (values ('usage'), ('select')) as p(priv);
+```
+
+2 שורות נוספות. **הקבלה: 38/38 `true`** (36 + 2). זו ההוכחה שמצב ההרשאות —
+כולל מסלול הטעינה בפועל — הוא מה שהמיגרציה קבעה, לא מה שהתקבל במקרה. נשמר גם
 פלט `relacl` הגולמי משלושת האובייקטים.
 
 **שכבה B — דגלי אובייקטים** (checkpoint 5): `relrowsecurity` על הטבלה, ו-
@@ -395,85 +502,115 @@ rollback;
 שתי התת-שכבות רצות גם **לפני** הטעינה — `anon` נדחה ללא תלות בנתונים. E2 היא
 הבדיקה שמוכיחה שהמסלול שהמשתמש באמת עובר בו סגור.
 
-#### נוהל ניקוי אחרי בדיקות שגיאה (D ו-E1)
+#### נוהל בדיקות שגיאה — E1 (checkpoint 5, בוצע בפועל 02.09.2026)
 
-שש הבדיקות שמעוררות שגיאה במכוון — שלוש בשכבה D ושלוש ב-E1 — מותירות את
-ה-transaction במצב **aborted**. Postgres דוחה כל פקודה נוספת עד `ROLLBACK`,
-ולכן `rollback` שנכתב **בתוך אותו בלוק** אחרי השגיאה אינו מובטח שירוץ. ב-SQL
-Editor, שבו הסשן נשמר בין הרצות, מצב aborted נדבק — והשגיאה של **הבדיקה
-הבאה** תיראה כתוצאת RLS במקום כשארית של הבדיקה הקודמת.
+**הנוהל המתוכנן במקור נכשל באימות, ולא בוצע.** התוכנית המקורית (רצף שישה
+שלבים דרך SQL Editor — `pg_backend_pid`, ניסיון השגיאה, `rollback`,
+`reset role`, `reset request.jwt.claims`, ואימות ש-`pid` זהה) הניחה ש-SQL
+Editor שומר session בין הרצות נפרדות. **ההנחה הופרכה בפועל:** ה-`pid`
+שנרשם בשלב הראשון (`29375`) היה שונה מה-`pid` שנקרא בשלב האימות (`30087`)
+— כלל 4 בגרסה הקודמת של המסמך קבע מראש שבמקרה כזה יש לעבור לחלופת
+ה-exception handler, וכך נעשה.
 
-**ההכרעה: אפשרות א׳ — SQL Editor, אותו session.** שש בדיקות השגיאה עוברות
-מ-MCP ל-SQL Editor, כל בדיקה ונוהל הניקוי שלה **באותו חלון/session**. MCP
-נשאר המסלול הראשי לשכבות A/B/C בלבד, שאינן מעוררות שגיאות.
-
-*(אפשרות שנדחתה: `exception handler` ב-PL/pgSQL שתופס `insufficient_privilege`
-בתוך הבלוק עצמו, כך שה-transaction החיצוני אינו נשאר aborted. נדחתה כקסם
-מיותר בשביל שש בדיקות; ר' סעיף ד' לנוהל המעבר אליה אם session affinity נכשל.)*
-
-**הרצף לכל בדיקת שגיאה — שישה שלבים:**
-
-| # | פקודה | מצופה |
-|---|---|---|
-| 1 | `select pg_backend_pid();` | נרשם כזהות ה-session |
-| 2 | ניסיון השגיאה (שכבה D או E1) | `42501` + ההודעה המלאה |
-| 3 | `rollback;` | ה-transaction נסגר |
-| 4 | `reset role;` | — |
-| 5 | `reset request.jwt.claims;` | — |
-| 6 | אימות מצב | ארבע שורות `pass = true` |
-
-**שאילתת האימות — ארבע בדיקות עם `expected`/`actual`/`pass` מפורשים:**
+**הנוהל שבוצע בפועל: בלוק PL/pgSQL יחיד, `begin`...`commit` מפורש, לא
+מרובה-קריאות.** שלושת האובייקטים (הטבלה ושני ה-views) נבדקים בתוך **אותה
+עסקה אחת**, כל אחד ב-`DO` block נפרד שתופס `insufficient_privilege`
+ב-`EXCEPTION` — ה-savepoint הפנימי של PL/pgSQL מבטיח שה-transaction
+החיצוני **אף פעם לא נשאר aborted**, ולכן אין תלות ב-session affinity כלל.
+זה מוחק את הבעיה מיסודה, לא רק ב-SQL Editor אלא גם ב-MCP.
 
 ```sql
+begin;
+
+select set_config('app.start_pid', pg_backend_pid()::text, true);
+
+set local role anon;
+
+do $$
+declare
+  v_state   text;
+  v_message text;
+begin
+  perform (select count(*) from public.funnel_records);
+  raise exception 'UNEXPECTED: anon was not denied on funnel_records';
+exception
+  when insufficient_privilege then
+    get stacked diagnostics
+      v_state = returned_sqlstate,
+      v_message = message_text;
+    perform set_config('app.t1_state', v_state, true);
+    perform set_config('app.t1_message', v_message, true);
+end $$;
+
+-- אותו מבנה ל-followup_insight (app.t2_*) ול-budget_tier_insight (app.t3_*)
+
+reset role;
+reset request.jwt.claims;
+
 select 'same_pid' as check_name,
-       '<PID_FROM_STEP_1>'    as expected,
+       current_setting('app.start_pid') as expected,
        pg_backend_pid()::text as actual,
-       pg_backend_pid() = <PID_FROM_STEP_1> as pass
+       pg_backend_pid()::text = current_setting('app.start_pid') as pass
 union all
 select 'current_user_equals_session_user',
-       session_user::text, current_user::text,
-       current_user = session_user
+       session_user::text, current_user::text, current_user = session_user
 union all
 select 'role_reset',
        'none', coalesce(current_setting('role', true), '<null>'),
        coalesce(current_setting('role', true), 'none') = 'none'
 union all
 select 'claims_safe',
-       'NULL or valid JSON',
-       coalesce(current_setting('request.jwt.claims', true), '<null>'),
+       'NULL, empty, or valid JSON',
+       coalesce(nullif(current_setting('request.jwt.claims', true), ''), '<null-or-empty>'),
        current_setting('request.jwt.claims', true) is null
-         or pg_input_is_valid(current_setting('request.jwt.claims', true), 'jsonb');
+         or current_setting('request.jwt.claims', true) = ''
+         or pg_input_is_valid(current_setting('request.jwt.claims', true), 'jsonb')
+union all
+select 'funnel_records_sqlstate', '42501',
+       coalesce(current_setting('app.t1_state', true), '<not set>'),
+       current_setting('app.t1_state', true) = '42501'
+-- + funnel_records_message, followup_insight_sqlstate/message, budget_tier_insight_sqlstate/message
+;
+
+commit;
 ```
 
-**שלוש נקודות שיש להקפיד עליהן בניסוח:**
+**חמש נקודות עיצוב, כל אחת נלמדה מכשל אמיתי בהרצה:**
 
-- **בעלות החיבור אינה נגזרת מ-`current_setting('role')`.** אחרי `RESET ROLE`
-  ה-GUC חוזר ל-`none`, וזה **מצב תקין**; הבדיקה הנכונה לחזרה לבעל החיבור היא
-  `current_user = session_user`.
-- **`claims_safe` אינו דורש ניסוח פנימי מסוים** — `NULL` תקין, וכל JSON תקף
-  תקין. אין להיתלות בערך ברירת מחדל ספציפי ש-`RESET` יחזיר.
-- הבדיקה משתמשת ב-`pg_input_is_valid` (PG 16+; הפרויקט על 17.6) כדי **לא**
-  לזרוק בעצמה — cast ישיר ל-`jsonb` על ערך פגום היה מבטל את ה-transaction
-  ומייצר בדיוק את הבעיה שהנוהל בא למנוע.
+1. **PID נשמר בתוך אותה עסקה**, לא בקריאה נפרדת — `set_config('app.start_pid',
+   ..., true)` (local לעסקה), לא `\gset` (מאפיין `psql`, לא זמין ב-SQL Editor
+   של Supabase) ולא `pg_backend_pid()` שנקרא לפני הבלוק (זה עצמו חיבור אחר).
+2. **`RAISE NOTICE` אינו ערוץ ראיה אמין.** SQL Editor של Supabase אינו מציג
+   הודעות `NOTICE` בשום פאנל נגיש — כנראה `client_min_messages` מסונן. הוחלף
+   ב-`set_config`, ותוצאות ה-`GET STACKED DIAGNOSTICS` (sqlstate + message
+   האמיתיים, לא טקסט קבוע) מוצגות כשורות בטבלת התוצאה — הערוץ היחיד שהוכח
+   שמגיע בפועל.
+3. **`claims_safe` חייב לקבל `''` (מחרוזת ריקה) כמצב תקין, לא רק `NULL`.**
+   ב-Supabase, `request.jwt.claims` הוא GUC עם ברירת מחדל `''` ברמת ה-session
+   (כדי ש-`current_setting` לא יזרוק שגיאה לפני שהגיעה בקשה), לא `NULL`.
+   בדיקה שדרשה `NULL` בלבד נכשלה (`pass=false`) אחרי `RESET` תקין — הבאג היה
+   בבדיקה, לא בניקוי. `coalesce(nullif(..., ''), ...)` ו-`... = ''` מטפלים בזה.
+4. **`begin`/`commit` מפורשים**, לא הנחה על batching מרומז של הלקוח.
+5. **בלי תווים לא-ASCII בתוך string literals.** מקף ארוך (`—`) בתוך
+   `'<not set...>'` נשבר דרך שרשרת ההעתקה-הדבקה (Windows → דפדפן) לבתים לא
+   תקינים וגרם ל-`syntax error` שהצביע על שורה לא-קשורה. הוחלף ב-`-` רגיל.
 
-**ארבעה כללים:**
+**תוצאה: 10/10 `pass`** — ארבע בדיקות המצב + `sqlstate`/`message` לכל אחד
+משלושת האובייקטים, כולם `42501` וההודעה המדויקת.
 
-1. אין להתחיל את הבדיקה הבאה לפני שהאימות בשלב 6 חזר כמצופה בכל ארבע השורות.
-2. **הראיה כוללת את פלט האימות**, לא רק את השגיאה — בלעדיו אי אפשר לדעת
-   ששגיאת ההמשך אינה שארית של הבדיקה הקודמת.
-3. **לעולם לא `set_config` למחרוזת ריקה** על `request.jwt.claims`. רק `RESET`.
-4. ⚠ **הנחת ה-session חייבת להיבדק, לא להיות מונחת.** הבדיקה הראשונה, פעם
-   אחת לפני שש בדיקות השגיאה, מוודאת ש-SQL Editor אכן שומר session בין
-   הרצות. אם ה-`pid` משתנה — אין session affinity גם שם, כל הנוהל אינו תקף,
-   ויש לעבור לחלופת ה-exception handler.
+⚠ **נגזרת ל-checkpoint 9 (שכבה D).** נוהל ה-`rollback`/`reset` המקורי בתכנון
+המקורי לא נבדק בפועל עדיין, אך הוא **אותה שיטה בדיוק** שנכשלה כאן. מומלץ
+לאמץ את דפוס ה-exception-handler גם ל-D לפני checkpoint 9, ולעדכן את התכנון
+בהתאם — לא לחזור על אותה הנחה שכבר הופרכה.
 
 #### ממשל הבדיקות — מי מריץ ואיך נשמרת הראיה
 
 | כלל | קיבוע |
 |---|---|
-| יחידת הרצה | **A/B/C:** כל בלוק `begin…rollback` מורץ כיחידה אחת ואינו מפוצל. **D/E1:** ניסיון השגיאה ונוהל הניקוי הם קריאות נפרדות באותו SQL Editor session; לאחר הניקוי מורצת שאילתת האימות, ואין להתחיל בדיקה נוספת לפני שכל ארבעת ערכי `pass` הם `true` |
+| יחידת הרצה | **A/B/C:** כל בלוק `begin…rollback` מורץ כיחידה אחת ואינו מפוצל. **E1 (בפועל):** בלוק `begin`...`commit` יחיד, קריאה אחת בלבד — exception handler תופס את השגיאה בתוך savepoint פנימי, אין קריאת ניקוי נפרדת. **D (checkpoint 9, טרם בוצע):** מתוכנן באותו נוהל רב-קריאתי שכבר הוכח שנכשל ב-E1 — ר' הנגזרת בסוף "נוהל בדיקות שגיאה — E1" |
 | מסלול — שכבות A/B/C | **MCP `execute_sql` ראשי · SQL Editor גיבוי** — אותו טקסט SQL בשני המסלולים. אינן מעוררות שגיאה, ולכן אינן תלויות ב-session affinity |
-| מסלול — שכבות D/E1 | **חובה SQL Editor, כל בדיקה ונוהל הניקוי שלה באותו session.** ⚠ **אסור** MCP: שתי קריאות MCP נפרדות (בדיקה + ניקוי) אינן מובטחות ליפול על אותו חיבור מה-pool, וקריאת ניקוי על חיבור אחר נותנת ביטחון שווא. ראו "נוהל ניקוי אחרי בדיקות שגיאה" למטה |
+| מסלול — E1 (בפועל) | **בלוק PL/pgSQL יחיד, `begin`...`commit` מפורש, קריאה אחת בלבד.** אומת ש-SQL Editor **גם הוא** חסר session affinity בין הרצות נפרדות (לא רק MCP) — הכלל "אסור MCP" בגרסה הקודמת נבע מהנחה שהופרכה. הפתרון בפועל: exception handler לוכד את השגיאה **בתוך** אותה קריאה, כך שאין עוד תלות בזהות החיבור בכלל — לא ב-SQL Editor ולא ב-MCP. ראו "נוהל בדיקות שגיאה — E1" למטה |
+| מסלול — D (checkpoint 9, טרם בוצע) | ⚠ הנוהל הישן (רב-קריאתי, rollback/reset) **טרם נבדק ועלול להיכשל באותה צורה** — ר' הנגזרת בסוף סעיף E1. יש לשקול את אותו דפוס לפני checkpoint 9 |
 | פלט כל שכבה | נשמר כטבלה עם שלוש עמודות חובה: `expected`, `actual`, `pass` |
 | שכבות D ו-E1 | נשמרות בנפרד, עם **קוד השגיאה והודעת PostgreSQL המלאה** (`42501` · `permission denied for table …`) — לא כ-`pass` בוליאני בלבד. כל בדיקה מלווה בפלט נוהל הניקוי |
 | שכבה E2 | נשמרים **status code** וגוף תגובה מסונן. **בלי headers** ובלי echo של הבקשה |
@@ -491,8 +628,21 @@ select 'claims_safe',
 
 **בדיקת ה-parity — בעלות מפורשת.** ההשוואה בין ערכי ה-views לערכים שמחשב
 Python מה-CSV **אינה** בדיקת CI, כי ה-views דורשים credentials. היא צעד מקומי
-ב-**checkpoint 8**: שולפים את שני ה-views, מריצים את אותן נוסחאות על ה-CSV,
-ומשווים בסובלנות `1e-9`. בלי ההצמדה הזו, "parity" הוא קריטריון בלי בעלים.
+ב-**checkpoint 8**, ובוצעה בפועל 02.09.2026.
+
+⚠ **לא דרך `scripts/verify_data_contract.py` / ה-client של Python — זו מגבלה
+ארכיטקטונית, לא רק הרשאתית.** ניסיון ראשון עם `service_role` נכשל ב-
+`permission denied for view followup_insight`: אין ל-`service_role` grant
+על ה-views בכוונה (D4 — "הסקריפטים המקומיים לא צורכים אותם"), ובכל מקרה
+PostgREST אין לו דרך להתחזות ל-`authenticated`+`organization=northbound` בלי
+JWT אמיתי — אין עדיין משתמשי Auth (פאזה 4). הפתרון: סימולציית role דרך
+MCP `execute_sql`, אותו דפוס בדיוק כמו שכבה C ב-checkpoint 5.
+
+**תוצאה:** `followup_insight` — 5/5 שורות, הפרש ~1e-16–1e-17 מהחישוב ב-Python
+(רחוק מ-`1e-9`). `budget_tier_insight` — `n`=780/1,717/1,003 (סכום 3,500),
+הפרש ~1e-17–1e-19. `EXPLAIN` (בלי `ANALYZE`) על שתי השאילתות: `Seq Scan`
+זול על 3,500 שורות (~800 ו-~162 cost בהתאמה) — אין רמז לצורך באינדקס,
+מאשש את D8 בראיה, לא רק בהערכה.
 
 ---
 
@@ -513,7 +663,8 @@ Python מה-CSV **אינה** בדיקת CI, כי ה-views דורשים credentia
 - `budget_tier_insight` מחזיר n = 780 / 1,717 / 1,003, סכום 3,500, ואפס שורות
   עם `budget_tier is null`.
 - שני ה-views מחזירים `stage_order` 1–5 ו-`tier_order` 1–3 בהתאמה.
-- **מטריצת ה-grants: 24 מתוך 24 `pass`.**
+- **מטריצת ה-grants: 38 מתוך 38 `pass`** (3 תפקידים × 3 אובייקטים × 4
+  פעולות = 36, ועוד 2 בדיקות sequence ל-`service_role`).
 - `anon` — נדחה בשגיאה בטבלה ובשני ה-views: `42501` בשלוש קריאות SQL (E1)
   ודחייה ב-HTTP (E2).
 - `authenticated` בלי `organization` — **אפס שורות** בשלושתם, בלי שגיאה.
@@ -547,17 +698,20 @@ Python מה-CSV **אינה** בדיקת CI, כי ה-views דורשים credentia
 
 | שכבה | מה נשמר |
 |---|---|
-| A | 24 שורות מטריצת ה-grants + פלט `relacl` גולמי משלושת האובייקטים |
+| A | 38 שורות מטריצת ה-grants (כולל `service_role` וה-sequence) + פלט `relacl` גולמי משלושת האובייקטים |
 | B | `relrowsecurity` ו-`reloptions` הגולמי של שני ה-views |
 | C | ספירות שלושת האובייקטים בשני מצבי המשתמש |
 | D | שלוש שגיאות הכתיבה, **עם קוד `42501` וההודעה המלאה** + פלט אימות הניקוי (`pid`/`role`/`claims`) אחרי כל אחת |
-| E1 | שלוש שגיאות ה-`anon` ב-SQL — טבלה ושני views — עם `42501` וההודעה המלאה + פלט אימות הניקוי אחרי כל אחת |
+| E1 | ✅ בוצע — 10/10 `pass`: `sqlstate`/`message` אמיתיים (`GET STACKED DIAGNOSTICS`) לכל אחד משלושת האובייקטים + `same_pid`/`current_user_equals_session_user`/`role_reset`/`claims_safe`, כולם בבלוק `begin`...`commit` יחיד |
 | E2 | status code וגוף מסונן לכל קריאת HTTP; **בלי headers ובלי מפתחות** |
 
-בנוסף: פלט שתי הרצות ה-loader וספירת שורות אחרי כל אחת · פלט Data Contract
-מקומי ומול Supabase · תוצאת בדיקת ה-parity בסובלנות `1e-9` · `EXPLAIN` לשתי
-השאילתות וההחלטה המתועדת על אינדקסים · פלט סריקת ה-secrets · CI ירוק, קישור PR
-ו-SHA של commit הקבלה.
+בנוסף: פלט שתי הרצות ה-loader וספירת שורות אחרי כל אחת — ✅ בוצע, שתי הרצות
+זהות, 3,500/3,500 · פלט Data Contract מקומי ומול Supabase — ✅ בוצע,
+`scripts/verify_data_contract.py`, 3,500×19 תואם + snapshot זהה · תוצאת בדיקת
+ה-parity בסובלנות `1e-9` — ✅ בוצע דרך MCP, הפרשים ~1e-16–1e-19 · `EXPLAIN`
+לשתי השאילתות וההחלטה המתועדת על אינדקסים — ✅ בוצע, `Seq Scan` זול, **אין
+צורך באינדקס** · פלט סריקת ה-secrets · CI ירוק, קישור PR ו-SHA של commit
+הקבלה.
 
 ---
 
@@ -569,7 +723,8 @@ Python מה-CSV **אינה** בדיקת CI, כי ה-views דורשים credentia
 | View עוקף RLS | `security_invoker = true` + בדיקת דחייה מפורשת דרך כל view |
 | דחייה שנראית כהצלחה ריקה | `having count(*) > 0` — אפס שורות, לא שורת `NULL` |
 | grant חסר בגלל המתג הכבוי | `grant select` מפורש לטבלה ולשני ה-views; ייתפס מיד בבדיקה |
-| **הרשאה עודפת ל-`authenticated` ששרדה** כי ה-`revoke` לא כלל אותו | `revoke all … from anon, authenticated, public` לפני ה-`grant`; מטריצה A מאמתת 24/24 |
+| **הרשאה עודפת ששרדה** כי ה-`revoke` לא כלל את כל התפקידים | `revoke all … from anon, authenticated, service_role, public` על הטבלה, ה-sequence ושני ה-views, לפני כל `grant`; מטריצה A מאמתת 38/38 |
+| **`service_role` בלי grants על הטבלה/sequence** — ה-loader נכשל ב-`permission denied` למרות `BYPASSRLS`, כי הוא עוקף policies ולא ACL | `grant select, insert, update` על הטבלה + `grant usage, select` על ה-sequence; מטריצה A בודקת את שלושתם במפורש |
 | **false pass ב-`INSERT`** — כשל על `NOT NULL` שנראה כחסימת הרשאות | ה-`INSERT` בשכבה D מספק את כל 17 עמודות ה-`NOT NULL`; שכבה A היא ההוכחה העיקרית |
 | **גרף מטעה בהיעדר סדר** — מיון אלפביתי ייתן High, Low, Mid | `stage_order` ו-`tier_order` מפורשים בשני ה-views |
 | **בדיקת RLS חסרת ערך** כי רצה כבעל הטבלה | חובה `set local role authenticated`; RLS אינו חל על הבעלים |
@@ -578,7 +733,7 @@ Python מה-CSV **אינה** בדיקת CI, כי ה-views דורשים credentia
 | טייר מומצא לפער 1501–1999 | `case` ללא ענף `else`; ערך בפער מדווח כ-`NULL` ונבדק |
 | סימולציית claims אינה המסלול האמיתי | נוספת בדיקת `anon` אמיתית ב-HTTP; JWT אמיתי בפאזה 4 |
 | דליפת secrets בלוגים | אין הדפסת env/headers; סריקת repo לפני PR |
-| **שגיאת המשך שנקראת בטעות כתוצאת RLS** — transaction נשאר aborted אחרי שגיאת D/E1 ומזהם את הבדיקה הבאה | נוהל ניקוי ייעודי (§ו): `rollback`/`reset role`/`reset request.jwt.claims` באותו session ב-SQL Editor, עם אימות `pid`/`role`/`claims` לפני כל בדיקה |
+| **שגיאת המשך שנקראת בטעות כתוצאת RLS** — transaction נשאר aborted ומזהם בדיקה הבאה | ב-E1 (בפועל): לא רלוונטי — exception handler תופס בתוך savepoint פנימי, ה-transaction החיצוני אף פעם לא נשאר aborted. ב-D (checkpoint 9, טרם בוצע): הסיכון **עדיין קיים**, כי המתוכנן שם הוא הנוהל הרב-קריאתי הישן — יש לאמץ את דפוס ה-exception-handler לפני checkpoint 9 |
 | **`request.jwt.claims` שנותר לא-JSON ושובר את `auth.jwt()`** | לעולם לא `set_config(..., '', false)`; רק `RESET`, מאומת ב-`pg_input_is_valid` |
 
 ---
