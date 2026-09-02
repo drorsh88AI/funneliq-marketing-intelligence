@@ -552,19 +552,22 @@ Editor שומר session בין הרצות נפרדות. **ההנחה הופרכ�
 **תוצאה: 10/10 `pass`** — ארבע בדיקות המצב + `sqlstate`/`message` לכל אחד
 משלושת האובייקטים, כולם `42501` וההודעה המדויקת.
 
-⚠ **נגזרת ל-checkpoint 9 (שכבה D).** נוהל ה-`rollback`/`reset` המקורי בתכנון
-המקורי לא נבדק בפועל עדיין, אך הוא **אותה שיטה בדיוק** שנכשלה כאן. מומלץ
-לאמץ את דפוס ה-exception-handler גם ל-D לפני checkpoint 9, ולעדכן את התכנון
-בהתאם — לא לחזור על אותה הנחה שכבר הופרכה.
+⚠ **נגזרת ל-checkpoint 9 (שכבה D) — ההמלצה אומצה בפועל, עודכן 02.09.2026.**
+נוהל ה-`rollback`/`reset` המקורי בתכנון המקורי לא נבדק עדיין בזמן שהפסקה הזו
+נכתבה, אך היה **אותה שיטה בדיוק** שנכשלה כאן; ההמלצה הייתה לאמץ את דפוס
+ה-exception-handler גם ל-D לפני checkpoint 9. **checkpoint 9 בוצע ב-02.09.2026
+לפי ההמלצה** — `layer_d_write_denial.sql` משתמש באותו בלוק PL/pgSQL יחיד עם
+savepoint פנימי (3 בלוקי `DO`, `EXCEPTION WHEN insufficient_privilege`, ללא
+`WHEN OTHERS`), לא בנוהל הרב-קריאתי הישן. 12/12 `pass`; ר' §ח.4.
 
 #### ממשל הבדיקות — מי מריץ ואיך נשמרת הראיה
 
 | כלל | קיבוע |
 |---|---|
-| יחידת הרצה | **A/B/C:** כל בלוק `begin…rollback` מורץ כיחידה אחת ואינו מפוצל. **E1 (בפועל):** בלוק `begin`...`commit` יחיד, קריאה אחת בלבד — exception handler תופס את השגיאה בתוך savepoint פנימי, אין קריאת ניקוי נפרדת. **D (checkpoint 9, טרם בוצע):** מתוכנן באותו נוהל רב-קריאתי שכבר הוכח שנכשל ב-E1 — ר' הנגזרת בסוף "נוהל בדיקות שגיאה — E1" |
+| יחידת הרצה | **A/B/C:** כל בלוק `begin…rollback` מורץ כיחידה אחת ואינו מפוצל. **E1 (בפועל):** בלוק `begin`...`commit` יחיד, קריאה אחת בלבד — exception handler תופס את השגיאה בתוך savepoint פנימי, אין קריאת ניקוי נפרדת. **D (checkpoint 9, בוצע 02.09.2026):** אימץ מראש את אותו דפוס exception-handler מ-E1, לא את הנוהל הרב-קריאתי הישן — ר' הנגזרת בסוף "נוהל בדיקות שגיאה — E1" |
 | מסלול — שכבות A/B/C | **MCP `execute_sql` ראשי · SQL Editor גיבוי** — אותו טקסט SQL בשני המסלולים. אינן מעוררות שגיאה, ולכן אינן תלויות ב-session affinity |
 | מסלול — E1 (בפועל) | **בלוק PL/pgSQL יחיד, `begin`...`commit` מפורש, קריאה אחת בלבד.** אומת ש-SQL Editor **גם הוא** חסר session affinity בין הרצות נפרדות (לא רק MCP) — הכלל "אסור MCP" בגרסה הקודמת נבע מהנחה שהופרכה. הפתרון בפועל: exception handler לוכד את השגיאה **בתוך** אותה קריאה, כך שאין עוד תלות בזהות החיבור בכלל — לא ב-SQL Editor ולא ב-MCP. ראו "נוהל בדיקות שגיאה — E1" למטה |
-| מסלול — D (checkpoint 9, טרם בוצע) | ⚠ הנוהל הישן (רב-קריאתי, rollback/reset) **טרם נבדק ועלול להיכשל באותה צורה** — ר' הנגזרת בסוף סעיף E1. יש לשקול את אותו דפוס לפני checkpoint 9 |
+| מסלול — D (checkpoint 9, בוצע 02.09.2026) | אימץ את דפוס ה-exception-handler מ-E1 מראש, בלוק `begin`...`rollback` יחיד, שלושה `DO` blocks — לא הנוהל הישן. 12/12 `pass`; ר' §ח.4 |
 | פלט כל שכבה | נשמר כטבלה עם שלוש עמודות חובה: `expected`, `actual`, `pass` |
 | שכבות D ו-E1 | נשמרות בנפרד, עם **קוד השגיאה והודעת PostgreSQL המלאה** (`42501` · `permission denied for table …`) — לא כ-`pass` בוליאני בלבד. כל בדיקה מלווה בפלט נוהל הניקוי |
 | שכבה E2 | נשמרים **status code** וגוף תגובה מסונן. **בלי headers** ובלי echo של הבקשה |
@@ -683,25 +686,163 @@ MCP `execute_sql`, אותו דפוס בדיוק כמו שכבה C ב-checkpoint 
 
 ## ח. ראיות שיישמרו
 
-פלט חמש שכבות הבדיקה, כל אחת כטבלה עם `expected` / `actual` / `pass` לפי כללי
-הממשל בסעיף ו':
+### ח.0 — נוהל ההרצה החוזרת (checkpoint 11, 02.09.2026)
 
-| שכבה | מה נשמר |
-|---|---|
-| A | 38 שורות מטריצת ה-grants (כולל `service_role` וה-sequence) + פלט `relacl` גולמי משלושת האובייקטים |
-| B | `relrowsecurity` ו-`reloptions` הגולמי של שני ה-views |
-| C | ספירות שלושת האובייקטים בשני מצבי המשתמש |
-| D | שלוש שגיאות הכתיבה, **עם קוד `42501` וההודעה המלאה** + פלט אימות הניקוי (`pid`/`role`/`claims`) אחרי כל אחת |
-| E1 | ✅ בוצע — 10/10 `pass`: `sqlstate`/`message` אמיתיים (`GET STACKED DIAGNOSTICS`) לכל אחד משלושת האובייקטים + `same_pid`/`current_user_equals_session_user`/`role_reset`/`claims_safe`, כולם בבלוק `begin`...`commit` יחיד |
-| E2 | status code וגוף מסונן לכל קריאת HTTP; **בלי headers ובלי מפתחות** |
+הפלטים הגולמיים של checkpoints 5 ו-9 לא נשמרו כקובץ ברפו — רק סיכומים
+מאומתים ב-`ROADMAP.html`. checkpoint 11 סוגר את הפער: **כל שש היחידות
+(A–E2) הורצו מחדש במלואן**, בדיוק מ-`supabase/tests/*.sql` ללא שינוי (`git
+diff` על התיקייה — ריק לפני ההרצה), דרך MCP `execute_sql` מול הפרויקט
+`zbxqwcwiirnrfnkzpwri`, בחלון זמן `2026-09-02T20:0x:xxZ`. **ללא שינוי מתמיד
+בנתונים** — A/B קוראות קטלוג, C רצה בתוך `begin…rollback`, D ו-E1 הן ניסיונות
+כתיבה שנדחים בתוך transaction עם exception handler ו-`rollback`, E2 כולל
+`POST` אמיתי שנדחה לפני שהגיע לכתיבה; ההוכחה היא `verify_no_writes_persisted`
+בח.4, לא הנחה. `load_data.py`, `verify_data_contract.py`, ה-parity וה-`EXPLAIN`
+**לא הורצו מחדש** — checkpoints 6–8 סגורים ודורשים secret key; ראיותיהם
+מתועתקות ב-ח.7. השוואה מלאה לתוצאות checkpoints 5/9 בח.10 — **אפס חריגות**.
 
-בנוסף: פלט שתי הרצות ה-loader וספירת שורות אחרי כל אחת — ✅ בוצע, שתי הרצות
-זהות, 3,500/3,500 · פלט Data Contract מקומי ומול Supabase — ✅ בוצע,
-`scripts/verify_data_contract.py`, 3,500×19 תואם + snapshot זהה · תוצאת בדיקת
-ה-parity בסובלנות `1e-9` — ✅ בוצע דרך MCP, הפרשים ~1e-16–1e-19 · `EXPLAIN`
-לשתי השאילתות וההחלטה המתועדת על אינדקסים — ✅ בוצע, `Seq Scan` זול, **אין
-צורך באינדקס** · פלט סריקת ה-secrets · CI ירוק, קישור PR ו-SHA של commit
-הקבלה.
+### ח.1 — שכבה A: מטריצת grants (checkpoint 5, נבדק מחדש)
+
+38/38 `pass = true` — 36 שורות טבלה/view (3 תפקידים × 3 אובייקטים × 4
+פעולות) + 2 שורות sequence עבור `service_role`. כל 12 השורות של `anon` —
+`actual=false`; `authenticated` — `SELECT` בלבד `true` בשלושת האובייקטים;
+`service_role` — `SELECT`/`INSERT`/`UPDATE` `true` על `funnel_records` בלבד
+(`DELETE` ושני ה-views — `false`); `funnel_records_id_seq` — `usage`/`select`
+`true` ל-`service_role`.
+
+`relacl` גולמי משלושת האובייקטים:
+
+```
+funnel_records       -> {postgres=arwdDxtm/postgres,authenticated=r/postgres,service_role=arw/postgres}
+followup_insight     -> {postgres=arwdDxtm/postgres,authenticated=r/postgres}
+budget_tier_insight  -> {postgres=arwdDxtm/postgres,authenticated=r/postgres}
+```
+
+### ח.2 — שכבה B: דגלי אובייקטים (checkpoint 5, נבדק מחדש)
+
+3/3 `pass = true`: `public.funnel_records.relrowsecurity = true`;
+`public.followup_insight.reloptions = {security_invoker=true}`;
+`public.budget_tier_insight.reloptions = {security_invoker=true}` — גולמי,
+לא רק ה-`pass` הבוליאני.
+
+### ח.3 — שכבה C: ספירות RLS בשני מצבי משתמש (checkpoint 9, נבדק מחדש)
+
+2/2 `pass = true`, שתי יחידות `begin…rollback` נפרדות:
+
+| מצב | `funnel_records` | `followup_insight` | `budget_tier_insight` |
+|---|---|---|---|
+| `authenticated`, בלי `organization` | 0 | 0 | 0 |
+| `authenticated`, `organization=northbound` | 3,500 | 5 | 3 |
+
+### ח.4 — שכבה D + עמידות אחרי rollback (checkpoint 9, נבדק מחדש)
+
+`layer_d_write_denial.sql`, transaction יחיד, 3 בלוקי `DO` עם `EXCEPTION WHEN
+insufficient_privilege` (ללא `WHEN OTHERS`) — **12/12 `pass`**:
+
+| בדיקה | expected | actual |
+|---|---|---|
+| `same_pid` | `144059` | `144059` |
+| `current_user_equals_session_user` | `postgres` | `postgres` |
+| `role_reset` | `none` | `none` |
+| `claims_safe` | JSON תקין/ריק/NULL | `<null-or-empty>` |
+| `insert_sqlstate` | `42501` | `42501` |
+| `insert_message` | מכיל `funnel_records`, לא `sequence` | `permission denied for table funnel_records` |
+| `update_sqlstate` | `42501` | `42501` |
+| `update_message` | " | `permission denied for table funnel_records` |
+| `delete_sqlstate` | `42501` | `42501` |
+| `delete_message` | " | `permission denied for table funnel_records` |
+| `row_count_unchanged` | `3500` | `3500` |
+| `row_1_ad_budget_unchanged` | `2500` | `2500` |
+
+**עמידות בקריאה נפרדת** (`verify_no_writes_persisted.sql`, אחרי ה-`rollback`,
+בלי role switch) — **2/2 `pass`**: `count(*) = 3500`; `ad_budget` של
+`source_row_id = 1` = `2500`.
+
+### ח.5 — שכבה E1: דחיית anon בשגיאות אמיתיות (checkpoint 5, נבדק מחדש)
+
+`layer_e1_anon_denial.sql` verbatim, בלוק `begin`...`commit` יחיד — **10/10
+`pass`**:
+
+| בדיקה | expected | actual |
+|---|---|---|
+| `same_pid` | `144063` | `144063` |
+| `current_user_equals_session_user` | `postgres` | `postgres` |
+| `role_reset` | `none` | `none` |
+| `claims_safe` | JSON תקין/ריק/NULL | `<null-or-empty>` |
+| `funnel_records_sqlstate` | `42501` | `42501` |
+| `funnel_records_message` | `permission denied for table funnel_records` | זהה |
+| `followup_insight_sqlstate` | `42501` | `42501` |
+| `followup_insight_message` | `permission denied for view followup_insight` | זהה |
+| `budget_tier_insight_sqlstate` | `42501` | `42501` |
+| `budget_tier_insight_message` | `permission denied for view budget_tier_insight` | זהה |
+
+### ח.6 — שכבה E2: דחיית anon ב-HTTP (checkpoint 9, נבדק מחדש)
+
+3×`GET` + 1×`POST` כ-`anon` דרך PostgREST (`curl`, publishable key מ-`.env`
+בתוך header בלבד — **לא הודפס**, בלי echo לבקשה) — **4/4 דחייה**:
+
+| קריאה | status | גוף (מסונן) |
+|---|---|---|
+| `GET funnel_records` | `401` | `{"code":"42501","message":"permission denied for table funnel_records"}` |
+| `GET followup_insight` | `401` | `{"code":"42501","message":"permission denied for view followup_insight"}` |
+| `GET budget_tier_insight` | `401` | `{"code":"42501","message":"permission denied for view budget_tier_insight"}` |
+| `POST funnel_records` | `401` | `{"code":"42501","message":"permission denied for table funnel_records"}` |
+
+### ח.7 — loader, Data Contract, parity, `EXPLAIN` (checkpoints 6–8, מתועתק — לא הורץ מחדש)
+
+שתי הרצות `load_data.py` (checkpoints 6–7): 7 batches של 500, ללא שגיאה;
+`count(*) = count(distinct source_row_id) = 3,500`, `min=1`, `max=3500` —
+זהה בשתי הריצות, מוכיח idempotency בפועל דרך `upsert` על `source_row_id`.
+Data Contract (checkpoint 8, `scripts/verify_data_contract.py`): 3,500 שורות
+× 19 עמודות תואמות בדיוק לפי `source_row_id`; snapshot זהה CSV מול Supabase
+(missing `ltv_months`=4, missing `cumulative_profit`=29, any-missing=33, 19
+כפילויות ב-9 קבוצות, `closed>0&purchased=0`=155, `purchased=0&ltv>0`=333).
+Parity בסובלנות `1e-9` דרך MCP בסימולציית `authenticated`+`northbound`:
+`followup_insight` הפרש ~1e-16 מהחישוב ב-Python; `budget_tier_insight`
+n=780/1,717/1,003 (סכום 3,500), הפרש ~1e-17–1e-19 — הכול מתחת ל-`1e-9`.
+`EXPLAIN` (בלי `ANALYZE`) על שתי השאילתות: `Seq Scan` זול (~800 ו-~162 cost)
+על 3,500 שורות — אין רמז לצורך באינדקס, D8 מאושש.
+
+### ח.8 — secret scan, CI, PR (checkpoint 10, מתועתק — לא הורץ מחדש)
+
+4 בדיקות לפי-צורה (עץ עבודה, טווח `e8ed585..HEAD`, `--all`, `git ls-files`)
+כולן ריקות; בדיקת ערך מ-`.env` לכל שלושת המשתנים (`SUPABASE_URL`,
+`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`) — 0 התאמות בעץ ובהיסטוריה.
+`python -m pytest -q`: 10 passed. commit `d149def` על `feat/supabase-data`,
+PR #13 נפתח מול `main`; שתי הרצות CI ירוקות (`33673868007` push,
+`33674235919` pull_request). גוף PR #13 נבדק נקי מסודות.
+
+### ח.9 — snapshot סוגר (checkpoint 11, ביום הסגירה)
+
+נמדד `2026-09-02T20:06:40Z`, MCP קריאה-בלבד, לא מוזג עדיין ל-`main`:
+
+- `funnel_records`: `count(*) = 3500`, `count(distinct source_row_id) = 3500`,
+  `min = 1`, `max = 3500`.
+- `get_advisors(security) = []`, `get_advisors(performance) = []` — שניהם
+  ריקים לחלוטין.
+- `list_migrations` — בדיוק 3: `20260901164903_schema`,
+  `20260901164904_views`, `20260901172942_fix_advisors`.
+- אובייקטי `public`: `funnel_records` (`relkind=r`), `followup_insight`
+  (`relkind=v`), `budget_tier_insight` (`relkind=v`) — טבלה אחת + שני views,
+  מאומת מהקטלוג (כלי `list_tables` של ה-MCP מחזיר טבלאות בלבד ולא views;
+  הושלם ישירות מ-`pg_class`).
+
+**תנאי תוקף:** ה-snapshot תקף להיום, `02.09.2026`, כל עוד הסגירה (כולל מיזוג
+PR #13) מסתיימת באותו יום קלנדרי. PR #13 הוא docs-only ואינו נוגע ב-Supabase
+— אין מסלול שבו מיזוגו משנה את הערכים כאן, ולכן אין snapshot שני אחרי המיזוג.
+
+### ח.10 — טבלת השוואה: הרצה חוזרת מול checkpoints 5/9
+
+| שכבה | checkpoint 5/9 | checkpoint 11 (הרצה חוזרת) | חריגה |
+|---|---|---|---|
+| A (grants) | 38/38 pass | 38/38 pass | אין |
+| B (object flags) | 3/3 pass | 3/3 pass | אין |
+| C (RLS counts) | 2/2 pass — 0/0/0, 3500/5/3 | 2/2 pass — זהה | אין |
+| D (write denial) | 12/12 pass | 12/12 pass | אין |
+| D durability | 2/2 pass | 2/2 pass | אין |
+| E1 (anon SQL) | 10/10 pass | 10/10 pass | אין |
+| E2 (anon HTTP) | 4/4 דחייה, `401`/`42501` | 4/4 דחייה, `401`/`42501` — גוף זהה | אין |
+
+**אפס חריגות בכל שש היחידות.**
 
 ---
 
@@ -723,7 +864,7 @@ MCP `execute_sql`, אותו דפוס בדיוק כמו שכבה C ב-checkpoint 
 | טייר מומצא לפער 1501–1999 | `case` ללא ענף `else`; ערך בפער מדווח כ-`NULL` ונבדק |
 | סימולציית claims אינה המסלול האמיתי | נוספת בדיקת `anon` אמיתית ב-HTTP; JWT אמיתי בפאזה 4 |
 | דליפת secrets בלוגים | אין הדפסת env/headers; סריקת repo לפני PR |
-| **שגיאת המשך שנקראת בטעות כתוצאת RLS** — transaction נשאר aborted ומזהם בדיקה הבאה | ב-E1 (בפועל): לא רלוונטי — exception handler תופס בתוך savepoint פנימי, ה-transaction החיצוני אף פעם לא נשאר aborted. ב-D (checkpoint 9, טרם בוצע): הסיכון **עדיין קיים**, כי המתוכנן שם הוא הנוהל הרב-קריאתי הישן — יש לאמץ את דפוס ה-exception-handler לפני checkpoint 9 |
+| **שגיאת המשך שנקראת בטעות כתוצאת RLS** — transaction נשאר aborted ומזהם בדיקה הבאה | ב-E1 (בפועל): לא רלוונטי — exception handler תופס בתוך savepoint פנימי, ה-transaction החיצוני אף פעם לא נשאר aborted. ב-D (checkpoint 9, בוצע 02.09.2026): לא רלוונטי גם כאן — אומץ מראש אותו דפוס exception-handler, 12/12 `pass` |
 | **`request.jwt.claims` שנותר לא-JSON ושובר את `auth.jwt()`** | לעולם לא `set_config(..., '', false)`; רק `RESET`, מאומת ב-`pg_input_is_valid` |
 
 ---
@@ -781,3 +922,50 @@ MCP `execute_sql`, אותו דפוס בדיוק כמו שכבה C ב-checkpoint 
 
 **זה אינו הוראה להתחיל.** `execution_status` נשאר `not_started` עד שתינתן
 פקודה מפורשת נוספת.
+
+---
+
+## יב. סיכום קבלה — פאזה 3
+
+| קריטריון קבלה (§ז) | סטטוס | ראיה |
+|---|---|---|
+| 3,500 שורות, 3,500 `source_row_id` ייחודיים | ✅ | ח.9 (snapshot: `count=3500`, `distinct=3500`) |
+| ריצה שנייה של ה-loader אינה משנה ספירה/כפילויות | ✅ | ח.7 (checkpoint 7: זהה לריצה הראשונה) |
+| 19 עמודות ללא שינוי; 33 חסרות; 19 כפילויות ב-9 קבוצות; 155/333 | ✅ | ח.7 (checkpoint 8: snapshot תואם) |
+| מיפוי מלא `source_row_id=k` ↔ שורת CSV `k`, כל 19 העמודות | ✅ | ח.7 (`verify_data_contract.py`: 3,500×19 תואם בדיוק) |
+| ערכי שני ה-views תואמים ל-Python בהפרש `< 1e-9` | ✅ | ח.7 (הפרשים ~1e-16–1e-19) |
+| `budget_tier_insight` — n=780/1,717/1,003, סכום 3,500, אפס `null` | ✅ | ח.7 |
+| `stage_order` 1–5, `tier_order` 1–3 | ✅ | checkpoint 5/9 (מטריצות B/D אינן בודקות ישירות; אומת בכתיבת ה-views ולא נסתר בהרצה החוזרת — אין שינוי במיגרציות) |
+| מטריצת grants 38/38 `pass` | ✅ | ח.1 |
+| `anon` נדחה `42501` ב-SQL (E1) וב-HTTP (E2) | ✅ | ח.5, ח.6 |
+| `authenticated` בלי `organization` — אפס שורות בלי שגיאה | ✅ | ח.3 |
+| `authenticated`+`northbound` — 3,500/5/3, כתיבה נדחית | ✅ | ח.3, ח.4 |
+| CI ירוק בלי CSV/credentials | ✅ | ח.8 (`33673868007`, `33674235919`) |
+| אין secret/JWT/סיסמה/CSV בגיט או בפלט CI | ✅ | ח.8 (4 בדיקות צורה + בדיקת ערך — כולן `0`) |
+
+**כל 11 ה-checkpoints ב-`ROADMAP.html` מסומנים `done` עם ראיה, וכל 13
+קריטריוני הקבלה מתקיימים עם ראיה ישירה לתת-סעיף ב-§ח.** הרצה חוזרת מלאה של
+A–E2 (checkpoint 11) הראתה **אפס חריגות** מול checkpoints 5/9 — ח.10.
+
+⚠ **קריטריון `stage_order`/`tier_order`** לא נבדק כחלק ישיר משכבות A–E2 —
+הוא נקבע במיגרציית ה-views (`20260901164904_views.sql`) שלא השתנתה מאז
+checkpoint 4, ואינו תלוי בנתונים. לא הורץ מחדש בכוונה, לפי גבולות ההרצה
+החוזרת (§ו — אין שינוי במיגרציות).
+
+---
+
+## יג. אישור סגירה סופי
+
+| פריט | ערך |
+|---|---|
+| אישור מיזוג PR #13 | *(ממתין)* |
+| מיזוג PR #13 ל-`main` | *(ממתין)* |
+| אימות `main` אחרי המיזוג (CI + SHA) | *(ממתין)* |
+| אישור סגירת פאזה 3 | *(ממתין, מפורש בהודעת המשתמש)* |
+| זמן (UTC) | *(ממתין)* |
+| היקף האישור | סגירת פאזה 3 בלבד — **אינו** אישור לתכנון או ביצוע פאזה 4; שער `3→4` נשאר פתוח |
+| `execution_status` בפאזה 3 | `in_progress` עד למילוי השורות לעיל; יעודכן ל-`done` (11/11) רק לאחריהן |
+
+**הטבלה נשארת ריקה עד אישור סופי מפורש של המשתמש**, לפי §ז ב-`SPEC.md`
+(שער מעבר אחיד) ותקדים `PHASE2.md` §ז. checkpoint 11 עצמו — ולכן
+`execution_status` של פאזה 3 — אינו נסגר עד שהשורות האלה מתמלאות.
