@@ -386,8 +386,11 @@ pgTAP מקומי אינו זמין. **העיקרון המנחה:** לבדוק ה
 | **אין `grant`** | שגיאה — `permission denied` |
 | יש `grant`, ה-RLS מסנן | **אפס שורות**, בלי שגיאה |
 
-הבדיקות אינן רשאיות לערבב ביניהם. הקובץ: `supabase/tests/rls_checks.sql` —
-**אינו migration**.
+הבדיקות אינן רשאיות לערבב ביניהם. הקבצים: `supabase/tests/*.sql` — שישה
+קבצים, אחד ליחידת הרצה (`layer_a_grants_matrix.sql`, `layer_b_object_flags.sql`,
+`layer_c_rls_counts.sql`, `layer_d_write_denial.sql`, `layer_e1_anon_denial.sql`,
+`verify_no_writes_persisted.sql`) — **אינם migrations**; `db push` פועל רק על
+`migrations/` ולכן לעולם לא יחיל אותם בטעות.
 
 **שכבה A — מטריצת grants** (checkpoint 5; אינה תלויה בנתונים):
 
@@ -468,32 +471,33 @@ rollback;
 ה-policy עצמו. **חובה להחליף תפקיד** — הרצה כבעלים תראה 3,500 בכל מקרה, כי RLS
 אינו חל על בעל הטבלה, והבדיקה תהיה חסרת ערך.
 
-**שכבה D — ניסיונות כתיבה כשגיאות אמיתיות** (checkpoint 9). כל אחת **בקריאה
-נפרדת**, כי היא מבטלת את ה-transaction. שלושתן כזהות Northbound:
+**שכבה D — ניסיונות כתיבה כשגיאות אמיתיות** (checkpoint 9, בוצע בפועל
+02.09.2026, `supabase/tests/layer_d_write_denial.sql`). **transaction יחיד,
+שלושה `DO` blocks נפרדים**, כל אחד עם `EXCEPTION WHEN insufficient_privilege`
+(ללא `WHEN OTHERS`) — אותו דפוס savepoint שהוכח בשכבה E1 למטה; אין תלות
+ב-session affinity. שלושתן כזהות Northbound, מסתיימות ב-`ROLLBACK`:
 
-- `INSERT` — עם **כל 17 עמודות ה-`NOT NULL` מלאות**. זה קריטי: `INSERT` חסר
-  עמודות עלול להיכשל על `NOT NULL` ולהיראות כ"נחסם" גם אם ה-grant ניתן בטעות
-  — **false pass**. (Postgres אמנם בודק ACL לפני constraints, אבל הבדיקה לא
-  תסתמך על סדר פנימי שאינו חלק מהחוזה.)
+- `INSERT` — עם **כל 18 עמודות ה-`NOT NULL` מלאות** (16 `integer` + `referred`
+  + `source_row_id` עצמו), כולל `id` מפורש כדי ש-`nextval()` לעולם לא ייקרא
+  ואף הרשאת sequence לא מעורבת. `source_row_id = 999999` (לא קיים), כדי
+  שלא יתנגש ב-`UNIQUE` לפני שנבדק ה-ACL — התנגשות כזו הייתה מחזירה `23505`
+  במקום `42501`, **false pass** מאותה משפחה בדיוק כמו הכשל על `NOT NULL`.
 - `update public.funnel_records set ad_budget = ad_budget where source_row_id = 1;`
 - `delete from public.funnel_records where source_row_id = 1;`
 
-מצופה `permission denied` בשלושתן. שכבה D היא **אישוש** למסלול האמיתי; שכבה A
-היא ההוכחה.
+מצופה `sqlstate = 42501` **וגם** הודעה שמכילה `funnel_records` ואינה מכילה
+`sequence` (בדיקת מהות, לא השוואת מחרוזת מדויקת — עמידה יותר לניסוח). שכבה D
+היא **אישוש** למסלול האמיתי; שכבה A היא ההוכחה. הראיה שדבר לא נשמר בפועל היא
+`supabase/tests/verify_no_writes_persisted.sql`, שרץ בקריאה נפרדת אחרי ה-
+`ROLLBACK` — לא כבדיקת ניקוי session (זה בלתי אפשרי לבדוק מבחוץ, `set local`
+הוא transaction-scoped מטבעו) אלא כראיית **עמידות**.
 
 **שכבה E — דחיית `anon` אמיתית, בשני המסלולים** (checkpoints 5 ו-9). שכבה A
 מוכיחה את ה-ACL מהקטלוג; שכבה E מאששת שההתנהגות בפועל תואמת.
 
-**E1 — SQL.** שלוש קריאות **מבודדות**, כל אחת בקריאה משלה כי כל אחת מבטלת את
-ה-transaction:
-
-```sql
-begin; set local role anon;
-select count(*) from public.funnel_records;      -- מצופה: 42501
-rollback;
-```
-
-ובאותה צורה ל-`public.followup_insight` ול-`public.budget_tier_insight`. נשמרים
+**E1 — SQL.** `transaction` יחיד, שלושה `DO` blocks (אחד לכל אובייקט) עם
+`EXCEPTION WHEN insufficient_privilege` — לא שלוש קריאות מבודדות; ראו הנוהל
+שבוצע בפועל מיד למטה והקובץ `supabase/tests/layer_e1_anon_denial.sql`. נשמרים
 קוד השגיאה `42501` וההודעה המלאה, כמו בשכבה D.
 
 **E2 — HTTP.** `GET` לטבלה ולשני ה-views, ו-`POST` אחד, מול PostgREST עם
@@ -519,61 +523,11 @@ Editor שומר session בין הרצות נפרדות. **ההנחה הופרכ�
 החיצוני **אף פעם לא נשאר aborted**, ולכן אין תלות ב-session affinity כלל.
 זה מוחק את הבעיה מיסודה, לא רק ב-SQL Editor אלא גם ב-MCP.
 
-```sql
-begin;
-
-select set_config('app.start_pid', pg_backend_pid()::text, true);
-
-set local role anon;
-
-do $$
-declare
-  v_state   text;
-  v_message text;
-begin
-  perform (select count(*) from public.funnel_records);
-  raise exception 'UNEXPECTED: anon was not denied on funnel_records';
-exception
-  when insufficient_privilege then
-    get stacked diagnostics
-      v_state = returned_sqlstate,
-      v_message = message_text;
-    perform set_config('app.t1_state', v_state, true);
-    perform set_config('app.t1_message', v_message, true);
-end $$;
-
--- אותו מבנה ל-followup_insight (app.t2_*) ול-budget_tier_insight (app.t3_*)
-
-reset role;
-reset request.jwt.claims;
-
-select 'same_pid' as check_name,
-       current_setting('app.start_pid') as expected,
-       pg_backend_pid()::text as actual,
-       pg_backend_pid()::text = current_setting('app.start_pid') as pass
-union all
-select 'current_user_equals_session_user',
-       session_user::text, current_user::text, current_user = session_user
-union all
-select 'role_reset',
-       'none', coalesce(current_setting('role', true), '<null>'),
-       coalesce(current_setting('role', true), 'none') = 'none'
-union all
-select 'claims_safe',
-       'NULL, empty, or valid JSON',
-       coalesce(nullif(current_setting('request.jwt.claims', true), ''), '<null-or-empty>'),
-       current_setting('request.jwt.claims', true) is null
-         or current_setting('request.jwt.claims', true) = ''
-         or pg_input_is_valid(current_setting('request.jwt.claims', true), 'jsonb')
-union all
-select 'funnel_records_sqlstate', '42501',
-       coalesce(current_setting('app.t1_state', true), '<not set>'),
-       current_setting('app.t1_state', true) = '42501'
--- + funnel_records_message, followup_insight_sqlstate/message, budget_tier_insight_sqlstate/message
-;
-
-commit;
-```
+הבלוק המלא שבוצע בפועל — שלושת ה-`DO` blocks (טבלה + שני ה-views), עשר שורות
+האימות (מצב session, שני `sqlstate`/`message` לכל אובייקט), ו-`commit` בסוף —
+חי כטקסט רציף אחד ב-`supabase/tests/layer_e1_anon_denial.sql`. אינו משוכפל
+כאן במלואו כדי שהמסמך והקובץ לא ייסחפו זה מזה; זה בדיוק הליקוי שהביקורת
+מצאה בגרסה הקודמת (placeholders כאן שלא תאמו את מה שרץ בפועל).
 
 **חמש נקודות עיצוב, כל אחת נלמדה מכשל אמיתי בהרצה:**
 
