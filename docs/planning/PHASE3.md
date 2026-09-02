@@ -690,10 +690,18 @@ MCP `execute_sql`, אותו דפוס בדיוק כמו שכבה C ב-checkpoint 
 
 הפלטים הגולמיים של checkpoints 5 ו-9 לא נשמרו כקובץ ברפו — רק סיכומים
 מאומתים ב-`ROADMAP.html`. checkpoint 11 סוגר את הפער: **כל שש היחידות
-(A–E2) הורצו מחדש במלואן**, בדיוק מ-`supabase/tests/*.sql` ללא שינוי (`git
-diff` על התיקייה — ריק לפני ההרצה), דרך MCP `execute_sql` מול הפרויקט
-`zbxqwcwiirnrfnkzpwri`, בחלון של דקות ספורות שמסתיים ב-snapshot הסוגר
-(`2026-09-02T20:06:40Z`, ח.9). **ללא שינוי מתמיד
+(A–E2) הורצו מחדש במלואן**, בדיוק מ-`supabase/tests/*.sql` ללא שינוי, דרך MCP
+`execute_sql` מול הפרויקט `zbxqwcwiirnrfnkzpwri`, בחלון של דקות ספורות
+שמסתיים ב-snapshot הסוגר (`2026-09-02T20:06:40Z`, ח.9).
+
+**אימות הזהות מול checkpoint 9 עוגן ל-commit מוגדר, לא רק ל-`git diff` מול
+העץ הנוכחי:** `git log --oneline --all -- supabase/tests/` מראה
+ש-`4179d2c` (checkpoint 9) הוא ה-commit **היחיד** בכל היסטוריית ה-repo שנגע
+אי-פעם בתיקייה הזו; בנוסף `git diff --stat HEAD -- supabase/tests/` (מול
+`ffa2915`, ה-commit האחרון לפני ההרצה) חזר ריק. שני המבחנים יחד — לא רק
+השני — מוכיחים שהקבצים שהורצו זהים ל-`4179d2c`.
+
+**ללא שינוי מתמיד
 בנתונים** — A/B קוראות קטלוג, C רצה בתוך `begin…rollback`, D ו-E1 הן ניסיונות
 כתיבה שנדחים בתוך transaction עם exception handler ו-`rollback`, E2 כולל
 `POST` אמיתי שנדחה לפני שהגיע לכתיבה; ההוכחה היא `verify_no_writes_persisted`
@@ -748,9 +756,9 @@ insufficient_privilege` (ללא `WHEN OTHERS`) — **12/12 `pass`**:
 | `insert_sqlstate` | `42501` | `42501` |
 | `insert_message` | מכיל `funnel_records`, לא `sequence` | `permission denied for table funnel_records` |
 | `update_sqlstate` | `42501` | `42501` |
-| `update_message` | " | `permission denied for table funnel_records` |
+| `update_message` | מכיל `funnel_records`, לא `sequence` | `permission denied for table funnel_records` |
 | `delete_sqlstate` | `42501` | `42501` |
-| `delete_message` | " | `permission denied for table funnel_records` |
+| `delete_message` | מכיל `funnel_records`, לא `sequence` | `permission denied for table funnel_records` |
 | `row_count_unchanged` | `3500` | `3500` |
 | `row_1_ad_budget_unchanged` | `2500` | `2500` |
 
@@ -803,14 +811,22 @@ n=780/1,717/1,003 (סכום 3,500), הפרש ~1e-17–1e-19 — הכול מתח�
 `EXPLAIN` (בלי `ANALYZE`) על שתי השאילתות: `Seq Scan` זול (~800 ו-~162 cost)
 על 3,500 שורות — אין רמז לצורך באינדקס, D8 מאושש.
 
-### ח.8 — secret scan, CI, PR (checkpoint 10, מתועתק — לא הורץ מחדש)
+### ח.8 — secret scan, CI, PR (checkpoint 10 + checkpoint 11)
 
-4 בדיקות לפי-צורה (עץ עבודה, טווח `e8ed585..HEAD`, `--all`, `git ls-files`)
-כולן ריקות; בדיקת ערך מ-`.env` לכל שלושת המשתנים (`SUPABASE_URL`,
-`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`) — 0 התאמות בעץ ובהיסטוריה.
-`python -m pytest -q`: 10 passed. commit `d149def` על `feat/supabase-data`,
-PR #13 נפתח מול `main`; שתי הרצות CI ירוקות (`33673868007` push,
-`33674235919` pull_request). גוף PR #13 נבדק נקי מסודות.
+**checkpoint 10 (מתועתק — לא הורץ מחדש):** 4 בדיקות לפי-צורה (עץ עבודה, טווח
+`e8ed585..HEAD`, `--all`, `git ls-files`) כולן ריקות; בדיקת ערך מ-`.env`
+לכל שלושת המשתנים (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,
+`SUPABASE_SECRET_KEY`) — 0 התאמות בעץ ובהיסטוריה. `python -m pytest -q`: 10
+passed. commit `d149def` על `feat/supabase-data`, PR #13 נפתח מול `main`;
+שתי הרצות CI ירוקות (`33673868007` push, `33674235919` pull_request). גוף
+PR #13 נבדק נקי מסודות.
+
+**checkpoint 11 (בוצע בפועל, לא מתועתק):** אותן 4 בדיקות לפי-צורה + בדיקת
+ערך מ-`.env` הורצו שוב לפני ה-commit — כולן ריקות/0. שני commits חדשים על
+`feat/supabase-data`: `8afed01` (הרצה חוזרת + §ח + §יב + §יג) ו-`1e9b445`
+(תיקוני ביקורת עצמית). ארבע הרצות CI ירוקות: `8afed01` — `33677982093`
+(push), `33677986227` (pull_request); `1e9b445` — `33678187287` (push),
+`33678192768` (pull_request). PR #13 עדיין לא מוזג.
 
 ### ח.9 — snapshot סוגר (checkpoint 11, ביום הסגירה)
 
