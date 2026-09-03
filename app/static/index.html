@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FunnelIQ &mdash; התחברות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <div id="loading" role="status">טוען&hellip;</div>
+
+  <div id="config-error" class="error" role="alert" hidden>
+    שגיאה בטעינת ההגדרות. נסו לרענן את הדף.
+  </div>
+
+  <section id="login-section" hidden>
+    <h1>FunnelIQ</h1>
+    <form id="login-form" novalidate>
+      <div class="field">
+        <label for="email">אימייל</label>
+        <input id="email" name="email" type="email" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">סיסמה</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <div id="login-error" class="error" role="alert" aria-live="polite" hidden></div>
+      <button type="submit">התחברות</button>
+    </form>
+  </section>
+
+  <section id="shell-section" hidden>
+    <p>מחובר כ־<span id="user-email"></span></p>
+    <button id="signout-button" type="button">התנתקות</button>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.min.js"
+        integrity="sha384-WmjsOVSSw3JNqIKfmDU35+uddOzBdP9PlYIWCg7xdnVOesjWVGpRcooOVheFFwH4"
+        crossorigin="anonymous"></script>
+<script src="/app.js"></script>
+</body>
+</html>

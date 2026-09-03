@@ -9,3 +9,13 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /health
+    envVars:
+      # Values set manually in the Render dashboard, not synced from here --
+      # same pattern as .env.example (names only, never values, in git).
+      # Public by design (PHASE4.md D16): served back by GET /api/config.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      # SUPABASE_SECRET_KEY is deliberately absent -- this process never
+      # needs it (D8) and it must never reach Render.
