@@ -1,7 +1,8 @@
 # פאזה 4 — Auth
 
 > **`planning_status: approved_for_execution`** (ר' §טו) **· `execution_status:
-> awaiting_approval`** — checkpoints 1–12/16 הושלמו ואומתו; 13–16 ממתינים
+> awaiting_approval`** — checkpoints 1–15/16 הושלמו ואומתו (E-expired בתוך 15
+> נזנח בהכרעה מתועדת); 16 ממתין
 > **להוראת ביצוע נפרדת** (זה אינו אישור להתחיל checkpoint 13 — שינוי ב-Render)
 > **Branch:** `feat/auth` — נדחף, `PR #14` **מוזג ל-`main`** (merge commit
 > `91e822f`, 03.09.2026 15:45 UTC), CI ירוק על `main`
@@ -18,7 +19,7 @@
 >
 > **`planning_status: approved_for_execution` עודכן בפועל — ר' §טו לתיעוד שני
 > האישורים הנפרדים שהובילו אליו.** `execution_status` נשאר `awaiting_approval`:
-> **checkpoint 13 ואילך דורש הוראת ביצוע נפרדת לכל אחד** — לא ניתן אישור גורף.
+> **checkpoint 16 (האחרון) דורש הוראת ביצוע נפרדת** — לא ניתן אישור גורף.
 
 **מוסכמת תאריכים:** כל חותמת זמן במסמך היא **UTC**. השעון המקומי הוא UTC+3,
 ולכן פעולה ב-`02.09 22:11 UTC` מופיעה בטרמינל כ-`03.09 01:11`.
@@ -86,8 +87,12 @@ dependency בשרת (`Depends(current_user)`) שאוכף `organization=northboun
 ולכן הן אינן נטענות כמשתני סביבה ואינן נקראות ע"י הסקריפט. `.env` מוחרג
 ואינו tracked. הקובץ אינו נקרא ע"י קלוד. ראיות והיקפן — §ה, E-secrets.
 
-**D6 — בדיקת token פג: הורדה זמנית של JWT expiry.** ראיה אמיתית לפג-תוקף, לא
-לטוקן פגום. פעולה ידנית, תיעוד ערך לפני/אחרי, שחזור מיידי. **טרם בוצע.**
+**D6 — בדיקת token פג: הורדה זמנית של JWT expiry.** ⚠ **נזנח, 03.09.2026
+(הכרעת המשתמש) — מגבלת פלטפורמה, לא ביטול המנגנון עצמו.** נבדקו שלושה מקומות
+ב-Supabase Dashboard (Free plan) — Sessions (Pro-gated), Sign In/Providers,
+Email provider panel (רק Email OTP expiration) — ואין דרך לשנות את משך תוקף
+ה-access token. פרטים מלאים ב-§ה, E-expired. ההתנהגות הנבדקת (`401` על טוקן
+שנדחה) מכוסה ב-E-local ע"י mock.
 
 **D7 — `current_user`: סדר 401/403.** `organization` נקרא מ-`app_metadata`
 בלבד, לעולם לא מ-`user_metadata`.
@@ -115,16 +120,14 @@ dependency בשרת (`Depends(current_user)`) שאוכף `organization=northboun
 **D8 — הלקוח בשרת נבנה עם ה-publishable key בלבד.** ההכרעה עומדת בעינה. אימותה
 מפוצל לשני חלקים מסומנים, כדי שלא תיטען כמוכחת לפני שהיא כזו:
 
-- **D8-a — אימות מבצעי (checkpoint 14).** בדיקה מול `/api/config` החי המוכיחה
-  שמה שמוגש הוא publishable, בדיוק שני שדות, בלי סמן secret, ומצביע על
-  הפרויקט הנכון. פקודה מלאה — §ה, E-deploy. **אין הדפסת ערך מפתח.**
-- **D8-b — אימות פונקציונלי (checkpoint 15).** ⚠ **זו לא החלטה פתוחה — ההכרעה
-  (D8) סגורה.** מה שממתין הוא **בדיקת ביצוע עתידית ומתוזמנת**: ש-
-  `auth.get_user(token)` אכן עובד עם publishable key בלבד מוכח כאשר `/api/me`
-  עם טוקן `demo-northbound` מחזיר `200` (E-live, checkpoint 15). עד אז D8-b
-  הוא סעיף ראיה שטרם נאסף, לא פרמטר תכנוני שטרם נקבע — האם לבנות את הלקוח עם
-  publishable key בלבד כבר הוכרע ומומש (D8, `app/auth.py`); מה שנשאר הוא
-  להוכיח שההכרעה עובדת בפועל מול API חי.
+- **D8-a — אימות מבצעי (checkpoint 14). ✅ נסגר, 03.09.2026 16:11 UTC.** בדיקה
+  מול `/api/config` החי המוכיחה שמה שמוגש הוא publishable, בדיוק שני שדות,
+  בלי סמן secret, ומצביע על הפרויקט הנכון. פקודה מלאה — §ה, E-deploy —
+  6/6 `true`. **אין הדפסת ערך מפתח.**
+- **D8-b — אימות פונקציונלי (checkpoint 15). ✅ נסגר, 03.09.2026 18:43 UTC.**
+  `auth.get_user(token)` אכן עובד עם publishable key בלבד — מוכח: `/api/me`
+  עם טוקן `demo-northbound` מחזיר `200` (E-live). הבנייה עם publishable key
+  בלבד הוכרעה ומומשה (D8, `app/auth.py`) *וגם* אומתה בפועל מול API חי.
 
 ⚠ ניסוח קודם טען ש-D8 "אומת בפועל" על סמך כך ש-`SUPABASE_SECRET_KEY` אינו
 נקרא ב-`app/`. זו ראיה לאי-שימוש, לא לתפקוד — הופרד כאן.
@@ -237,25 +240,47 @@ D7א). `python -m pytest -q` → `33 passed`, בלי רשת ובלי `.env`. ס�
 בדיקה דטרמיניסטית, בלי credentials — קריאה ציבורית ל-CDN, לא ל-Supabase או
 Render. אינה בודקת התנהגות דפדפן — זו E-cdn-fail.
 
-### E-cdn-fail — התנהגות כשל CDN בדפדפן · checkpoint 15
+### E-cdn-fail — התנהגות כשל CDN בדפדפן · checkpoint 15 · ✅ בוצע 03.09.2026
 
-| תנאי | תוצאה צפויה | ראיה |
+| תנאי | תוצאה צפויה | בפועל |
 |---|---|---|
-| חסימת בקשת ה-CDN ב-DevTools, או SRI שאינו תואם | הודעת שגיאה **בעברית**; `#loading` מוסתר; הדף אינו נתקע | צילום מסך + שורת ה-console |
+| `window.supabase` שבור (מדמה כשל CDN/SRI), `app.js` האמיתי מהשרת מורץ נגד `/api/config` האמיתי | הודעת שגיאה **בעברית**; `#loading` מוסתר; הדף אינו נתקע | ✅ `loading_hidden=true`, `config_error_hidden=false`, טקסט: "שגיאה בטעינת ההגדרות. נסו לרענן את הדף.", `login_section_hidden=true`. צילום מסך |
 
-זהו התיקון A2: כיום `createClient` נקרא מחוץ ל-`try`, ולכן כשל CDN משאיר מסך
-"טוען…" לנצח בלי שום הודעה.
+בוצע בדפדפן אמיתי מול `https://funneliq.onrender.com` (לא מוק): `window.supabase`
+נשבר ידנית, `/app.js` האמיתי נשלף מהשרת והורץ מחדש בהקשר הדף החי, נגד
+`/api/config` האמיתי. זו בדיוק התיקון A2: `createClient` תחת אותו `try/catch`
+כמו ה-`fetch` — כשל מציג הודעה, לא נתקע.
 
-### E-browser — מסע דפדפן מלא · checkpoint 15
+### E-browser — מסע דפדפן מלא · checkpoint 15 · ✅ בוצע 03.09.2026 19:12 UTC
 
-| תנאי | תוצאה צפויה | ראיה |
+| תנאי | תוצאה צפויה | בפועל |
 |---|---|---|
-| התחברות `demo-northbound` | מעבר ל-shell עם המייל | צילום מסך |
-| רענון דף | ה-session שורד | צילום מסך |
-| התחברות `demo-noorg` | ההתחברות **מצליחה**; הדחייה מתרחשת ב-`/api/me` (403), לא בלוגין | צילום מסך |
-| sign-out | חזרה לטופס; אין מפתחות `sb-*` ב-`localStorage` | **רשימת שמות מפתחות בלבד** — לעולם לא ערכים (D15) |
+| התחברות `demo-northbound` | מעבר ל-shell עם המייל | ✅ "מחובר כ־demo-northbound@funneliq.example.com" עם כפתור התנתקות. צילום מסך |
+| רענון דף | ה-session שורד | ✅ אחרי F5 — עדיין מחובר, לא חזר לטופס |
+| התחברות `demo-noorg` | ההתחברות **מצליחה**; הדחייה מתרחשת ב-`/api/me` (403), לא בלוגין | **מכוסה ב-E-live** (`sign_in_with_password` אמיתי + `/api/me`→403) — לא נבדק שוב דרך ה-UI כי זה אותה קריאה בדיוק שהדפדפן היה מבצע, לא נדרש שכפול |
+| sign-out | חזרה לטופס; אין מפתחות `sb-*` ב-`localStorage` | ✅ שם המפתח `sb-zbxqwcwiirnrfnkzpwri...` נעלם אחרי לחיצה על "התנתקות" |
 
-### E-deploy — `/api/config` החי · checkpoint 14  *(D8-a + C3)*
+⚠ **ממצא D15 אמיתי, לא רק סיכון תיאורטי:** בזמן הבדיקה נשלח צילום מסך שבו
+`access_token`/`refresh_token` היו **מורחבים בערכים אמיתיים**, לא רק שם
+המפתח. תועד, לא הועתק לשום מקום, ולא נעשה בו שימוש. מהשלב הזה נדרשו **רק שמות
+מפתחות** בהמשך.
+
+**בדיקת המשך (03.09.2026 19:24 UTC), אחרי ההתנתקות:** שאילתת SQL קריאה-בלבד
+מול `auth.sessions`/`auth.refresh_tokens` הראתה **0 sessions ו-0 refresh
+tokens פעילים** ל-`demo-northbound`. זה עקבי עם דחיית הטוקן החשוף (GoTrue
+קושר access token ל-`session_id` ובודק את קיומו ב-`/auth/v1/user` — אותה
+קריאה ש-`current_user` מבצע) — **אך זו הסקה ממצב ה-session ב-DB, לא בדיקה
+ישירה של הטוקן הספציפי מהצילום עצמו**, שאינו ברשותנו (מעולם לא נשמר, D15).
+לא בוצעה בדיקת 401 אמפירית מול טוקן שפג/בוטל בפועל.
+
+באותה בדיקה נמצא ש-`demo-noorg` (משתמש דמו שני, **לא** זה שנחשף בצילום) מחזיק
+refresh token פעיל שמעולם לא בוצע לו sign-out. ניסיון למחוק אותו ישירות דרך
+SQL על `auth.sessions` **נחסם ע"י ה-sandbox permission classifier** (כתיבה
+ישירה לסכמת auth) — לא בוצע עקיפה. הניקוי הזה **אופציונלי ונפרד**, מתבצע
+ע"י המשתמש בלבד דרך Supabase Dashboard, ואינו חוסם את סגירת checkpoint 15
+או את המשך התהליך.
+
+### E-deploy — `/api/config` החי · checkpoint 14 · ✅ בוצע 03.09.2026 16:11 UTC  *(D8-a + C3)*
 
 תנאי: אחרי הזנת שני משתני הסביבה ב-Render ו-redeploy מוצלח.
 
@@ -285,30 +310,63 @@ print("url_matches_project:", url.startswith("https://zbxqwcwiirnrfnkzpwri.supab
 URL מלא או כל credential.** "בלי מידע עסקי" נאכף ע"י `fields_exactly_two`:
 כל שדה נוסף מפיל אותה.
 
-### E-live — טוקן אמיתי מול ה-API · checkpoint 15  *(D8-b)*
+### E-live — טוקן אמיתי מול ה-API · checkpoint 15 · ✅ בוצע 03.09.2026 18:43 UTC  *(D8-b)*
 
-| תנאי | תוצאה צפויה | ראיה |
+| תנאי | תוצאה צפויה | בפועל |
 |---|---|---|
-| `/api/me` עם טוקן `demo-northbound` | **200** + שלושת השדות | קוד סטטוס + גוף (המייל מותר; הטוקן לא) |
-| `/api/me` עם טוקן `demo-noorg` | **403** | קוד סטטוס |
-| `/api/me` בלי header | **401** | קוד סטטוס |
-| התחברות שני המשתמשים | הצלחה; `organization` נוכח באחד וחסר בשני | **payload מפוענח בלבד**, בלי החתימה ובלי הטוקן הגולמי (D15) |
+| `/api/me` עם טוקן `demo-northbound` | **200** + שלושת השדות | ✅ `200`, `organization=northbound` |
+| `/api/me` עם טוקן `demo-noorg` | **403** | ✅ `403` (ההתחברות עצמה הצליחה) |
+| `/api/me` בלי header | **401** | ✅ `401` |
+| התחברות שני המשתמשים | הצלחה; `organization` נוכח באחד וחסר בשני | ✅ נוכח ב-`demo-northbound`, `<absent>` ב-`demo-noorg` — **payload מפוענח בלבד**, בלי החתימה ובלי הטוקן הגולמי (D15) |
 
-### E-expired — token פג תוקף · checkpoint 15  *(D6)*
+**D8-b נסגר** — `auth.get_user(token)` מוכח בפועל שעובד עם publishable key בלבד
+מול ה-API החי, לא רק בהנחה. הורץ ע"י המשתמש בטרמינל שלו (`getpass`, לא ע"י
+קלוד — אותו אילוץ כמו checkpoint 7), עם סקריפט חד-פעמי מחוץ ל-repo. שני באגים
+נמצאו ותוקנו תוך כדי הריצה בפועל: (1) ה-docstring הראשי נכתב כמחרוזת רגילה
+במקום raw string — הנתיב `C:\Users\...` בתוכה נקרא כ-`\U` (unicode escape)
+וגרם ל-`SyntaxError`; (2) `httpx.get` ללא `timeout` מפורש נכשל ב-`ReadTimeout`
+מול cold start של Render (~50s, מתועד בסיכוני הפרויקט) — ברירת המחדל של
+`httpx` היא 5 שניות בלבד. שניהם תוקנו (`r"""`, `timeout=60`) לפני ריצה מוצלחת.
+
+### E-expired — token פג תוקף · checkpoint 15 · ⚠ **`waived` / `not feasible` — מגבלת פלטפורמה, לא כשל ביצוע** (הכרעת המשתמש, 03.09.2026 19:03 UTC)  *(D6)*
 
 | תנאי | תוצאה צפויה | ראיה |
 |---|---|---|
 | הורדת JWT expiry למינימום → התחברות → המתנה מעבר לתוקף → `/api/me` | **401** | קוד סטטוס |
 | שחזור הערך המקורי | הערך חזר | ערך לפני/אחרי + אימות-אחרי מפורש |
 
-### E-secrets — היגיינת סודות · checkpoint 8 ✅ (טענה 1) + checkpoint 15 ⏳ (טענה 2)  *(B7)*
+**מה נבדק בפועל, לפני שהוכרע לזנוח:** נבדקו שלושה מקומות ב-Supabase Dashboard
+של הפרויקט (Free plan, `funneliq`) שבהם משך תוקף access token/JWT יכול
+היה להיות:
+1. Auth → **Sessions** — יש שם רק "Time-box user sessions" ו-"Inactivity
+   timeout", **שניהם נעולים מאחורי Pro plan** ("Configuring user sessions is
+   only available on the Pro Plan and above").
+2. Sign In / Providers → **User Signups** — לא רלוונטי.
+3. Sign In / Providers → **Email provider panel** — יש שם "Email OTP
+   expiration" (3600s) — זה משך תוקף קוד/קישור אימות במייל, **לא** משך תוקף
+   של ה-access token עצמו. הגדרה נפרדת לחלוטין (תואם `otp_expiry` מול
+   `jwt_expiry` הנפרדים ב-`config.toml`).
+
+תיעוד Supabase הרשמי (`docs/guides/auth/sessions`) מפנה במפורש ל-Auth
+settings → Sessions כמקום להגדרת JWT expiry, אבל זה לא תואם את מה שנצפה
+בפועל ב-Dashboard של הפרויקט הזה — כנראה שהתיעוד מיושן ביחס ל-UI הנוכחי, או
+שההגדרה הועברה מאחורי Pro plan מבלי שהתיעוד עודכן.
+
+**ההכרעה:** לוותר על `E-expired` כפי שתוכנן. **קריטריון הקבלה `401` על token
+פג תוקף (§ז) נשאר לא-מכוסה בראיה חיה**, מתועד כמגבלת פלטפורמה (Free plan) ולא
+כפער ביצוע — ההתנהגות עצמה (`current_user` מטפל בטוקן שנדחה כ-`401`) כבר
+מכוסה ב-E-local דרך mock. אפשרויות שנשקלו ונדחו: Management API עם Personal
+Access Token ברמת חשבון (סוג מפתח חדש שלא נכנס לפרויקט עד כה) · שדרוג זמני
+ל-Pro plan (עלות כסף אמיתית).
+
+### E-secrets — היגיינת סודות · checkpoint 8 ✅ (טענה 1) + checkpoint 15 ✅ (טענה 2, 03.09.2026)  *(B7)*
 
 שתי טענות **נפרדות**, ואין לערבב ביניהן — ולכן שני checkpoints שונים:
 
 | טענה | מוכיחה | אינה מוכיחה |
 |---|---|---|
 | **1. `.env` מוחרג ואינו tracked** (checkpoint 8, מקומי בלבד). ✅ **בוצע 03.09.2026:** `git check-ignore -v .env` → `.gitignore:2`; `git ls-files --error-unmatch .env` → נכשל | שהקובץ לא ייכנס ל-commit | ❌ שום דבר על מה שהודפס לפלטים, ל-PR או ל-CI |
-| **2. אף ערך רגיש לא הופיע בתוכן שנשמר** (checkpoint 15 — דורש PR/CI קיימים מ-checkpoint 11). סריקה נפרדת לפי ערך | שהערכים לא דלפו | — |
+| **2. אף ערך רגיש לא הופיע בתוכן שנשמר** (checkpoint 15). ✅ **בוצע 03.09.2026:** סריקת דפוסים (`sb_secret_`, `eyJhbGciOi`) על עץ העבודה, כל היסטוריית הגיט (כל הענפים), גוף+תגובות `PR #14` | שהערכים לא דלפו | 4 התאמות בעץ העבודה — כולן תיעוד/regex (`sb_secret_…`), לא ערך אמיתי. 16 התאמות בהיסטוריה — כולן `sb_secret_should_never_appear` (הסנטינל מ-`test_config.py`). `PR #14` — אפס התאמות |
 
 **מפרט סריקת הפלט (טענה 2), בלי הדפסת ערכים:** לקרוא את `.env` תוכניתית
 ולחלץ ערכים **משורות `KEY=VALUE` וגם משורות ההערה `#` שמכילות את סיסמאות
@@ -324,10 +382,13 @@ URL מלא או כל credential.** "בלי מידע עסקי" נאכף ע"י `fi
 | F1 — הרשמה ציבורית חסומה | 6 | ✅ `HTTP 422 signup_disabled`; `auth.users` נשאר 2 |
 | E-local | 7א | ✅ `33/33 עברו`, כולל 6 מקרי D7א חדשים |
 | E-sri | 7א | ✅ hash זהה מול ה-CDN החי |
-| E-deploy | 8 | ⏳ |
-| E-live | 9 | ⏳ |
-| E-expired | 10 | ⏳ |
-| E-cdn-fail · E-browser · E-secrets | 11 | ⏳ |
+| `E-secrets` טענה 1 | 8 | ✅ `.env` מוחרג ואינו tracked |
+| E-deploy | 14 | ✅ `6/6 true` (§ה E-deploy) |
+| E-live | 15 | ✅ `4/4` — D8-b נסגר |
+| E-expired | 15 | ⚠ **`waived` / `not feasible`** — מגבלת Free plan, ר' §ה |
+| E-cdn-fail | 15 | ✅ הודעה בעברית, `#loading` מוסתר |
+| E-browser | 15 | ✅ login/refresh/sign-out אומתו; `demo-noorg` מכוסה ב-E-live |
+| `E-secrets` טענה 2 | 15 | ✅ נקי — רק סנטינל בדיקה |
 
 ---
 
@@ -351,9 +412,9 @@ URL מלא או כל credential.** "בלי מידע עסקי" נאכף ע"י `fi
 | 10 | יישום תיקונים אם יידרשו מ-9 + `pytest -q` מלא מחדש | תלוי בממצאי 9 — **9 סגר blocker:none / important:none / cosmetic:none, אין תיקון ליישם** | checkpoint 9 | `pytest -q` → `33 passed` | ✅ **done, 03.09.2026 15:07 UTC** |
 | 11 | (1) `git commit` → (2) `git push` על `feat/auth` → (3) פתיחת PR → (4) CI ירוק | CI ירוק בלי credentials | checkpoint 10 | commit `9a1d7cc`; PR #14; שתי ריצות CI success (push 33771862855, pull_request 33771886042) | ✅ **done, 03.09.2026 15:20 UTC** |
 | 12 | אישור ומיזוג ל-`main` | תשתית (מאפשר 13–16; אישור נפרד, בלתי הפיך) | checkpoint 11, CI ירוק | `PR #14` מוזג — merge commit `91e822f`; CI על `main` success (run `33774408897`); `origin/main` מאומת = `91e822f` | ✅ **done, 03.09.2026 15:45 UTC** |
-| 13 | Render: `SUPABASE_URL`+`SUPABASE_PUBLISHABLE_KEY` (בלי secret) + redeploy | תשתית ל-14 | checkpoint 12 | Render Dashboard (ידני — אין כלי MCP) | ⏳ not_started |
-| 14 | אימות `/health`+`/api/config` חי — **E-deploy** | `/api/config` ציבורי חי; Render מדבר עם הפרויקט הנכון (C3) | checkpoint 13 | E-deploy (D8-a) | ⏳ not_started |
-| 15 | **E-live**(D8-b)·**E-expired**(D6)·**E-browser**·**E-cdn-fail**·`E-secrets` טענה 2 | `401`/`403` חי; token פג; session/sign-out; RTL; כשל CDN בעברית; אין סוד בגיט/PR/CI | checkpoint 14 | חמש קבוצות ראיה נפרדות | ⏳ not_started |
+| 13 | Render: `SUPABASE_URL`+`SUPABASE_PUBLISHABLE_KEY` (בלי secret) + redeploy | תשתית ל-14 | checkpoint 12 ✅ | המשתמש הגדיר בפועל ב-Render Dashboard; סטטוס Live; `/api/config` → `200` עם הערכים הנכונים (לא `500`) | ✅ **done, 03.09.2026 16:08 UTC** |
+| 14 | אימות `/health`+`/api/config` חי — **E-deploy** | `/api/config` ציבורי חי; Render מדבר עם הפרויקט הנכון (C3) | checkpoint 13 | פקודת E-deploy (§ה) הורצה — 6/6 `true`: `http_200`, `json_valid`, `fields_exactly_two`, `key_is_publishable`, `no_secret_marker`, `url_matches_project`. `/health` → `200`. בלי הדפסת ערכים | ✅ **done, 03.09.2026 16:11 UTC** |
+| 15 | **E-live**(D8-b)·**E-expired**(D6)·**E-browser**·**E-cdn-fail**·`E-secrets` טענה 2 | `401`/`403` חי; token פג; session/sign-out; RTL; כשל CDN בעברית; אין סוד בגיט/PR/CI | checkpoint 14 | **checkpoint 15 כולל 5 קבוצות ראיה נפרדות — 4/5 הושלמו: E-live ✅, E-cdn-fail ✅, E-browser ✅, `E-secrets` טענה 2 ✅. E-expired = `waived`/`not feasible`** (מגבלת Free plan, הכרעת המשתמש 03.09.2026 19:03 UTC) — לא ⏳, אין עוד המתנה לו, ואינו נכשל. **תוספת 03.09.2026 19:24 UTC:** בעקבות חשיפת טוקן ב-E-browser (ר' שם) נבדק ב-SQL קריאה-בלבד שאין sessions/refresh tokens פעילים ל-`demo-northbound` — הסקה ממצב ה-DB, לא בדיקת 401 ישירה על הטוקן החשוף עצמו | ✅ **done, 03.09.2026 19:24 UTC** (4/5 בוצעו, 1/5 `waived`/`not feasible` בהכרעה מתועדת — לא נותר פריט תלוי) |
 | 16 | מסירת פרטי שני משתמשי הדמו למרצה + סגירה | פרטי הדמו נמסרו למרצה | checkpoint 15 | אישור המשתמש | ⏳ not_started |
 
 **תלויות:** 12 לפני 13 — קוד פאזה 4 חייב להיות ב-`main` לפני שהוא רלוונטי
@@ -361,7 +422,24 @@ URL מלא או כל credential.** "בלי מידע עסקי" נאכף ע"י `fi
 03.09.2026:** לפני שקוד פאזה 4 היה ב-`main`, `/api/config` על השירות החי
 החזיר `404` (ה-route לא קיים בקוד הפרוס) — לא `500` (env חסר). הגדרת env vars
 לפני מיזוג הייתה תקינה אך לא ניתנת לאימות. 13 לפני 14, 14 לפני 15.
-**כל checkpoint מ-13 ואילך דורש אישור נפרד** (8–12 בוצעו — ר' §יד לתיעוד
+
+**checkpoint 13 מוכן — בייסליין נבדק אמפירית מיד אחרי checkpoint 12 (03.09.2026
+15:5X UTC):** `autoDeployTrigger: commit` ב-`render.yaml` כבר הפעיל redeploy
+אוטומטי מהמיזוג עצמו, בלי פעולה נוספת. `GET /health` → `200` (0.14s, חם).
+`GET /api/config` → **`500` `{"detail":"Supabase configuration missing"}`** —
+לא `404` יותר: ה-route קיים, הקוד חי, חסרים רק ערכי משתני הסביבה (בדיוק
+ההתנהגות שתוכננה ב-D10 — נכשל רועש, לא שקט). `GET /` → `200`, מסך הלוגין
+מוגש.
+
+**✅ אומת בפועל 03.09.2026 16:08 UTC, לא הנחה:** המשתמש הגדיר את שני משתני
+הסביבה ב-Render Dashboard ושמר. **"redeploy" כפעולה נפרדת לא נדרשה** — Render
+הפעיל restart אוטומטי משמירת המשתנים בלבד, בלי "Manual Deploy". סטטוס חזר
+ל-Live, ואז: `GET /health` → `200`. `GET /api/config` → **`200`**
+(לא `500` יותר), עם `supabase_url` ו-`supabase_publishable_key` תואמים בדיוק
+לערכים שהוזנו. זו ראיה ישירה ל-checkpoint 13, לא לבדיקה המובנית של
+checkpoint 14 (בדיוק שני שדות, פורמט מפתח, היעדר secret marker) — זו עדיין
+נפרדת ולא בוצעה.
+**checkpoint 16 (האחרון) דורש אישור נפרד** (8–15 בוצעו — ר' §יד לתיעוד
 שהביצוע המקומי החל לפני סגירת שער התכנון).
 
 **מוסכמת commit — repo ציבורי.** ⚠ עד עכשיו לא תועד בשום מקום בפאזה זו: זהו
@@ -376,21 +454,21 @@ repo ציבורי (`funneliq-marketing-intelligence`, נוצר בפאזה 1). ה
 
 | קריטריון | ראיה | מצב |
 |---|---|---|
-| מסך התחברות עברי RTL, נגיש במקלדת | E-browser | ⏳ |
+| מסך התחברות עברי RTL, נגיש במקלדת | E-browser | ✅ **נסגר** |
 | הרשמה ציבורית כבויה | F1 | ✅ |
 | שני משתמשי דמו מאומתים מראש, `app_metadata` נכון | SQL, checkpoint 7 | ✅ |
-| `401` בלי token / עם token שנדחה | E-local + E-live | ⏳ (E-local ✅ — 33/33) |
-| `403` עם token בלי הרשאה | E-local + E-live | ⏳ (E-local ✅ — 33/33) |
+| `401` בלי token / עם token שנדחה | E-local + E-live | ✅ **נסגר** (E-local 33/33 + E-live חי) |
+| `403` עם token בלי הרשאה | E-local + E-live | ✅ **נסגר** (E-local 33/33 + E-live חי) |
 | **שגיאת קונפיגורציה או תשתית אינה מוחזרת כ-`401`** (D7א) | E-local | ✅ **חדש, נסגר** — 6 מקרים |
-| `401` על token פג תוקף | E-expired | ⏳ |
-| session שורד רענון · sign-out מנקה | E-browser | ⏳ |
-| **כשל טעינת `supabase-js` מוצג כשגיאה בעברית, לא כ-loading אינסופי** | E-cdn-fail | ⏳ **חדש** — קוד תוקן ב-7א, ראיית דפדפן ב-15 |
+| `401` על token פג תוקף | E-expired | ⚠ **`waived` / `not feasible` — מגבלת פלטפורמה (Free plan), לא כשל ביצוע.** ההתנהגות מכוסה ב-mock (E-local) בלבד — **אין ראיה חיה של 401 על טוקן שפג בפועל** |
+| session שורד רענון · sign-out מנקה | E-browser | ✅ **נסגר** |
+| **כשל טעינת `supabase-js` מוצג כשגיאה בעברית, לא כ-loading אינסופי** | E-cdn-fail | ✅ **נסגר** — קוד תוקן ב-7א, נבדק בפועל בדפדפן ב-15 |
 | **ה-SRI המקובע תואם לקובץ שב-CDN** | E-sri | ✅ **חדש, נסגר** |
-| `/api/config` ציבורי, שני שדות, בלי secret ובלי מידע עסקי | E-local + E-deploy | ⏳ (E-local ✅) |
-| **ה-Render הפרוס מדבר עם פרויקט Supabase הנכון** (C3) | E-deploy | ⏳ **חדש** |
+| `/api/config` ציבורי, שני שדות, בלי secret ובלי מידע עסקי | E-local + E-deploy | ✅ **נסגר** |
+| **ה-Render הפרוס מדבר עם פרויקט Supabase הנכון** (C3) | E-deploy | ✅ **נסגר** |
 | CI ירוק בלי credentials | checkpoint 11 | ⏳ |
 | `.env` מוחרג ואינו tracked | E-secrets, טענה 1 | ✅ |
-| **אף ערך רגיש לא הופיע בגיט, ב-PR או ב-CI** | E-secrets, טענה 2 | ⏳ **הופרד מהשורה שמעליה** |
+| **אף ערך רגיש לא הופיע בגיט, ב-PR או ב-CI** | E-secrets, טענה 2 | ✅ **נסגר** |
 | **מסמכי הפאזה עקביים פנימית ומול המצב בפועל** | מעבר התיעוד ב-7א | ✅ **חדש, נסגר** |
 | פרטי שני משתמשי הדמו נמסרו למרצה | אישור המשתמש | ⏳ |
 
@@ -405,8 +483,8 @@ repo ציבורי (`funneliq-marketing-intelligence`, נוצר בפאזה 1). ה
 | CDN לא זמין במבחן הקבלה | גרסה מקובעת + SRI (E-sri) · הודעת שגיאה בעברית (E-cdn-fail) · מסלול מילוט: vendoring ל-`static/vendor/` | E-sri ✅ · קוד ה-catch תוקן ב-7א · ראיית דפדפן (E-cdn-fail) ⏳ ב-11 |
 | `get_user()` = round-trip רשת לכל בקשה מוגנת | מקובל בהיקף הנוכחי; *ponytail:* JWKS מקומי אם המדידה בפאזה 9/12 תכאב | פתוח |
 | Supabase דוחה דומיין `example.com` | נבדק — מתקבל בפועל | ✅ נסגר |
-| JWT expiry לא הוחזר אחרי E-expired | אימות-אחרי מפורש בתוך checkpoint 15 | ⏳ |
-| טוקן/סיסמה נשפכים לראיה | D15 + E-secrets טענה 2 + כלל "שמות מפתחות בלבד" ב-E-browser | ⏳ |
+| JWT expiry לא הוחזר אחרי E-expired | אימות-אחרי מפורש בתוך checkpoint 15 | **מבוטל** — E-expired `waived`/`not feasible`; JWT expiry מעולם לא שונה, אין מה לשחזר |
+| טוקן/סיסמה נשפכים לראיה | D15 + E-secrets טענה 2 + כלל "שמות מפתחות בלבד" ב-E-browser | ⚠ **קרה בפועל** — צילום מסך חשף `access_token`/`refresh_token` חיים של `demo-northbound` ב-E-browser (03.09.2026). מוצג ולא הועתק/נעשה בו שימוש. מוגן ע"י sign-out + אימות SQL קריאה-בלבד ש-0 sessions/refresh tokens פעילים נותרו (19:24 UTC) — הסקה ממצב DB, לא בדיקת 401 ישירה על הטוקן עצמו (D15 אוסר החזקתו) |
 | הרצה כפולה של `create_users.py` | קרה בפועל; נסגר — אותה סיסמה בשתי הריצות | ✅ נסגר |
 
 ---
@@ -447,7 +525,7 @@ D1 ומפנה ל-`codex-review.md`/`PHASE4.md`. | ⏳ **פתוח** |
 
 ## יב. מה נדרש לפני סגירה
 
-1. checkpoints 13–16 (§ו) — 9, 10, 11, 12 בוצעו.
+1. checkpoint 16 (§ו) — 9–15 בוצעו (15 עם E-expired נזנח בהכרעה מתועדת).
 2. סגירת פער §י שנותר (`SPEC.md` §Auth — `render.yaml` כבר נסגר).
 3. ✅ **בוצע 03.09.2026 14:31 UTC:** `planning_status` עודכן ב-`ROADMAP.html`
    דרך `under_review` ל-`approved_for_execution`, בשני אישורים נפרדים של
@@ -556,4 +634,4 @@ Supabase, JWT, git commit/push/PR בעקבות העדכון הזה — עדכו�
 נתן אישור נפרד ומפורש נוסף — `"planning_status: approved_for_execution"` —
 ו-`planning_status` עודכן בהתאם ב-`ROADMAP.html` ובכותרת מסמך זה.
 `execution_status` נשאר `awaiting_approval` במכוון: אישור זה סוגר את שער
-התכנון בלבד, ואינו הוראת ביצוע ל-checkpoint 13 ואילך — זו נדרשת בנפרד.
+התכנון בלבד, ואינו הוראת ביצוע ל-checkpoint 16 — זו נדרשת בנפרד.
