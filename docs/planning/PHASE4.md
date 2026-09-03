@@ -1,11 +1,10 @@
 # פאזה 4 — Auth
 
 > **`planning_status: approved_for_execution`** (ר' §טו) **· `execution_status:
-> awaiting_approval`** — checkpoints 1–11/16 הושלמו ואומתו; 12–16 ממתינים
-> **להוראת ביצוע נפרדת** (זה אינו אישור להתחיל checkpoint 12 — מיזוג ל-`main`,
-> בלתי הפיך)
-> **Branch:** `feat/auth` — נדחף, `PR #14` פתוח מול `main`, CI ירוק (commit
-> `9a1d7cc`), **טרם מוזג**
+> awaiting_approval`** — checkpoints 1–12/16 הושלמו ואומתו; 13–16 ממתינים
+> **להוראת ביצוע נפרדת** (זה אינו אישור להתחיל checkpoint 13 — שינוי ב-Render)
+> **Branch:** `feat/auth` — נדחף, `PR #14` **מוזג ל-`main`** (merge commit
+> `91e822f`, 03.09.2026 15:45 UTC), CI ירוק על `main`
 > **גבול הפאזה:** login עברי, session, sign-out, שני משתמשי דמו,
 > `Depends(current_user)` בשרת. אין endpoints עסקיים, אין קריאת נתונים
 > מהדפדפן, אין עיצוב מלא.
@@ -19,7 +18,7 @@
 >
 > **`planning_status: approved_for_execution` עודכן בפועל — ר' §טו לתיעוד שני
 > האישורים הנפרדים שהובילו אליו.** `execution_status` נשאר `awaiting_approval`:
-> **checkpoint 12 ואילך דורש הוראת ביצוע נפרדת לכל אחד** — לא ניתן אישור גורף.
+> **checkpoint 13 ואילך דורש הוראת ביצוע נפרדת לכל אחד** — לא ניתן אישור גורף.
 
 **מוסכמת תאריכים:** כל חותמת זמן במסמך היא **UTC**. השעון המקומי הוא UTC+3,
 ולכן פעולה ב-`02.09 22:11 UTC` מופיעה בטרמינל כ-`03.09 01:11`.
@@ -351,7 +350,7 @@ URL מלא או כל credential.** "בלי מידע עסקי" נאכף ע"י `fi
 | 9 | סגירת ביקורת נוספת על התכנון | תשתית (תהליכי — סוגר את שער התכנון, לא קריטריון מוצר) | — | ביקורת עצמאית של **בעל הפרויקט** (לא הרצת כלי Codex) על `PHASE4.md` מול `ROADMAP.html` — **תוצאה: `blocker: none`, `important: none`, `cosmetic: none`**. פרוט מלא ב-§טו סעיף 7 | ✅ **done, 03.09.2026 14:58 UTC** |
 | 10 | יישום תיקונים אם יידרשו מ-9 + `pytest -q` מלא מחדש | תלוי בממצאי 9 — **9 סגר blocker:none / important:none / cosmetic:none, אין תיקון ליישם** | checkpoint 9 | `pytest -q` → `33 passed` | ✅ **done, 03.09.2026 15:07 UTC** |
 | 11 | (1) `git commit` → (2) `git push` על `feat/auth` → (3) פתיחת PR → (4) CI ירוק | CI ירוק בלי credentials | checkpoint 10 | commit `9a1d7cc`; PR #14; שתי ריצות CI success (push 33771862855, pull_request 33771886042) | ✅ **done, 03.09.2026 15:20 UTC** |
-| 12 | אישור ומיזוג ל-`main` | תשתית (מאפשר 13–16; אישור נפרד, בלתי הפיך) | checkpoint 11, CI ירוק | merge commit | ⏳ not_started |
+| 12 | אישור ומיזוג ל-`main` | תשתית (מאפשר 13–16; אישור נפרד, בלתי הפיך) | checkpoint 11, CI ירוק | `PR #14` מוזג — merge commit `91e822f`; CI על `main` success (run `33774408897`); `origin/main` מאומת = `91e822f` | ✅ **done, 03.09.2026 15:45 UTC** |
 | 13 | Render: `SUPABASE_URL`+`SUPABASE_PUBLISHABLE_KEY` (בלי secret) + redeploy | תשתית ל-14 | checkpoint 12 | Render Dashboard (ידני — אין כלי MCP) | ⏳ not_started |
 | 14 | אימות `/health`+`/api/config` חי — **E-deploy** | `/api/config` ציבורי חי; Render מדבר עם הפרויקט הנכון (C3) | checkpoint 13 | E-deploy (D8-a) | ⏳ not_started |
 | 15 | **E-live**(D8-b)·**E-expired**(D6)·**E-browser**·**E-cdn-fail**·`E-secrets` טענה 2 | `401`/`403` חי; token פג; session/sign-out; RTL; כשל CDN בעברית; אין סוד בגיט/PR/CI | checkpoint 14 | חמש קבוצות ראיה נפרדות | ⏳ not_started |
@@ -362,7 +361,7 @@ URL מלא או כל credential.** "בלי מידע עסקי" נאכף ע"י `fi
 03.09.2026:** לפני שקוד פאזה 4 היה ב-`main`, `/api/config` על השירות החי
 החזיר `404` (ה-route לא קיים בקוד הפרוס) — לא `500` (env חסר). הגדרת env vars
 לפני מיזוג הייתה תקינה אך לא ניתנת לאימות. 13 לפני 14, 14 לפני 15.
-**כל checkpoint מ-12 ואילך דורש אישור נפרד** (8–11 בוצעו — ר' §יד לתיעוד
+**כל checkpoint מ-13 ואילך דורש אישור נפרד** (8–12 בוצעו — ר' §יד לתיעוד
 שהביצוע המקומי החל לפני סגירת שער התכנון).
 
 **מוסכמת commit — repo ציבורי.** ⚠ עד עכשיו לא תועד בשום מקום בפאזה זו: זהו
@@ -448,7 +447,7 @@ D1 ומפנה ל-`codex-review.md`/`PHASE4.md`. | ⏳ **פתוח** |
 
 ## יב. מה נדרש לפני סגירה
 
-1. checkpoints 12–16 (§ו) — 9, 10, 11 בוצעו.
+1. checkpoints 13–16 (§ו) — 9, 10, 11, 12 בוצעו.
 2. סגירת פער §י שנותר (`SPEC.md` §Auth — `render.yaml` כבר נסגר).
 3. ✅ **בוצע 03.09.2026 14:31 UTC:** `planning_status` עודכן ב-`ROADMAP.html`
    דרך `under_review` ל-`approved_for_execution`, בשני אישורים נפרדים של
@@ -557,4 +556,4 @@ Supabase, JWT, git commit/push/PR בעקבות העדכון הזה — עדכו�
 נתן אישור נפרד ומפורש נוסף — `"planning_status: approved_for_execution"` —
 ו-`planning_status` עודכן בהתאם ב-`ROADMAP.html` ובכותרת מסמך זה.
 `execution_status` נשאר `awaiting_approval` במכוון: אישור זה סוגר את שער
-התכנון בלבד, ואינו הוראת ביצוע ל-checkpoint 12 ואילך — זו נדרשת בנפרד.
+התכנון בלבד, ואינו הוראת ביצוע ל-checkpoint 13 ואילך — זו נדרשת בנפרד.
