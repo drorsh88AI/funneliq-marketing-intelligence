@@ -1,11 +1,13 @@
 # פאזה 4 — Auth
 
 > **`planning_status: approved_for_execution`** (ר' §טו) **· `execution_status:
-> awaiting_approval`** — checkpoints 1–15/16 הושלמו ואומתו (E-expired בתוך 15
-> נזנח בהכרעה מתועדת); 16 ממתין
-> **להוראת ביצוע נפרדת** (זה אינו אישור להתחיל checkpoint 13 — שינוי ב-Render)
-> **Branch:** `feat/auth` — נדחף, `PR #14` **מוזג ל-`main`** (merge commit
-> `91e822f`, 03.09.2026 15:45 UTC), CI ירוק על `main`
+> done`** — כל 16 ה-checkpoints הושלמו ואומתו (E-expired בתוך 15
+> `waived`/`not feasible` בהכרעה מתועדת — לא כשל; 16 בוצע — מסירת הדמו
+> למרצה ע"י המשתמש, אישר במפורש 03.09.2026 19:39 UTC). **פאזה 4 סגורה.**
+> **Branch:** `feat/auth` — `PR #14` מוזג ל-`main` (merge commit `91e822f`,
+> 03.09.2026 15:45 UTC), `PR #15` (checkpoints 12–15 evidence + תיקוני
+> checkpoint 15) מוזג ל-`main` (merge commit `90c297a`, 03.09.2026 19:38
+> UTC). CI ירוק על `main`
 > **גבול הפאזה:** login עברי, session, sign-out, שני משתמשי דמו,
 > `Depends(current_user)` בשרת. אין endpoints עסקיים, אין קריאת נתונים
 > מהדפדפן, אין עיצוב מלא.
@@ -18,8 +20,9 @@
 > (ר' §טו סעיף 7), לא בהרצת הפרומפט מול Codex עצמו** — ההבחנה מתועדת שם.
 >
 > **`planning_status: approved_for_execution` עודכן בפועל — ר' §טו לתיעוד שני
-> האישורים הנפרדים שהובילו אליו.** `execution_status` נשאר `awaiting_approval`:
-> **checkpoint 16 (האחרון) דורש הוראת ביצוע נפרדת** — לא ניתן אישור גורף.
+> האישורים הנפרדים שהובילו אליו.** `execution_status: done` — checkpoint 16
+> (האחרון) קיבל הוראת ביצוע נפרדת משלו, כמו כל checkpoint קודם, ואומת לפני
+> שסומן.
 
 **מוסכמת תאריכים:** כל חותמת זמן במסמך היא **UTC**. השעון המקומי הוא UTC+3,
 ולכן פעולה ב-`02.09 22:11 UTC` מופיעה בטרמינל כ-`03.09 01:11`.
@@ -415,7 +418,7 @@ Access Token ברמת חשבון (סוג מפתח חדש שלא נכנס לפר�
 | 13 | Render: `SUPABASE_URL`+`SUPABASE_PUBLISHABLE_KEY` (בלי secret) + redeploy | תשתית ל-14 | checkpoint 12 ✅ | המשתמש הגדיר בפועל ב-Render Dashboard; סטטוס Live; `/api/config` → `200` עם הערכים הנכונים (לא `500`) | ✅ **done, 03.09.2026 16:08 UTC** |
 | 14 | אימות `/health`+`/api/config` חי — **E-deploy** | `/api/config` ציבורי חי; Render מדבר עם הפרויקט הנכון (C3) | checkpoint 13 | פקודת E-deploy (§ה) הורצה — 6/6 `true`: `http_200`, `json_valid`, `fields_exactly_two`, `key_is_publishable`, `no_secret_marker`, `url_matches_project`. `/health` → `200`. בלי הדפסת ערכים | ✅ **done, 03.09.2026 16:11 UTC** |
 | 15 | **E-live**(D8-b)·**E-expired**(D6)·**E-browser**·**E-cdn-fail**·`E-secrets` טענה 2 | `401`/`403` חי; token פג; session/sign-out; RTL; כשל CDN בעברית; אין סוד בגיט/PR/CI | checkpoint 14 | **checkpoint 15 כולל 5 קבוצות ראיה נפרדות — 4/5 הושלמו: E-live ✅, E-cdn-fail ✅, E-browser ✅, `E-secrets` טענה 2 ✅. E-expired = `waived`/`not feasible`** (מגבלת Free plan, הכרעת המשתמש 03.09.2026 19:03 UTC) — לא ⏳, אין עוד המתנה לו, ואינו נכשל. **תוספת 03.09.2026 19:24 UTC:** בעקבות חשיפת טוקן ב-E-browser (ר' שם) נבדק ב-SQL קריאה-בלבד שאין sessions/refresh tokens פעילים ל-`demo-northbound` — הסקה ממצב ה-DB, לא בדיקת 401 ישירה על הטוקן החשוף עצמו | ✅ **done, 03.09.2026 19:24 UTC** (4/5 בוצעו, 1/5 `waived`/`not feasible` בהכרעה מתועדת — לא נותר פריט תלוי) |
-| 16 | מסירת פרטי שני משתמשי הדמו למרצה + סגירה | פרטי הדמו נמסרו למרצה | checkpoint 15 | אישור המשתמש | ⏳ not_started |
+| 16 | מסירת פרטי שני משתמשי הדמו למרצה + סגירה | פרטי הדמו נמסרו למרצה | checkpoint 15 | אישור המשתמש | ✅ **done, 03.09.2026 19:39 UTC** — המשתמש אישר במפורש שמסר את שני משתמשי הדמו למרצה בעצמו (D1); לא בוצעה שום העברה של סיסמה/טוקן דרך קלוד |
 
 **תלויות:** 12 לפני 13 — קוד פאזה 4 חייב להיות ב-`main` לפני שהוא רלוונטי
 ל-Render, ש-`render.yaml` מגדיר לפרוס מ-`branch: main`. **אומת אמפירית
@@ -466,11 +469,11 @@ repo ציבורי (`funneliq-marketing-intelligence`, נוצר בפאזה 1). ה
 | **ה-SRI המקובע תואם לקובץ שב-CDN** | E-sri | ✅ **חדש, נסגר** |
 | `/api/config` ציבורי, שני שדות, בלי secret ובלי מידע עסקי | E-local + E-deploy | ✅ **נסגר** |
 | **ה-Render הפרוס מדבר עם פרויקט Supabase הנכון** (C3) | E-deploy | ✅ **נסגר** |
-| CI ירוק בלי credentials | checkpoint 11 | ⏳ |
+| CI ירוק בלי credentials | checkpoint 11 + `PR #15` | ✅ **נסגר** — שתי ריצות CI ירוקות, ללא `.env`/credentials |
 | `.env` מוחרג ואינו tracked | E-secrets, טענה 1 | ✅ |
 | **אף ערך רגיש לא הופיע בגיט, ב-PR או ב-CI** | E-secrets, טענה 2 | ✅ **נסגר** |
 | **מסמכי הפאזה עקביים פנימית ומול המצב בפועל** | מעבר התיעוד ב-7א | ✅ **חדש, נסגר** |
-| פרטי שני משתמשי הדמו נמסרו למרצה | אישור המשתמש | ⏳ |
+| פרטי שני משתמשי הדמו נמסרו למרצה | אישור המשתמש | ✅ **נסגר** — המשתמש אישר במפורש 03.09.2026 19:39 UTC שהמסירה בוצעה בעצמו (D1); קלוד לא ראה, לא ביקש ולא קיבל סיסמה או טוקן בשום שלב |
 
 ---
 
@@ -478,9 +481,9 @@ repo ציבורי (`funneliq-marketing-intelligence`, נוצר בפאזה 1). ה
 
 | סיכון | מענה | מצב |
 |---|---|---|
-| כשל בהזנת משתני Render מתחזה ל-401 | D7א + E-deploy | ⏳ D7א ✅ (קוד+33 בדיקות); E-deploy ממתין ל-checkpoint 14 (אחרי מיזוג ל-`main`, checkpoint 12) |
+| כשל בהזנת משתני Render מתחזה ל-401 | D7א + E-deploy | ✅ **נסגר** — D7א (קוד+33 בדיקות) + E-deploy (checkpoint 14, 6/6 true) |
 | `StaticFiles` בולע את ה-API | mount אחרון; כיסוי רגרסיה משתמע — בדיקת ה-401 תיפול ל-404 אם הסדר יתהפך | ✅ |
-| CDN לא זמין במבחן הקבלה | גרסה מקובעת + SRI (E-sri) · הודעת שגיאה בעברית (E-cdn-fail) · מסלול מילוט: vendoring ל-`static/vendor/` | E-sri ✅ · קוד ה-catch תוקן ב-7א · ראיית דפדפן (E-cdn-fail) ⏳ ב-11 |
+| CDN לא זמין במבחן הקבלה | גרסה מקובעת + SRI (E-sri) · הודעת שגיאה בעברית (E-cdn-fail) · מסלול מילוט: vendoring ל-`static/vendor/` | ✅ **נסגר** — E-sri ✅ · קוד ה-catch תוקן ב-7א · ראיית דפדפן (E-cdn-fail) ✅ ב-15 |
 | `get_user()` = round-trip רשת לכל בקשה מוגנת | מקובל בהיקף הנוכחי; *ponytail:* JWKS מקומי אם המדידה בפאזה 9/12 תכאב | פתוח |
 | Supabase דוחה דומיין `example.com` | נבדק — מתקבל בפועל | ✅ נסגר |
 | JWT expiry לא הוחזר אחרי E-expired | אימות-אחרי מפורש בתוך checkpoint 15 | **מבוטל** — E-expired `waived`/`not feasible`; JWT expiry מעולם לא שונה, אין מה לשחזר |
@@ -504,13 +507,12 @@ repo ציבורי (`funneliq-marketing-intelligence`, נוצר בפאזה 1). ה
 | `.env.example` | נקב `(phase 9)` | ✅ תוקן |
 | `codex-review.md` | חסרו D1, D5א, D11, D16 ביומן ההכרעות | ✅ נוספו |
 | `render.yaml` | אין `envVars` | ✅ תוקן — `sync: false` לשני השדות, בלי ערכים, `SUPABASE_SECRET_KEY` נעדר במפורש. נדחף ב-commit `9a1d7cc` (checkpoint 11), עדיין רק ב-`feat/auth` — יגיע בפועל ל-`main` ולפריסה החיה רק אחרי checkpoint 12 (מיזוג) |
-| `SPEC.md` §Auth | **אומת ישירות 03.09.2026 — עדיין לא תוקן.** `SPEC.md:1068-1073`
-("### שער החלטה לפני פאזה 4 — מסירת גישת הדמו") עדיין מנוסח כהכרעה עתידית
-פתוחה ("לפני תחילת ביצוע פאזה 4 **חייבת להיסגר**..."; "**אין לנחש** או לקבע
-מראש..."), למרות שההכרעה (D1: שני משתמשי דמו — `demo-northbound` עם
-`organization=northbound`, `demo-noorg` בלעדיו — המשתמש מוסר את הפרטים
-בעצמו) כבר נפלה ומומשה. חסר: משפט סגירה בסוף אותו סעיף ב-`SPEC.md` שמצטט את
-D1 ומפנה ל-`codex-review.md`/`PHASE4.md`. | ⏳ **פתוח** |
+| `SPEC.md` §Auth | ✅ **נסגר בפועל, לא רק בתיעוד הזה.** אומת מחדש 03.09.2026
+19:39 UTC: `SPEC.md:1068-1076` ("### שער החלטה לפני פאזה 4") כבר נפתח ב-"✅
+ההכרעה נסגרה — 02.09.2026, אישור המשתמש", מצטט את D1 ומפנה ל-`PHASE4.md`
+ול-`codex-review.md` — בדיוק מה ששורה זו טענה שחסר. ⚠ **שורה זו עצמה הייתה
+תיעוד מיושן**: הגאפ נסגר בפועל בסבב תיקוני checkpoint 7א, אבל השורה כאן
+מעולם לא עודכנה בהתאם — נמצא ותוקן כעת, כחלק מסגירת הפאזה. | ✅ **נסגר** |
 | `ROADMAP.html` | פריט checkpoint 7א | ✅ נוסף, מסומן `done` עם ראיה |
 
 ---
@@ -518,18 +520,27 @@ D1 ומפנה ל-`codex-review.md`/`PHASE4.md`. | ⏳ **פתוח** |
 ## יא. מעמד המסמך
 
 המשתמש אישר ביצוע פאזה 4 בהיקף מוגבל, checkpoint אחר checkpoint, ולא אישור
-גורף. checkpoint 7א בוצע 03.09.2026 04:09 UTC (§ה, §ו). **checkpoint 8 ואילך
-ממתין לאישור נפרד** — לא ניתן אישור גורף לשאר הפאזה.
+גורף. כל checkpoint (1–16) קיבל הוראת ביצוע נפרדת משלו — אין אף checkpoint
+שסומן `done` על סמך אישור של checkpoint אחר.
+
+✅ **פאזה 4 נסגרה — 03.09.2026 19:39 UTC.** כל 16 ה-checkpoints בוצעו
+ואומתו (E-expired בתוך 15 `waived`/`not feasible` בהכרעה מתועדת, לא כשל).
+כל שלושת קריטריוני §יב נסגרו. `execution_status: done`.
 
 ---
 
 ## יב. מה נדרש לפני סגירה
 
-1. checkpoint 16 (§ו) — 9–15 בוצעו (15 עם E-expired נזנח בהכרעה מתועדת).
-2. סגירת פער §י שנותר (`SPEC.md` §Auth — `render.yaml` כבר נסגר).
+1. ✅ **בוצע.** checkpoint 16 (§ו) — כל 1–16 בוצעו (15 עם E-expired
+   `waived`/`not feasible` בהכרעה מתועדת; 16 עם מסירת הדמו למרצה, אישור
+   המשתמש 03.09.2026 19:39 UTC).
+2. ✅ **בוצע.** סגירת פער §י שנותר (`SPEC.md` §Auth — נמצא כבר סגור בפועל,
+   §י תוקן להתאים; `render.yaml` כבר נסגר).
 3. ✅ **בוצע 03.09.2026 14:31 UTC:** `planning_status` עודכן ב-`ROADMAP.html`
    דרך `under_review` ל-`approved_for_execution`, בשני אישורים נפרדים של
    המשתמש — ר' §טו.
+
+**כל שלושת הפריטים נסגרו. אין חסם נותר לסגירת הפאזה.**
 
 ---
 
