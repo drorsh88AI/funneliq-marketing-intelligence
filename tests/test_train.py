@@ -234,14 +234,27 @@ def test_build_folds_is_deterministic_across_repeated_calls(df):
 def test_build_folds_stratifies_validation_splits(df, task):
     """Each fold's validation slice keeps both target classes present
     -- a plain KFold on a class-sorted population could starve one
-    class out of a fold entirely; stratification must not let that
-    happen."""
+    class out of a fold entirely. And it's not enough for both classes
+    to merely appear somewhere: StratifiedKFold's actual guarantee is
+    that each class's count is spread as evenly as possible across the
+    5 folds, so no fold ends up skewed relative to the others -- that's
+    checked here directly (max-min <= 1 per class across folds), not
+    just presence."""
     train_df = tr.build_task_train_frame(df, task)
     target = tr.TARGET[task]
     folds = tr.build_folds(df, task)
+
+    per_fold_counts = []
     for _, va_idx in folds:
-        classes = set(train_df.iloc[va_idx][target])
-        assert len(classes) == 2
+        counts = train_df.iloc[va_idx][target].value_counts()
+        assert len(counts) == 2
+        per_fold_counts.append(counts)
+
+    for cls in train_df[target].unique():
+        cls_counts = [c.get(cls, 0) for c in per_fold_counts]
+        assert max(cls_counts) - min(cls_counts) <= 1, (
+            f"{task}: class {cls!r} spread unevenly across folds: {cls_counts}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +281,9 @@ def test_budget_tier_only_added_for_p4(df):
 
 
 def test_p4_pipeline_passthrough_keeps_budget_tier_as_one_raw_column(df):
+    """Column count alone doesn't prove the raw column *is* budget_tier
+    -- checked here by comparing its values, row for row, against
+    independently computed Low/Mid/High labels."""
     train_df = tr.build_task_train_frame(df, "P4")
     X = train_df
     for _, transformer in tr.build_preprocessing_steps("P4", encode_budget_tier=False):
@@ -275,16 +291,33 @@ def test_p4_pipeline_passthrough_keeps_budget_tier_as_one_raw_column(df):
     n_numeric = len(tr.model_feature_columns("P4"))
     assert X.shape == (len(train_df), n_numeric + 1)  # +1 raw budget_tier column
 
+    expected = train_df["ad_budget"].map(budget_tier).to_numpy()
+    actual = X[:, -1]  # budget_tier is the last ColumnTransformer block
+    assert list(actual) == list(expected)
+    assert set(actual) <= {"Low", "Mid", "High"}
+
 
 def test_p4_pipeline_one_hot_expands_budget_tier_into_multiple_columns(df):
+    """Column count alone doesn't prove the extra columns are the
+    Low/Mid/High categories -- checked here against the fitted
+    OneHotEncoder's actual categories_, not just their count."""
     train_df = tr.build_task_train_frame(df, "P4")
+    expected_tiers = sorted(train_df["ad_budget"].map(budget_tier).unique())
+    assert set(expected_tiers) <= {"Low", "Mid", "High"}
+    assert len(expected_tiers) >= 2, "fixture must span more than one budget tier"
+
     X = train_df
-    for _, transformer in tr.build_preprocessing_steps("P4", encode_budget_tier=True):
+    column_transformer = None
+    for name, transformer in tr.build_preprocessing_steps("P4", encode_budget_tier=True):
         X = transformer.fit_transform(X)
+        if name == "select":
+            column_transformer = transformer
+
+    one_hot = column_transformer.named_transformers_["budget_tier"]
+    assert sorted(one_hot.categories_[0]) == expected_tiers
+
     n_numeric = len(tr.model_feature_columns("P4"))
-    n_tiers_present = train_df["ad_budget"].map(budget_tier).nunique()
-    assert n_tiers_present >= 2, "fixture must span more than one budget tier"
-    assert X.shape == (len(train_df), n_numeric + n_tiers_present)
+    assert X.shape == (len(train_df), n_numeric + len(expected_tiers))
 
 
 def test_preprocessing_pipeline_produces_no_missing_values(df):
