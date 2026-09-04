@@ -1048,25 +1048,48 @@ def test_barh_with_na_never_draws_a_bar_for_none():
     an.plt.close(fig)
 
 
-def test_correlations_svg_never_draws_none_as_a_zero_bar(tmp_path):
-    """End-to-end guard on the actual chart builder: a column with
-    correlations[col] is None must produce no bar in the rendered figure
-    -- not a bar at r=0, which would misreport "no linear relationship"
-    for a column whose r is genuinely undefined."""
+def test_correlations_svg_never_draws_none_as_a_zero_bar(tmp_path, monkeypatch):
+    """Regression guard for the Codex finding on commit 623533e: round 1
+    of this test never called _svg_correlations at all -- it built a
+    separate figure directly with _barh_with_na, proving the helper
+    works but nothing about what the builder actually passes it. A
+    regression where _svg_correlations converts None to 0.0 (or 0)
+    before calling _barh_with_na would still have passed that version
+    silently.
+
+    Fixed: monkeypatch.setattr replaces the real an._barh_with_na with a
+    spy that records the exact (categories, values) it's called with and
+    then forwards to the original -- so _svg_correlations() itself is
+    exercised (production code, not a reimplementation) and the real SVG
+    is still produced correctly."""
     fake_results = {
         "correlations": {"defined_positive": 0.7, "undefined": None, "defined_negative": -0.3},
     }
-    fig_before = len(an.plt.get_fignums())
-    an._svg_correlations(fake_results, tmp_path / "corr.svg")
-    assert len(an.plt.get_fignums()) == fig_before  # the chart function closes its own figure
 
+    original_barh_with_na = an._barh_with_na
+    captured: dict = {}
+
+    def spy(ax, categories, values, color):
+        captured["categories"] = list(categories)
+        captured["values"] = list(values)
+        return original_barh_with_na(ax, categories, values, color)
+
+    monkeypatch.setattr(an, "_barh_with_na", spy)
+
+    an._svg_correlations(fake_results, tmp_path / "corr.svg")
+
+    # explicit alphabetical order -- what _svg_correlations itself sorts by
+    assert captured["categories"] == ["defined_negative", "defined_positive", "undefined"]
+
+    values_by_col = dict(zip(captured["categories"], captured["values"]))
+    # the undefined column must reach the helper as None -- not 0 or 0.0,
+    # which would be indistinguishable from a genuinely measured r=0
+    assert values_by_col["undefined"] is None
+    # the defined values pass through unchanged, in the right slots
+    assert values_by_col["defined_positive"] == 0.7
+    assert values_by_col["defined_negative"] == -0.3
+
+    # the real chart file is still produced correctly (spy forwarded to
+    # the original helper)
     text = (tmp_path / "corr.svg").read_text(encoding="utf-8")
-    # 2 real bars (defined_positive, defined_negative) -- confirmed via a
-    # freshly-built figure using the same helper, not by parsing the SVG's
-    # glyph-path text (see test_barh_with_na_never_draws_a_bar_for_none for
-    # why that would silently pass even if broken)
-    fig, ax = an.plt.subplots()
-    an._barh_with_na(ax, ["defined_negative", "defined_positive", "undefined"], [-0.3, 0.7, None], color="#8172B2")
-    assert len(ax.patches) == 2
-    an.plt.close(fig)
-    assert ET.fromstring(text).tag == "{http://www.w3.org/2000/svg}svg"  # still valid output
+    assert ET.fromstring(text).tag == "{http://www.w3.org/2000/svg}svg"
