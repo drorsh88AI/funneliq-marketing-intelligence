@@ -551,3 +551,80 @@ def test_lift_at_k_handles_zero_positives_without_crashing():
     assert result["base_rate"] == pytest.approx(0.0)
     assert result["precision_at_k"] == pytest.approx(0.0)
     assert result["lift"] is None
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 5 -- NaN/±inf must raise, never silently misfire (NaN
+# compares False against everything, so an unguarded NaN could make a
+# candidate look ineligible, or a veto look unmet, with no error).
+# ---------------------------------------------------------------------------
+
+NON_FINITE = [float("nan"), float("inf"), float("-inf")]
+
+
+@pytest.mark.parametrize("bad", NON_FINITE)
+def test_one_se_stats_rejects_non_finite_scores(bad):
+    with pytest.raises(ValueError, match="finite"):
+        tr.one_se_stats([1, 2, 3, 4, bad])
+
+
+@pytest.mark.parametrize("bad", NON_FINITE)
+def test_one_se_eligible_rejects_non_finite_inputs(bad):
+    with pytest.raises(ValueError, match="finite"):
+        tr.one_se_eligible(bad, 3.0, 0.5, higher_is_better=True)
+    with pytest.raises(ValueError, match="finite"):
+        tr.one_se_eligible(3.0, bad, 0.5, higher_is_better=True)
+    with pytest.raises(ValueError, match="finite"):
+        tr.one_se_eligible(3.0, 3.0, bad, higher_is_better=True)
+
+
+@pytest.mark.parametrize("bad", NON_FINITE)
+def test_paired_delta_stats_rejects_non_finite_deltas(bad):
+    with pytest.raises(ValueError, match="finite"):
+        tr.paired_delta_stats([1, 1, 1, 1, bad])
+
+
+@pytest.mark.parametrize("bad", NON_FINITE)
+def test_guardrail_vetoed_rejects_non_finite_deltas(bad):
+    with pytest.raises(ValueError, match="finite"):
+        tr.guardrail_vetoed(
+            delta_rmse=[1, 1, 1, 1, bad],
+            delta_abs_bias=[0, 0, 0, 0, 0],
+        )
+
+
+@pytest.mark.parametrize("bad", NON_FINITE)
+def test_conformal_quantile_rejects_non_finite_residuals(bad):
+    with pytest.raises(ValueError, match="finite"):
+        tr.conformal_quantile([1, 2, 3, bad], alpha=0.05)
+
+
+@pytest.mark.parametrize("bad", NON_FINITE)
+def test_conformal_interval_rejects_non_finite_inputs(bad):
+    with pytest.raises(ValueError, match="finite"):
+        tr.conformal_interval(bad, 5.0)
+    with pytest.raises(ValueError, match="finite"):
+        tr.conformal_interval(100.0, bad)
+
+
+@pytest.mark.parametrize("bad", NON_FINITE)
+def test_top_decile_mask_rejects_non_finite_y_true(bad):
+    with pytest.raises(ValueError, match="finite"):
+        tr.top_decile_mask([1, 2, 3, bad])
+
+
+@pytest.mark.parametrize("bad", NON_FINITE)
+def test_top_decile_metrics_rejects_non_finite_y_pred(bad):
+    with pytest.raises(ValueError, match="finite"):
+        tr.top_decile_metrics([1, 2, 3, 4], [1, 2, 3, bad])
+
+
+@pytest.mark.parametrize("bad", NON_FINITE)
+def test_lift_at_k_rejects_non_finite_y_score(bad):
+    with pytest.raises(ValueError, match="finite"):
+        tr.lift_at_k([1, 0, 1, 0], [1, 2, 3, bad], k=0.25)
+
+
+def test_require_finite_1d_rejects_non_one_dimensional_input():
+    with pytest.raises(ValueError, match="one-dimensional"):
+        tr.one_se_stats([[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]])

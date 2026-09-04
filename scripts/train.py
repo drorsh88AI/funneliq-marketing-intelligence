@@ -196,15 +196,40 @@ def encode_referred_target(series: pd.Series) -> pd.Series:
 N_FOLDS = 5
 
 
-def _require_n_folds(values, name: str) -> np.ndarray:
+def _require_finite_1d(values, name: str) -> np.ndarray:
+    """The base check every array input to a decision rule goes
+    through: one-dimensional, and every value finite. NaN/±inf must
+    never reach a comparison and produce a silent, wrong decision --
+    NaN compares False against everything, so an unguarded NaN score
+    would quietly make a candidate look ineligible (or a veto look
+    unmet) with no error at all."""
     values = np.asarray(values, dtype=float)
+    if values.ndim != 1:
+        raise ValueError(f"{name} must be one-dimensional, got shape {values.shape}")
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"{name} must contain only finite values (no NaN or ±inf)")
+    return values
+
+
+def _require_finite_scalar(value: float, name: str) -> float:
+    """Same guarantee as _require_finite_1d, for the scalar inputs
+    (means, standard errors, point estimates) that don't go through an
+    array-shaped check."""
+    value = float(value)
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be finite, got {value}")
+    return value
+
+
+def _require_n_folds(values, name: str) -> np.ndarray:
+    values = _require_finite_1d(values, name)
     if values.size != N_FOLDS:
         raise ValueError(f"{name} must have exactly {N_FOLDS} values (one per CV fold), got {values.size}")
     return values
 
 
 def _require_nonempty(values, name: str) -> np.ndarray:
-    values = np.asarray(values, dtype=float)
+    values = _require_finite_1d(values, name)
     if values.size == 0:
         raise ValueError(f"{name} must not be empty")
     return values
@@ -231,7 +256,12 @@ def one_se_eligible(candidate_mean: float, best_mean: float, best_se: float,
     """Whether a candidate is within one standard error of the best
     model b. The threshold uses SE_b -- the *best* model's own SE --
     never the candidate's own SE (SPEC.md's One-SE rule is explicit
-    about this). Inclusive at the boundary (<=/>=)."""
+    about this). Inclusive at the boundary (<=/>=). A NaN in any of the
+    three inputs compares False against everything -- unguarded, it
+    would silently make a candidate look ineligible with no error."""
+    candidate_mean = _require_finite_scalar(candidate_mean, "candidate_mean")
+    best_mean = _require_finite_scalar(best_mean, "best_mean")
+    best_se = _require_finite_scalar(best_se, "best_se")
     if higher_is_better:
         return candidate_mean >= best_mean - best_se
     return candidate_mean <= best_mean + best_se
@@ -293,6 +323,8 @@ def conformal_interval(point_estimate: float, q: float) -> tuple[float, float]:
     bound clipped at 0 -- ltv_months is never negative. The clip is a
     documented one-sided deviation from the interval's symmetry, not a
     second, independent decision."""
+    point_estimate = _require_finite_scalar(point_estimate, "point_estimate")
+    q = _require_finite_scalar(q, "q")
     return max(0.0, point_estimate - q), point_estimate + q
 
 
@@ -317,7 +349,7 @@ def top_decile_metrics(y_true, y_pred) -> dict:
     instead of it."""
     _require_matching_length(y_true, y_pred, "y_true", "y_pred")
     y_true = _require_nonempty(y_true, "y_true")
-    y_pred = np.asarray(y_pred, dtype=float)
+    y_pred = _require_finite_1d(y_pred, "y_pred")
     mask = top_decile_mask(y_true)
     yt, yp = y_true[mask], y_pred[mask]
     return {
@@ -340,7 +372,7 @@ def lift_at_k(y_true, y_score, k: float = 0.1) -> dict:
         raise ValueError(f"k must be in (0, 1], got {k}")
     _require_matching_length(y_true, y_score, "y_true", "y_score")
     y_true = _require_nonempty(y_true, "y_true")
-    y_score = np.asarray(y_score, dtype=float)
+    y_score = _require_finite_1d(y_score, "y_score")
     n = len(y_true)
     K = math.ceil(k * n)
     order = np.argsort(-y_score, kind="stable")
