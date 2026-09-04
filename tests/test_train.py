@@ -689,3 +689,41 @@ def test_write_metrics_json_never_injects_volatile_fields(tmp_path):
     text = path.read_text(encoding="utf-8").lower()
     for term in ("timestamp", "git_sha", "git sha", "rss", "run_time", "runtime", "duration"):
         assert term not in text, f"unexpected volatile field marker {term!r} in metrics.json"
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 6 -- _metric_summary known-answer test: mean/std/se all
+# hand-verified, and std != se (std = se * sqrt(5)), for both a
+# negated scorer (mae, rmse) and one that isn't (r2).
+# ---------------------------------------------------------------------------
+
+def test_metric_summary_known_answer_mean_std_se_and_sign_correction():
+    fold_scores = {
+        "mae": [-1, -2, -3, -4, -5],      # negated -> natural [1,2,3,4,5]
+        "rmse": [-2, -3, -4, -5, -6],     # negated -> natural [2,3,4,5,6]
+        "r2": [10, 20, 30, 40, 50],       # not negated -- left as-is
+    }
+    result = tr._metric_summary(fold_scores, role="candidate", best_params={"x": 1})
+
+    assert result["role"] == "candidate"
+    assert result["best_params"] == {"x": 1}
+
+    assert result["fold_scores_mae"] == [1, 2, 3, 4, 5]
+    assert result["mean_mae"] == pytest.approx(3.0)
+    assert result["std_mae"] == pytest.approx(1.5811388300841898)
+    assert result["se_mae"] == pytest.approx(0.7071067811865476)
+
+    assert result["fold_scores_rmse"] == [2, 3, 4, 5, 6]
+    assert result["mean_rmse"] == pytest.approx(4.0)
+    assert result["std_rmse"] == pytest.approx(1.5811388300841898)
+    assert result["se_rmse"] == pytest.approx(0.7071067811865476)
+
+    # r2 is NOT sign-corrected -- stored exactly as given.
+    assert result["fold_scores_r2"] == [10, 20, 30, 40, 50]
+    assert result["mean_r2"] == pytest.approx(30.0)
+    assert result["std_r2"] == pytest.approx(15.811388300841896)
+    assert result["se_r2"] == pytest.approx(7.071067811865475)
+
+    # std and se are genuinely different numbers -- std = se * sqrt(5).
+    assert result["std_mae"] == pytest.approx(result["se_mae"] * math.sqrt(5))
+    assert result["std_mae"] != pytest.approx(result["se_mae"])

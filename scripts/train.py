@@ -530,17 +530,23 @@ def _baseline_candidate(estimator, preprocessing_steps, X, y, folds, scoring: di
 
 
 def _metric_summary(fold_scores: dict, role: str, best_params: dict | None = None) -> dict:
-    """One {fold_scores_<metric>, mean_<metric>, se_<metric>} triple
-    per metric in fold_scores, sign-corrected back to each metric's
-    natural scale (D13's "ב-CV — per-fold + ממוצע ± std" column)."""
+    """One {fold_scores_<metric>, mean_<metric>, std_<metric>,
+    se_<metric>} quadruple per metric in fold_scores, sign-corrected
+    back to each metric's natural scale. mean ± std is what D13's "ב-CV
+    — per-fold + ממוצע ± std" column asks for and what gets reported;
+    se (= std/sqrt(5)) is kept alongside as a separate field for the
+    One-SE rule's own use in checkpoint 10 -- std and se are different
+    numbers (se = std/√5), not two names for the same one."""
     out: dict = {"role": role}
     if best_params is not None:
         out["best_params"] = best_params
     for name, scores in fold_scores.items():
         natural_scores = [-s for s in scores] if name in P2_NEGATED_SCORERS else list(scores)
         mean, se = one_se_stats(natural_scores)
+        std = se * math.sqrt(N_FOLDS)
         out[f"fold_scores_{name}"] = natural_scores
         out[f"mean_{name}"] = mean
+        out[f"std_{name}"] = std
         out[f"se_{name}"] = se
     return out
 
@@ -645,9 +651,9 @@ if __name__ == "__main__":
     p2_results = train_p2(df)
     for name, r in sorted(p2_results.items()):
         print(f"P2/{name}: role={r['role']} "
-              f"MAE={r['mean_mae']:.4f}+-{r['se_mae']:.4f} "
-              f"RMSE={r['mean_rmse']:.4f}+-{r['se_rmse']:.4f} "
-              f"R2={r['mean_r2']:.4f}+-{r['se_r2']:.4f}")
+              f"MAE={r['mean_mae']:.4f}+-{r['std_mae']:.4f} "
+              f"RMSE={r['mean_rmse']:.4f}+-{r['std_rmse']:.4f} "
+              f"R2={r['mean_r2']:.4f}+-{r['std_r2']:.4f}")
 
     metrics_path = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
     all_metrics = read_metrics_json(metrics_path)
