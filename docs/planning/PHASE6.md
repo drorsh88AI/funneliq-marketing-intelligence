@@ -534,7 +534,10 @@ D13 (הפרדת מדדי הכיול), D15 (ששת שדות ה-metadata), D18 (פ
 
 ✅ **המשתמש נתן הוראת ביצוע נפרדת ומפורשת 04.09.2026.** `feat/models`
 נפתח מ-`main` (אחרי commit `2baa365`, אישור התכנון). **checkpoint 1
-בוצע ואומת**: SHA-256 של הקובץ תואם `EXPECTED_SHA256` ב-`load_data.py`,
-header תואם `EXPECTED_COLUMNS`, `n_rows=3500`. `execution_status`
-עודכן ל-`in_progress`. ראה `ROADMAP.html` §checkpoint 1 לראיה המלאה.
-פאזה 6 בביצוע.
+בוצע ואומת עצמאית על ידי קלוד**: SHA-256 של הקובץ תואם `EXPECTED_SHA256`
+ב-`load_data.py`, header תואם `EXPECTED_COLUMNS`, `n_rows=3500`.
+⚠ **מסומן `awaiting_approval`, לא `done`** — לפי שער האישור ברמת
+checkpoint (`ROADMAP.html`, מבוסס על תקדים checkpoint 2 של פאזה 5):
+אימות עצמי של קלוד אינו מספיק, נדרשת ביקורת Codex או אישור סופי מפורש
+אחר של המשתמש. `execution_status` עודכן ל-`in_progress`. ראה
+`ROADMAP.html` §checkpoint 1 לראיה המלאה. פאזה 6 בביצוע.
