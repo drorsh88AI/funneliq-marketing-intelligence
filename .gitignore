@@ -23,6 +23,9 @@ env/
 exports/
 data/raw/
 
+# CatBoost's own auto-generated training-log directory (phase 6)
+catboost_info/
+
 # OS / editor
 .DS_Store
 Thumbs.db
