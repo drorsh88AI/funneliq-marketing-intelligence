@@ -536,7 +536,7 @@ D13 (הפרדת מדדי הכיול), D15 (ששת שדות ה-metadata), D18 (פ
 נפתח מ-`main` (אחרי commit `2baa365`, אישור התכנון). `execution_status`
 עודכן ל-`in_progress`. פאזה 6 בביצוע.
 
-**checkpoints 1–6 בוצעו, אומתו עצמאית, עברו ביקורת ואושרו — כולם
+**checkpoints 1–7 בוצעו, אומתו עצמאית, עברו ביקורת ואושרו — כולם
 `done`.** כל checkpoint עבר את אותו שער אישור ברמת checkpoint
 (`ROADMAP.html`): מסומן `awaiting_approval` אחרי אימות עצמי של קלוד,
 הופך ל-`done` רק אחרי ביקורת Codex ואישור סופי מפורש של המשתמש —
@@ -547,12 +547,21 @@ checkpoint 5 (חוקי ההכרעה) עבר שני סבבי תיקון: אכיפ
 בדיקות שליליות, ואז דחיית `NaN`/`±inf` בכל קלט מספרי — 92/92 בדיקות
 `tests/test_train.py`, 230/230 בכל `pytest`.
 
-checkpoint 6 (P2: חיפוש + Baselines) עבר שלושה סבבי תיקון: (1) הוספת
-RMSE ו-R² per-fold ל-P2 (D13 דורש את שלושת המדדים, לא MAE בלבד) —
-בלי CV נוסף, דרך `scoring` מרובה-מדדים באותו `RandomizedSearchCV`; (2)
-בדיקות ל-`read/write_metrics_json` (round-trip, דטרמיניזם, `allow_nan=False`,
-היעדר שדות נדיפים); (3) `std_<metric>` (ddof=1) נשמר בנפרד מ-`se_<metric>`
-— D13 דורש "ממוצע ± std", לא SE, שהם ערכים שונים במספר (`std=se·√5`).
-בכל סבב: אותם ערכי MAE ואותם `best_params` בדיוק, ודטרמיניזם מאומת
-בהרצה שנייה עצמאית מול ה-CSV האמיתי. 236/236 בכל `pytest`, אין
-רגרסיה. ראה `ROADMAP.html` §checkpoints 1–6 לראיה המלאה של כל אחד.
+checkpoint 6 (P2: חיפוש + Baselines) עבר שלושה סבבי תיקון: הוספת RMSE
+ו-R² per-fold בלי CV נוסף (D13) · בדיקות ל-`read/write_metrics_json` ·
+`std_<metric>` בנפרד מ-`se_<metric>` (D13 דורש "ממוצע ± std", לא SE).
+בכל סבב אותם ערכי MAE בדיוק, ודטרמיניזם מאומת מול ה-CSV האמיתי.
+236/236 ב-`pytest`.
+
+checkpoint 7 (P3: חיפוש + Baselines + רגיל מול משוקלל + שני הכללים
+הידניים) עבר שלושה סבבי תיקון: (1) `precision` עם `zero_division=0`,
+הוספת RMSE/R²-מקבילי P3 (`Lift@10%` דרך `make_scorer` שעוטף את
+`lift_at_k`) — כלל תפעולי חדש (`calls_to_closed`) ננעל בטעות בלי אישור
+מראש; (2) **דליפה אמיתית** תוקנה בשורש — יחס משקל המחלקה ל-
+`train_p3_weighted_comparison` חושב פעם אחת מכל ה-train כולל תוויות
+ה-validation של כל fold; תוקן ללולאת folds ידנית שמחשבת את היחס מ-
+train בלבד לכל fold, עדיין 15 fits בדיוק; הכלל התפעולי פוצל לפונקציה
+שדורשת feature/direction מפורשים, בלי ברירת מחדל, ולא הופעלה עד
+שהמשתמש בחר מתוך שלוש חלופות שהוצגו עם סיבה עסקית בלבד, ללא ציוני
+יעד; (3) הרצה עם הבחירה (`closed > חציון`) — דטרמיניזם מאומת. 244/244
+ב-`pytest`. ראה `ROADMAP.html` §checkpoints 1–7 לראיה המלאה של כל אחד.
