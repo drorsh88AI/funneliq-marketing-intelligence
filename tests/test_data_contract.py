@@ -86,12 +86,29 @@ def test_check_schema_flags_null_in_referred(tmp_path, monkeypatch):
     assert any("referred" in v and "null" in v for v in violations)
 
 
-def test_check_schema_flags_missing_or_reordered_column(tmp_path, monkeypatch):
+def test_check_schema_flags_missing_or_renamed_column(tmp_path, monkeypatch):
+    """A renamed column is both an unexpected column (the new name) and a
+    missing one (the old name is gone from the 19) -- not the same case as
+    a genuine reorder below, where the set of 19 names is untouched."""
     df = _load_fixture(tmp_path, monkeypatch)
     renamed = df.rename(columns={"ad_budget": "zzz_ad_budget"})
     violations = dc.check_schema(renamed)
     assert any("mismatch" in v for v in violations)
     assert any("zzz_ad_budget" in v for v in violations)  # also unexpected
+
+
+def test_check_schema_flags_reordered_columns(tmp_path, monkeypatch):
+    """Same 19 columns, same set -- only two positions swapped, no rename
+    and no add/remove. Order mismatch must still be caught, and must NOT
+    be reported as an unexpected column (the set is unchanged)."""
+    df = _load_fixture(tmp_path, monkeypatch)
+    cols = list(df.columns)
+    i, j = cols.index("ad_budget"), cols.index("num_leads")
+    cols[i], cols[j] = cols[j], cols[i]
+    reordered = df[cols]
+    violations = dc.check_schema(reordered)
+    assert any("mismatch" in v for v in violations)
+    assert not any("unexpected column" in v for v in violations)
 
 
 def test_check_schema_flags_wrong_dtype_on_not_null_column(tmp_path, monkeypatch):
