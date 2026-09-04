@@ -783,12 +783,21 @@ def test_build_results_closure(tmp_path, monkeypatch):
 def test_build_results_key_is_the_registry_key_not_dunder_name(tmp_path, monkeypatch):
     """Regression guard for the Codex finding on commit 386c6dd: the
     JSON/results key must come from RESULT_BUILDERS's own key, not from
-    the callable's __name__. Injects a callable whose __name__ deliberately
-    disagrees with the registry key it's mapped under, into an
-    EXPERIMENTAL COPY of the registry (production RESULT_BUILDERS is not
-    touched) -- if build_results ever regresses to keying by __name__, this
-    fails."""
+    the callable's __name__.
+
+    Round 1 of this test built `results` itself with the same
+    comprehension build_results() uses -- Codex correctly pointed out
+    that proves the comprehension works, not that build_results()
+    itself is keyed correctly; a regression to func.__name__ inside
+    build_results() would still pass it. Fixed: monkeypatch.setattr
+    replaces the actual an.RESULT_BUILDERS module global with an
+    experimental registry (a callable whose __name__ deliberately
+    disagrees with its registry key), then calls an.build_results(df,
+    csv_path) itself -- the real production function, not a
+    re-implementation. If build_results() ever regresses to keying by
+    __name__, this fails."""
     df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
+    csv_path = tmp_path / "sample.csv"
 
     def renamed_but_registered_as_missing_values(frame):
         return an.missing_values(frame)
@@ -796,10 +805,14 @@ def test_build_results_key_is_the_registry_key_not_dunder_name(tmp_path, monkeyp
 
     experimental_registry = dict(an.RESULT_BUILDERS)
     experimental_registry["missing_values"] = renamed_but_registered_as_missing_values
+    monkeypatch.setattr(an, "RESULT_BUILDERS", experimental_registry)
 
-    results = {name: func(df) for name, func in experimental_registry.items()}
-    assert "missing_values" in results          # the registry key survives
-    assert "totally_different_name" not in results  # __name__ never leaks in
+    results = an.build_results(df, csv_path)  # calls production code, not a copy of it
+
+    assert "missing_values" in results               # the registry key survives
+    assert "totally_different_name" not in results   # __name__ never leaks in
+    assert results["missing_values"] == an.missing_values(df)
+    assert "source_metadata" in results               # source_metadata still merged in
 
 
 def test_build_results_has_no_flat_key_collision_now_that_it_is_nested(tmp_path, monkeypatch):
