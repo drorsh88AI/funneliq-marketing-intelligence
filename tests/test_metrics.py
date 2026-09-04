@@ -728,14 +728,25 @@ def test_m6_duplicate_profile_reuses_duplicates_output_exactly(operational_df):
 # ---------------------------------------------------------------------------
 # checkpoint 10 -- source_metadata, build_results, write_findings_json.
 #
-# build_results is a NESTED merge (results[func.__name__] = func(df)), not
-# a flat union of each function's own keys. PHASE5.md D6 §3 originally
-# specified flat union; checking it against the real functions found 14
-# real top-level key collisions (e.g. correlations()["followup_1"] is a
-# Pearson r, funnel_dropoff()["followup_1"] is a per-stage dropout dict --
-# same key, different values). Corrected in PHASE5.md 2026-09-04, user
-# approved. test_build_results_closure below tests the corrected, nested
-# contract.
+# build_results is a NESTED merge (results[name] = func(df) for (name, func)
+# in RESULT_BUILDERS.items()), keyed by an explicit registry string, NOT a
+# flat union of each function's own keys and NOT func.__name__.
+#
+# Round 1 (PHASE5.md D6 §3, corrected 2026-09-04, user approved): the
+# original spec was a flat union; checking it against the real functions
+# found 14 real top-level key collisions (e.g. correlations()["followup_1"]
+# is a Pearson r, funnel_dropoff()["followup_1"] is a per-stage dropout
+# dict -- same key, different values). Fixed by nesting.
+#
+# Round 2 (Codex finding on commit 386c6dd): nesting by func.__name__ is
+# still not a stable data contract -- a rename refactor (with its test
+# renamed to match) silently changes findings.json's keys while every test
+# stays green, because __name__ was both the production key and the test's
+# own source of truth. Fixed with RESULT_BUILDERS, a hand-typed registry;
+# the tests below derive their expectations from RESULT_BUILDERS, and
+# test_build_results_key_is_the_registry_key_not_dunder_name proves the
+# JSON key tracks the registry, not whatever the callable happens to be
+# named.
 # ---------------------------------------------------------------------------
 def test_source_metadata_fixed_fixture(tmp_path):
     """source_metadata reads a fixed file's bytes and reports its SHA-256.
@@ -750,23 +761,45 @@ def test_source_metadata_fixed_fixture(tmp_path):
 
 
 def test_build_results_closure(tmp_path, monkeypatch):
-    """set(results) is exactly {f.__name__ for f in ALL_METRIC_FUNCS} |
-    {"source_metadata"} -- no hidden or declared exception, no manual
-    metadata key. Each nested value equals calling the function directly:
-    build_results never recomputes, only merges."""
+    """set(results) is exactly set(RESULT_BUILDERS) | {"source_metadata"} --
+    no hidden or declared exception, no manual metadata key. Each nested
+    value equals calling the registered function directly: build_results
+    never recomputes, only merges."""
     df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
     csv_path = tmp_path / "sample.csv"  # the exact path _load() writes to
 
     results = an.build_results(df, csv_path)
 
-    expected_keys = {f.__name__ for f in an.ALL_METRIC_FUNCS} | {"source_metadata"}
+    expected_keys = set(an.RESULT_BUILDERS) | {"source_metadata"}
     assert set(results) == expected_keys
 
-    for f in an.ALL_METRIC_FUNCS:
-        assert results[f.__name__] == f(df)
+    for name, func in an.RESULT_BUILDERS.items():
+        assert results[name] == func(df)
     assert results["source_metadata"] == {
         "source_sha256": hashlib.sha256(csv_path.read_bytes()).hexdigest()
     }
+
+
+def test_build_results_key_is_the_registry_key_not_dunder_name(tmp_path, monkeypatch):
+    """Regression guard for the Codex finding on commit 386c6dd: the
+    JSON/results key must come from RESULT_BUILDERS's own key, not from
+    the callable's __name__. Injects a callable whose __name__ deliberately
+    disagrees with the registry key it's mapped under, into an
+    EXPERIMENTAL COPY of the registry (production RESULT_BUILDERS is not
+    touched) -- if build_results ever regresses to keying by __name__, this
+    fails."""
+    df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
+
+    def renamed_but_registered_as_missing_values(frame):
+        return an.missing_values(frame)
+    renamed_but_registered_as_missing_values.__name__ = "totally_different_name"
+
+    experimental_registry = dict(an.RESULT_BUILDERS)
+    experimental_registry["missing_values"] = renamed_but_registered_as_missing_values
+
+    results = {name: func(df) for name, func in experimental_registry.items()}
+    assert "missing_values" in results          # the registry key survives
+    assert "totally_different_name" not in results  # __name__ never leaks in
 
 
 def test_build_results_has_no_flat_key_collision_now_that_it_is_nested(tmp_path, monkeypatch):
@@ -802,7 +835,7 @@ def test_write_findings_json_is_deterministic_json_no_volatile_metadata(tmp_path
     text = bytes1.decode("utf-8")
     assert "NaN" not in text  # no invalid bareword NaN anywhere
     parsed = json.loads(text)  # must be strictly valid JSON
-    assert set(parsed) == {f.__name__ for f in an.ALL_METRIC_FUNCS} | {"source_metadata"}
+    assert set(parsed) == set(an.RESULT_BUILDERS) | {"source_metadata"}
     assert "source_sha256" in parsed["source_metadata"]
 
     # no volatile/environment metadata and no local filesystem path leaked

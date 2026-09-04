@@ -10,10 +10,14 @@ by-hand-computed answer.
 
 build_results() (checkpoint 10) merges these functions' output plus
 source_metadata() -- the one function below that touches the filesystem
--- into `results`, nested by function name (PHASE5.md D6 §3, corrected
-2026-09-04: a flat key union collides for real across several of these
-functions). findings.json rendering is checkpoint 12+. Nothing here
-performs modeling, splits data, or touches Supabase (D10).
+-- into `results`, nested by an explicit RESULT_BUILDERS registry key,
+not func.__name__ (PHASE5.md D6 §3, corrected 2026-09-04 in two rounds:
+a flat key union collides for real across several of these functions,
+and __name__ is not a stable data contract). write_findings_json()
+serializes `results` straight to docs/findings.json -- also checkpoint
+10, already implemented here. Only FINDINGS.md's prose rendering (with
+$placeholder substitution) and the SVG charts are checkpoints 11-12.
+Nothing here performs modeling, splits data, or touches Supabase (D10).
 
 ⚠ Every value returned here is a dataset description (SPEC.md §
 גרעיניות מעורבת's "מוסק בלבד" framing, and PHASE5.md D3): none of it is a
@@ -481,33 +485,54 @@ def source_metadata(csv_path: Path) -> dict:
     return {"source_sha256": sha256_of(Path(csv_path))}
 
 
-# Every pure metric function whose output belongs in results, in no
-# particular order -- build_results()'s closure test derives the
-# expected key set from this tuple, so adding a function here is what
-# makes it show up in results (not a second, hand-typed list).
-ALL_METRIC_FUNCS = (
-    missing_values, budget_tiers, duplicates, duplicate_sensitivity,
-    correlations, ad_budget_leads_curve, funnel_dropoff, calls_to_closed,
-    m1_zero_profit, m2_zero_profit_consistency, m3_top_decile,
-    m4_profit_by_tier, m5_outliers, m6_duplicate_profile,
-)
+# Every pure metric function whose output belongs in results, keyed by
+# an EXPLICIT, hand-typed string -- not derived from func.__name__.
+# build_results()'s closure test reads its expected key set from this
+# dict, so adding a function here is what makes it show up in results.
+# A function's __name__ is an implementation detail, not a data
+# contract: a harmless-looking rename (with its test renamed to match)
+# would silently change every key in findings.json while every test
+# stayed green, since __name__ was both the production key AND the
+# test's own source of truth. The registry key is what downstream
+# consumers (findings.json, checkpoints 11-12's FINDINGS.md/SVG
+# rendering) actually depend on, so it's pinned here independently of
+# whatever the function is currently called. (PHASE5.md D6 §3, round 2
+# of the checkpoint 10 correction, Codex finding on commit 386c6dd.)
+RESULT_BUILDERS = {
+    "missing_values": missing_values,
+    "budget_tiers": budget_tiers,
+    "duplicates": duplicates,
+    "duplicate_sensitivity": duplicate_sensitivity,
+    "correlations": correlations,
+    "ad_budget_leads_curve": ad_budget_leads_curve,
+    "funnel_dropoff": funnel_dropoff,
+    "calls_to_closed": calls_to_closed,
+    "m1_zero_profit": m1_zero_profit,
+    "m2_zero_profit_consistency": m2_zero_profit_consistency,
+    "m3_top_decile": m3_top_decile,
+    "m4_profit_by_tier": m4_profit_by_tier,
+    "m5_outliers": m5_outliers,
+    "m6_duplicate_profile": m6_duplicate_profile,
+}
 
 
 def build_results(df: pd.DataFrame, csv_path: Path) -> dict:
-    """Merge only -- results[f.__name__] = f(df) for every function in
-    ALL_METRIC_FUNCS, plus results["source_metadata"] = source_metadata(csv_path).
+    """Merge only -- results[name] = func(df) for every (name, func) in
+    RESULT_BUILDERS, plus results["source_metadata"] = source_metadata(csv_path).
 
-    Nested by function name, NOT a flat union of each function's own
-    keys. PHASE5.md D6 §3 originally specified a flat union; checking it
-    against the real functions (checkpoint 10) found 14 real top-level
-    key collisions, several with genuinely different values under the
+    Nested by the registry's fixed key, NOT a flat union of each
+    function's own keys and NOT func.__name__. PHASE5.md D6 §3 went
+    through two corrections to get here: (1) a flat union of every
+    function's own top-level keys collides for real 14 times across
+    these functions, several with genuinely different values under the
     same name (e.g. correlations()["followup_1"] is a Pearson r,
-    funnel_dropoff()["followup_1"] is a per-stage dropout dict) -- a flat
-    merge would silently drop one of them. Nesting makes that
-    structurally impossible and needs no merge-order decision; the
-    'no hidden or declared exception' rule from D6 §3 still holds at the
-    function-name level. Corrected in PHASE5.md 2026-09-04."""
-    results = {f.__name__: f(df) for f in ALL_METRIC_FUNCS}
+    funnel_dropoff()["followup_1"] is a per-stage dropout dict) -- fixed
+    by nesting. (2) nesting by func.__name__ is still not a stable data
+    contract -- a rename refactor changes findings.json's keys with
+    every test still green. RESULT_BUILDERS's hand-typed keys are what
+    findings.json and checkpoints 11-12's rendering actually depend on,
+    independent of what the function is currently named."""
+    results = {name: func(df) for name, func in RESULT_BUILDERS.items()}
     results["source_metadata"] = source_metadata(csv_path)
     return results
 
