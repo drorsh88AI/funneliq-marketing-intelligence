@@ -916,14 +916,19 @@ if __name__ == "__main__":
     p3_brief_rule = train_p3_brief_rule(df)
     print(f"P3/brief_rule: ROC-AUC={p3_brief_rule['mean_roc_auc']:.4f} "
           f"F1={p3_brief_rule['mean_f1']:.4f} thresholds={p3_brief_rule['thresholds']}")
-    # P3's operational rule (D11 rule b) waits on the user's feature
-    # choice -- not run here. See train_p3_operational_rule().
+
+    # Operational rule (D11 rule b): closed > train median, chosen by
+    # the user (2026-09-04) from 3 candidate FEATURES["P3"] columns
+    # presented with business rationale only, no target scores.
+    p3_operational_rule = train_p3_operational_rule(df, feature="closed", direction="gt")
+    print(f"P3/operational_rule: ROC-AUC={p3_operational_rule['mean_roc_auc']:.4f} "
+          f"F1={p3_operational_rule['mean_f1']:.4f} thresholds={p3_operational_rule['thresholds']}")
 
     metrics_path = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
     all_metrics = read_metrics_json(metrics_path)
     all_metrics["P2"] = p2_results
     all_metrics["P3"] = p3_results
     all_metrics["P3_weighted_comparison"] = p3_weighted
-    all_metrics["P3_manual_rules"] = {"brief_rule": p3_brief_rule}
+    all_metrics["P3_manual_rules"] = {"brief_rule": p3_brief_rule, "operational_rule": p3_operational_rule}
     write_metrics_json(all_metrics, metrics_path)
     print(f"wrote {metrics_path}")
