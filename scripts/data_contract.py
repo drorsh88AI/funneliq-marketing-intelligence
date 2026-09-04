@@ -276,7 +276,12 @@ def check_snapshot(
 
     A list-valued expectation (e.g. ad_budget_values) is accepted as either
     a list or a tuple -- both compare by value against the measured tuple,
-    never reduced to a count, a percentage, or a hash.
+    never reduced to a count, a percentage, or a hash. Giving the wrong
+    shape for a key (a list for a scalar-valued one, or a bare scalar for a
+    list-valued one) raises TypeError with a clear message naming the key
+    -- a caller/test bug, same category as an unknown key, not silently
+    coerced into `tuple(3500)` blowing up with an opaque "int object is
+    not iterable" from deep inside the comparison.
     """
     measured = _measure_snapshot(df)
     violations: list[str] = []
@@ -284,10 +289,15 @@ def check_snapshot(
         if key not in measured:
             raise KeyError(f"check_snapshot: unknown expectation key {key!r}")
         got = measured[key]
-        if isinstance(got, tuple) or isinstance(want, (list, tuple)):
-            mismatch = tuple(got) != tuple(want)
-        else:
-            mismatch = got != want
+        got_is_seq = isinstance(got, tuple)
+        want_is_seq = isinstance(want, (list, tuple))
+        if got_is_seq != want_is_seq:
+            expected_shape = "a list/tuple" if got_is_seq else "a scalar int"
+            raise TypeError(
+                f"check_snapshot: {key!r} expects {expected_shape}, got "
+                f"{want!r} ({type(want).__name__})"
+            )
+        mismatch = tuple(got) != tuple(want) if got_is_seq else got != want
         if mismatch:
             violations.append(f"{key}: expected {want}, measured {got}")
     return violations
