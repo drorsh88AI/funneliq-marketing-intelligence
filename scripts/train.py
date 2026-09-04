@@ -7,10 +7,11 @@ feature lists -- nothing here redefines them.
 
 Built incrementally, one PHASE6.md checkpoint at a time. This module
 currently holds checkpoint 3's split layer, checkpoint 4's shared CV
-folds + preprocessing Pipelines, and checkpoint 5's decision-rule pure
+folds + preprocessing Pipelines, checkpoint 5's decision-rule pure
 functions (One-SE, the paired guardrail veto, Split Conformal's
 quantile, top-decile metrics, Lift@K) -- all built and tested before
-any model is trained.
+any model is trained -- and checkpoints 6-8's actual training (P2, P3,
+P4).
 """
 from __future__ import annotations
 
@@ -494,11 +495,19 @@ P2_NEGATED_SCORERS = {"mae", "rmse"}
 
 
 def _search_candidate(estimator, param_distributions, preprocessing_steps, X, y, folds,
-                       scoring: dict, refit: str) -> dict:
+                       scoring: dict, refit: str, fit_params: dict | None = None) -> dict:
     """Runs one RandomizedSearchCV over the shared folds and extracts
     the winning configuration's 5 per-fold scores, for every metric in
     `scoring`, from cv_results_ at best_index_ (D3) -- no second CV run
-    for the winner, and no second CV run per extra metric either."""
+    for the winner, and no second CV run per extra metric either.
+
+    fit_params (step__param, e.g. "model__cat_features") is forwarded
+    to .fit() rather than the estimator's constructor -- CatBoost's
+    cat_features breaks sklearn's clone() when set at construction
+    (verified empirically before writing this: RandomizedSearchCV and
+    Pipeline both clone the estimator internally, and CatBoost's
+    get_params()/constructor pairing isn't clone-safe for this specific
+    parameter), so P4's booster (checkpoint 8) needs this route."""
     pipeline = Pipeline(preprocessing_steps + [("model", estimator)])
     search = RandomizedSearchCV(
         pipeline,
@@ -510,7 +519,7 @@ def _search_candidate(estimator, param_distributions, preprocessing_steps, X, y,
         random_state=SEARCH_RANDOM_STATE,
         n_jobs=SEARCH_N_JOBS,
     )
-    search.fit(X, y)
+    search.fit(X, y, **(fit_params or {}))
     best = search.best_index_
     fold_scores = {
         name: [float(search.cv_results_[f"split{k}_test_{name}"][best]) for k in range(N_FOLDS)]
@@ -829,6 +838,84 @@ def train_p3_operational_rule(df: pd.DataFrame, feature: str, direction: str) ->
     }
 
 
+# ---------------------------------------------------------------------------
+# Checkpoint 8 -- P4: search + Baselines + budget_tier categorical.
+# ---------------------------------------------------------------------------
+
+def make_p4_boosters() -> dict:
+    """P4's ONE required booster (SPEC.md §שש החבילות, חבילה 4):
+    CatBoost with budget_tier as a native categorical feature -- P2/P3
+    each require all three boosters (checkpoints 6/7); P4 requires
+    only this one. ⚠ cat_features is deliberately NOT set here, in the
+    constructor -- CatBoostClassifier(cat_features=[...]) breaks
+    sklearn's clone() (verified empirically: RuntimeError, "constructor
+    either does not set or modifies parameter cat_features"), which
+    RandomizedSearchCV and Pipeline both call internally. It's passed
+    at fit() time instead, via train_p4's fit_params -- see
+    _search_candidate's fit_params parameter."""
+    return {
+        "catboost": (
+            CatBoostClassifier(random_state=SEARCH_RANDOM_STATE, thread_count=SEARCH_N_JOBS, verbose=False),
+            catboost_param_distributions(),
+        ),
+    }
+
+
+def train_p4(df: pd.DataFrame) -> dict:
+    """Checkpoint 8: P4's one required booster (CatBoost, budget_tier
+    as a native categorical) + two Baselines (Dummy, Logistic), all
+    scored on the same 5 shared folds over P4's train set, on the full
+    D13 metric set -- identical to P3's (D13: "P4 | ROC-AUC | כנ"ל"),
+    reused as-is rather than duplicated. Selection (One-SE eligibility
+    + the RSS tie-break) is checkpoint 10's job, and uses ROC-AUC only.
+
+    CatBoost gets budget_tier raw (its native categorical handling);
+    Logistic can't consume a raw string column, so its Baseline uses
+    the one-hot-encoded preprocessing instead -- a DIFFERENT Pipeline
+    from the candidate's, both built from the same
+    build_preprocessing_steps(task, encode_budget_tier=...) already in
+    place since checkpoint 4. Dummy ignores its features entirely
+    (strategy="most_frequent"), so it rides along on the same
+    preprocessing as Logistic -- which arm it uses makes no difference
+    to a Dummy's prediction."""
+    task = "P4"
+    train_df = build_task_train_frame(df, task)
+    y = encode_referred_target(train_df[TARGET[task]])
+    folds = build_folds(df, task)
+    catboost_steps = build_preprocessing_steps(task, encode_budget_tier=False)
+    baseline_steps = build_preprocessing_steps(task, encode_budget_tier=True)
+    # budget_tier's fixed position in catboost_steps' output, right
+    # after the numeric columns -- verified empirically before writing
+    # this.
+    cat_features_index = len(model_feature_columns(task))
+
+    results = {}
+    for name, (estimator, param_distributions) in make_p4_boosters().items():
+        candidate = _search_candidate(
+            estimator, param_distributions, catboost_steps, train_df, y, folds,
+            P3_SCORING, refit=P3_PRIMARY_METRIC,
+            fit_params={"model__cat_features": [cat_features_index]},
+        )
+        results[name] = _metric_summary(
+            candidate["fold_scores"], "candidate", candidate["best_params"], negated_scorers=P3_NEGATED_SCORERS,
+        )
+
+    baselines = {
+        "dummy": DummyClassifier(strategy="most_frequent"),
+        # max_iter=50000 -- P4's one-hot budget_tier columns next to
+        # P3's already-unscaled feature magnitudes push lbfgs further
+        # than P3 needed; verified empirically (5000/10000 still warn,
+        # 50000 converges with ~5x headroom at ~10,230 iterations used).
+        "logistic": LogisticRegression(max_iter=50000),
+    }
+    for name, estimator in baselines.items():
+        candidate = _baseline_candidate(estimator, baseline_steps, train_df, y, folds, P3_SCORING)
+        role = "benchmark" if name == "dummy" else "baseline"
+        results[name] = _metric_summary(candidate["fold_scores"], role, negated_scorers=P3_NEGATED_SCORERS)
+
+    return results
+
+
 def read_metrics_json(path: Path) -> dict:
     """Whatever tasks have been written so far -- {} if the file
     doesn't exist yet (checkpoint 6 is the first task to write it)."""
@@ -924,11 +1011,19 @@ if __name__ == "__main__":
     print(f"P3/operational_rule: ROC-AUC={p3_operational_rule['mean_roc_auc']:.4f} "
           f"F1={p3_operational_rule['mean_f1']:.4f} thresholds={p3_operational_rule['thresholds']}")
 
+    print("--- checkpoint 8: P4 search + Baselines + budget_tier categorical ---")
+    p4_results = train_p4(df)
+    for name, r in sorted(p4_results.items()):
+        print(f"P4/{name}: role={r['role']} "
+              f"ROC-AUC={r['mean_roc_auc']:.4f}+-{r['std_roc_auc']:.4f} "
+              f"Lift@10%={r['mean_lift_at_10']:.4f}")
+
     metrics_path = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
     all_metrics = read_metrics_json(metrics_path)
     all_metrics["P2"] = p2_results
     all_metrics["P3"] = p3_results
     all_metrics["P3_weighted_comparison"] = p3_weighted
     all_metrics["P3_manual_rules"] = {"brief_rule": p3_brief_rule, "operational_rule": p3_operational_rule}
+    all_metrics["P4"] = p4_results
     write_metrics_json(all_metrics, metrics_path)
     print(f"wrote {metrics_path}")

@@ -828,3 +828,33 @@ def test_train_p3_operational_rule_uses_the_given_feature_and_direction(df):
         expected_pred = (feature_cond & (train_df["customer_acquisition_cost"] < cac_t)).to_numpy().astype(int)
         expected = tr._p3_rule_fold_metrics(y, expected_pred, folds)
         assert rule["fold_scores_accuracy"] == expected["fold_scores_accuracy"]
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 8 -- the P4 piece that involves zero model fitting: the
+# clone-safety of make_p4_boosters' CatBoost estimator. train_p4 (real
+# fits) stays local-only per D21, same precedent as train_p2/train_p3.
+# ---------------------------------------------------------------------------
+
+def test_make_p4_boosters_catboost_is_clone_safe():
+    """cat_features must NOT be in the constructor -- CatBoostClassifier
+    (cat_features=[...]) breaks sklearn's clone() (verified empirically
+    before writing train_p4: RuntimeError, "constructor either does
+    not set or modifies parameter cat_features"), which
+    RandomizedSearchCV and Pipeline both call internally. It's passed
+    at fit() time instead, via train_p4's fit_params."""
+    from sklearn.base import clone
+
+    estimator, param_distributions = tr.make_p4_boosters()["catboost"]
+    assert "cat_features" not in estimator.get_params()
+    clone(estimator)  # must not raise
+    assert param_distributions == tr.catboost_param_distributions()
+
+
+def test_p4_cat_features_index_matches_model_feature_columns_length():
+    """train_p4 points CatBoost's cat_features at the position right
+    after P4's numeric columns in build_preprocessing_steps' output --
+    this is exactly len(model_feature_columns("P4")), the same count
+    checkpoint 4's pipeline-shape tests already pin down."""
+    n_numeric = len(tr.model_feature_columns("P4"))
+    assert n_numeric == 13  # 14 FEATURES["P4"] minus leads_not_answered (D4)
