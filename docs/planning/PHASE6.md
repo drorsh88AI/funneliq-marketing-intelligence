@@ -531,5 +531,10 @@ D13 (הפרדת מדדי הכיול), D15 (ששת שדות ה-metadata), D18 (פ
 
 ✅ **המשתמש בחן את השינויים בפועל ואישר במפורש 04.09.2026:
 `planning_status: approved_for_execution`.**
-⚠ **זהו אישור תכנון בלבד — לא אישור לביצוע.** `execution_status: not_started`
-נשאר ללא שינוי עד הוראת ביצוע נפרדת ומפורשת.
+
+✅ **המשתמש נתן הוראת ביצוע נפרדת ומפורשת 04.09.2026.** `feat/models`
+נפתח מ-`main` (אחרי commit `2baa365`, אישור התכנון). **checkpoint 1
+בוצע ואומת**: SHA-256 של הקובץ תואם `EXPECTED_SHA256` ב-`load_data.py`,
+header תואם `EXPECTED_COLUMNS`, `n_rows=3500`. `execution_status`
+עודכן ל-`in_progress`. ראה `ROADMAP.html` §checkpoint 1 לראיה המלאה.
+פאזה 6 בביצוע.
