@@ -1,5 +1,5 @@
-"""Known-answer tests for scripts/analysis.py's package-1 functions
-(PHASE5.md checkpoint 7).
+"""Known-answer tests for scripts/analysis.py's package-1, package-5, and
+M1-M6 functions (PHASE5.md checkpoints 7, 8, and 9).
 
 Every fixture below is a tiny synthetic CSV, loaded the same way
 load_data.py loads the real one (SHA-256 verified, source_row_id added),
@@ -7,12 +7,12 @@ with the expected value for each assertion computed BY HAND and written
 in a comment next to it -- not by running the function and trusting its
 own output. Runs in CI with no CSV present, per PHASE5.md D4/D6.
 
-Package 5, M1-M6, build_results()/findings rendering are out of scope --
-checkpoints 8, 9, 10+ respectively.
+build_results()/findings rendering are out of scope -- checkpoint 10+.
 """
 from __future__ import annotations
 
 import hashlib
+import math
 from pathlib import Path
 
 import pytest
@@ -387,3 +387,274 @@ def test_calls_to_closed_single_record_population_correlation_is_none_not_nan(si
 
     serialized = json.dumps(result)
     assert "NaN" not in serialized
+
+
+# ---------------------------------------------------------------------------
+# M1 / M2 / M4 -- share a 6-row fixture built around cumulative_profit:
+# zero vs. positive vs. missing, spread across tiers and purchased status.
+#
+#   row  tier  purchased  closed  cumulative_profit  ltv_months  CAC
+#   A    Low   1          1       1000.0             10.0        200
+#   B    Low   0          0       0.0    (zero)        5.0        150
+#   C    Mid   1          2       2000.0             20.0        400
+#   D    Mid   0          1       0.0    (zero)        8.0        350
+#   E    High  1          0       (missing)          (missing)   900
+#   F    Low   1          1       500.0              15.0        180
+# ---------------------------------------------------------------------------
+M124_CSV_TEXT = (
+    ",".join(ld.EXPECTED_COLUMNS) + "\n"
+    "500,10,8,2,6,5,4,3,2,1,1,3,4,200,10.0,1,0,1000.0,No\n"      # A
+    "800,15,10,5,8,6,5,3,2,2,0,0,3,150,5.0,0,0,0.0,No\n"         # B
+    "3000,30,25,5,20,16,12,8,6,4,2,2,5,400,20.0,1,1,2000.0,Yes\n"  # C
+    "3000,25,20,5,16,13,10,6,5,4,1,1,4,350,8.0,0,0,0.0,No\n"     # D
+    "10000,80,65,15,52,42,33,25,18,18,0,0,6,900,,1,0,,No\n"      # E (missing)
+    "500,12,9,3,7,5,4,3,2,1,1,2,4,180,15.0,1,0,500.0,No\n"       # F
+)
+
+
+@pytest.fixture
+def m124_df(tmp_path, monkeypatch):
+    return _load(M124_CSV_TEXT, tmp_path, monkeypatch)
+
+
+def test_m1_zero_profit(m124_df):
+    result = an.m1_zero_profit(m124_df)
+    assert result == {
+        "n_zero_profit": 2,       # B, D
+        "n_missing_profit": 1,    # E
+        "n_negative_profit": 0,
+    }
+
+
+def test_m2_zero_profit_consistency(m124_df):
+    """zero-profit group = {B, D}; known-nonzero group = {A, C, F} (E is
+    missing, excluded from both -- M2 never imputes)."""
+    result = an.m2_zero_profit_consistency(m124_df)
+
+    assert result["n_zero_profit"] == 2
+    assert result["n_known_nonzero_profit"] == 3
+
+    # purchased: B=0, D=0 -> mean 0.0 | A=1, C=1, F=1 -> mean 1.0
+    assert result["purchased_rate"]["zero_profit"] == pytest.approx(0.0)
+    assert result["purchased_rate"]["known_nonzero_profit"] == pytest.approx(1.0)
+
+    # closed>0: B closed=0 (False), D closed=1 (True) -> mean 0.5
+    # A closed=1, C closed=2, F closed=1 -- all True -> mean 1.0
+    assert result["closed_gt0_rate"]["zero_profit"] == pytest.approx(0.5)
+    assert result["closed_gt0_rate"]["known_nonzero_profit"] == pytest.approx(1.0)
+
+    # ltv_months: zero group (B=5.0, D=8.0) -> mean 6.5
+    # known-nonzero group (A=10.0, C=20.0, F=15.0) -> mean 15.0
+    assert result["mean_ltv_months"]["zero_profit"] == pytest.approx(6.5)
+    assert result["mean_ltv_months"]["known_nonzero_profit"] == pytest.approx(15.0)
+
+    # CAC: zero group (B=150, D=350) -> mean 250 | known-nonzero (A=200,C=400,F=180) -> mean 260
+    assert result["mean_cac"]["zero_profit"] == pytest.approx(250.0)
+    assert result["mean_cac"]["known_nonzero_profit"] == pytest.approx(260.0)
+
+
+def test_m2_output_has_no_legitimacy_verdict_field(m124_df):
+    """The function's contract is consistency evidence, not a legitimacy
+    verdict -- its output must be exactly the six evidence keys, with no
+    boolean/verdict field (e.g. "legitimate", "is_valid") anywhere."""
+    result = an.m2_zero_profit_consistency(m124_df)
+    assert set(result) == {
+        "n_zero_profit", "n_known_nonzero_profit", "purchased_rate",
+        "closed_gt0_rate", "mean_ltv_months", "mean_cac",
+    }
+    for forbidden in ("legitimate", "legitimacy", "is_valid", "verdict"):
+        assert forbidden not in result
+
+
+def test_m4_profit_by_tier(m124_df):
+    result = an.m4_profit_by_tier(m124_df)
+
+    # Low: A(1000.0), B(0.0), F(500.0) -- 3 records, 0 missing
+    assert result["Low"]["n_records"] == 3
+    assert result["Low"]["n_missing_profit"] == 0
+    assert result["Low"]["sum_cumulative_profit"] == pytest.approx(1500.0)  # 1000+0+500
+    assert result["Low"]["mean_cumulative_profit"] == pytest.approx(500.0)  # 1500/3
+
+    # Mid: C(2000.0), D(0.0) -- 2 records, 0 missing
+    assert result["Mid"]["n_records"] == 2
+    assert result["Mid"]["n_missing_profit"] == 0
+    assert result["Mid"]["sum_cumulative_profit"] == pytest.approx(2000.0)
+    assert result["Mid"]["mean_cumulative_profit"] == pytest.approx(1000.0)
+
+    # High: E only, and E's profit is missing -- sum/mean must be None,
+    # not 0 or silently dropped
+    assert result["High"]["n_records"] == 1
+    assert result["High"]["n_missing_profit"] == 1
+    assert result["High"]["sum_cumulative_profit"] is None
+    assert result["High"]["mean_cumulative_profit"] is None
+
+    # gap: no rows in this fixture
+    assert result["gap"]["n_records"] == 0
+    assert result["gap"]["sum_cumulative_profit"] is None
+
+    # sanity: missing counts across tiers sum to the fixture's one missing row
+    total_missing = sum(result[t]["n_missing_profit"] for t in ("Low", "Mid", "High", "gap"))
+    assert total_missing == 1
+
+
+# ---------------------------------------------------------------------------
+# M3 -- a 10-row fixture built specifically for a tie at the exact-K
+# boundary. cumulative_profit values: [100, 100, 90, 80, 70, 60, 50, 40,
+# 30, 20] for source_row_id 1..10 -- rows 1 and 2 are tied for the
+# highest value.
+#
+# N=10, K=ceil(0.1*10)=1. Ranked profit DESC, source_row_id ASC as
+# tiebreak: row 1 (100) sorts before row 2 (100) -- exact-K = {row 1}
+# only. boundary_value=100. Both row 1 AND row 2 have profit==100, so
+# n_at_boundary_value=2, and inclusive-ties = every record with
+# profit>=100 = {row 1, row 2} = 2 records -- proving ties genuinely
+# extend the sensitivity set beyond exact-K.
+#
+# total_profit = 100+100+90+80+70+60+50+40+30+20 = 640
+# exact_k share = 100/640 = 0.15625
+# ties share    = 200/640 = 0.3125
+# ---------------------------------------------------------------------------
+def _m3_row(ad_budget: int, profit: int) -> str:
+    return f"{ad_budget},10,8,2,6,5,4,3,2,1,1,2,3,100,10.0,1,0,{profit}.0,No\n"
+
+
+M3_CSV_TEXT = ",".join(ld.EXPECTED_COLUMNS) + "\n" + "".join(
+    _m3_row(b, p)
+    for b, p in zip(
+        [500, 800, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000],
+        [100, 100, 90, 80, 70, 60, 50, 40, 30, 20],
+    )
+)
+
+
+@pytest.fixture
+def m3_df(tmp_path, monkeypatch):
+    return _load(M3_CSV_TEXT, tmp_path, monkeypatch)
+
+
+def test_m3_top_decile_exact_k_and_ties(m3_df):
+    result = an.m3_top_decile(m3_df)
+
+    assert result["n_known"] == 10
+    assert result["n_missing_profit"] == 0
+    assert result["K"] == 1  # ceil(0.1*10)
+    assert result["K_fraction_of_N"] == pytest.approx(0.1)
+    assert result["boundary_value"] == pytest.approx(100.0)
+    assert result["n_at_boundary_value"] == 2  # rows 1 AND 2 both == 100
+
+    # exact-K: only row 1 (the source_row_id tiebreak winner)
+    assert result["exact_k"]["n_records"] == 1
+    assert result["exact_k"]["profit_share"] == pytest.approx(100 / 640)
+
+    # inclusive ties: row 1 AND row 2 -- one more record than exact-K,
+    # proving ties genuinely extend the set, not a no-op
+    assert result["inclusive_ties"]["n_records"] == 2
+    assert result["inclusive_ties"]["profit_share"] == pytest.approx(200 / 640)
+    assert result["inclusive_ties"]["n_records"] != result["exact_k"]["n_records"]
+
+
+def test_m3_excludes_missing_without_imputing_or_filtering_by_purchased(tmp_path, monkeypatch):
+    """A row with missing cumulative_profit must lower n_known and raise
+    n_missing_profit, but never be treated as 0 profit, and never be
+    dropped based on purchased."""
+    text = M3_CSV_TEXT + "1750,10,8,2,6,5,4,3,2,1,1,2,3,100,10.0,0,0,,No\n"  # purchased=0, missing profit
+    df = _load(text, tmp_path, monkeypatch)
+    result = an.m3_top_decile(df)
+    assert result["n_known"] == 10   # unchanged -- the new row doesn't count
+    assert result["n_missing_profit"] == 1
+    # K and shares are unaffected -- computed only over the known 10
+    assert result["K"] == 1
+    assert result["exact_k"]["profit_share"] == pytest.approx(100 / 640)
+
+
+# ---------------------------------------------------------------------------
+# M5 -- IQR strict-boundary proof. Two 8-row fixtures, identical except
+# for the LAST row's customer_acquisition_cost (CAC): 1150 vs. 1151.
+# CAC values: [100, 200, 300, 400, 500, 600, 700, X].
+#
+# Q1/Q3 for n=8 (pandas quantile, interpolation="linear") are determined
+# by ranks 1,2 (Q1) and 5,6 (Q3) ONLY -- verified independent of X, as
+# long as X stays the maximum (>=700):
+#   Q1 = 200 + 0.75*(300-200) = 275.0
+#   Q3 = 600 + 0.25*(700-600) = 625.0
+#   IQR = 350.0
+#   upper = Q3 + 1.5*IQR = 625 + 525 = 1150.0  (exact, both fixtures)
+#
+# X=1150 sits AT the boundary -> strict ">" means NOT flagged.
+# X=1151 sits just past it -> flagged.
+# ---------------------------------------------------------------------------
+def _m5_row(ad_budget: int, cac: int) -> str:
+    return f"{ad_budget},10,8,2,6,5,4,3,2,1,1,2,3,{cac},10.0,1,0,1000.0,No\n"
+
+
+def _m5_csv_text(last_cac: int) -> str:
+    budgets = [500, 800, 1000, 1500, 2000, 2500, 3000, 4000]
+    cacs = [100, 200, 300, 400, 500, 600, 700, last_cac]
+    return ",".join(ld.EXPECTED_COLUMNS) + "\n" + "".join(
+        _m5_row(b, c) for b, c in zip(budgets, cacs)
+    )
+
+
+@pytest.fixture
+def m5_at_boundary_df(tmp_path, monkeypatch):
+    return _load(_m5_csv_text(1150), tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def m5_past_boundary_df(tmp_path, monkeypatch):
+    return _load(_m5_csv_text(1151), tmp_path, monkeypatch)
+
+
+def test_m5_iqr_value_exactly_at_boundary_is_not_flagged(m5_at_boundary_df):
+    result = an.m5_outliers(m5_at_boundary_df)
+    assert result["iqr"]["cells_flagged_per_column"]["customer_acquisition_cost"] == 0
+
+
+def test_m5_iqr_value_just_past_boundary_is_flagged(m5_past_boundary_df):
+    result = an.m5_outliers(m5_past_boundary_df)
+    assert result["iqr"]["cells_flagged_per_column"]["customer_acquisition_cost"] == 1
+
+
+def test_m5_covers_exactly_the_16_non_binary_numeric_columns(m5_at_boundary_df):
+    result = an.m5_outliers(m5_at_boundary_df)
+    assert len(result["columns"]) == 16
+    assert "purchased" not in result["columns"]
+    assert "upsell" not in result["columns"]
+    assert "referred" not in result["columns"]  # text, not numeric
+    assert "source_row_id" not in result["columns"]  # derived, not raw
+
+
+def test_m5_iqr_and_p1p99_never_unioned_into_one_measure(m5_at_boundary_df):
+    """Both methods must be reported separately -- no combined "outlier"
+    key anywhere in the output."""
+    result = an.m5_outliers(m5_at_boundary_df)
+    assert "iqr" in result and "p1_p99" in result
+    assert "outlier" not in result  # no unified key
+    assert set(result) == {
+        "columns", "missing_per_column", "iqr", "p1_p99",
+        "n_records_flagged_by_both_methods",
+    }
+
+
+def test_m5_p1_p99_matches_pandas_own_quantile_definition(m5_at_boundary_df):
+    """p1/p99's boundary values are exactly what pandas.Series.quantile
+    (interpolation="linear") computes -- the specification's own defining
+    primitive, not a re-assertion of this module's code. Checked on the
+    ad_budget column, which is fully populated (no missing) in this
+    fixture."""
+    col = m5_at_boundary_df["ad_budget"]
+    p1 = col.quantile(0.01, interpolation="linear")
+    p99 = col.quantile(0.99, interpolation="linear")
+    expected_flags = int(((col < p1) | (col > p99)).sum())
+
+    result = an.m5_outliers(m5_at_boundary_df)
+    assert result["p1_p99"]["cells_flagged_per_column"]["ad_budget"] == expected_flags
+
+
+# ---------------------------------------------------------------------------
+# M6 -- must be exactly duplicates()'s output, not a competing
+# reimplementation. Reuses the operational_df fixture already defined
+# above (its one duplicate pair, A and B).
+# ---------------------------------------------------------------------------
+def test_m6_duplicate_profile_reuses_duplicates_output_exactly(operational_df):
+    assert an.m6_duplicate_profile(operational_df) == an.duplicates(operational_df)

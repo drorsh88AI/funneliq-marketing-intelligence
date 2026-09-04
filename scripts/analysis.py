@@ -1,5 +1,5 @@
-"""Package 1 + package 5 (ניקוי + EDA) pure computation functions --
-PHASE5.md checkpoints 7 and 8.
+"""Package 1 + package 5 + M1-M6 (ניקוי + EDA) pure computation functions --
+PHASE5.md checkpoints 7, 8, and 9.
 
 Every function takes a DataFrame (already through
 load_data.load_and_verify_csv -- SHA-256 verified, source_row_id added,
@@ -8,9 +8,8 @@ reads inside these functions -- matches the design in PHASE5.md D6.
 tests/test_metrics.py proves each one against a small fixture with a
 by-hand-computed answer.
 
-M1-M6 are checkpoint 9. build_results()/findings rendering are
-checkpoint 10+. Nothing here performs modeling, splits data, or touches
-Supabase (D10).
+build_results()/findings rendering are checkpoint 10+. Nothing here
+performs modeling, splits data, or touches Supabase (D10).
 
 ⚠ Every value returned here is a dataset description (SPEC.md §
 גרעיניות מעורבת's "מוסק בלבד" framing, and PHASE5.md D3): none of it is a
@@ -19,6 +18,7 @@ or a model in phase 6 (D3's table of what may/may not cross into phase 6).
 """
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -249,3 +249,184 @@ def calls_to_closed(df: pd.DataFrame) -> dict:
         ),
         "corr_closed_calls_to_closed": _safe_corr(p1["closed"], p1["calls_to_closed"]),
     }
+
+
+# ---------------------------------------------------------------------------
+# M1-M6 (PHASE5.md §ה). ROADMAP.html:753's one-line names, given the
+# concrete reading PHASE5.md §ה pins down -- see that section for the
+# full reasoning; not re-derived here.
+# ---------------------------------------------------------------------------
+
+def m1_zero_profit(df: pd.DataFrame) -> dict:
+    """M1 -- rows where cumulative_profit == 0, reported separately from
+    the 29 missing (a zero is a real observed value, not a stand-in for
+    a missing one)."""
+    return {
+        "n_zero_profit": int((df["cumulative_profit"] == 0).sum()),
+        "n_missing_profit": int(df["cumulative_profit"].isna().sum()),
+        "n_negative_profit": int((df["cumulative_profit"] < 0).sum()),
+    }
+
+
+def m2_zero_profit_consistency(df: pd.DataFrame) -> dict:
+    """M2 -- consistency evidence for the zero-profit rows, NOT a
+    legitimacy claim: no data dictionary proves whether 0 is a genuine
+    zero-profit outcome or a missing-value stand-in (SPEC.md § גרעיניות
+    מעורבת's "מוסק בלבד" framing). Cross-tabs against purchased, closed,
+    ltv_months, and CAC, comparing the zero-profit rows to the known
+    (non-null, non-zero) rows. Rows are never dropped by this or any
+    other function here."""
+    zero = df[df["cumulative_profit"] == 0]
+    known_nonzero = df[df["cumulative_profit"].notna() & (df["cumulative_profit"] != 0)]
+
+    def _rate(frame: pd.DataFrame, mask: pd.Series) -> float | None:
+        return float(mask.mean()) if len(frame) else None
+
+    def _mean_ltv(frame: pd.DataFrame) -> float | None:
+        vals = frame["ltv_months"].dropna()
+        return float(vals.mean()) if len(vals) else None
+
+    return {
+        "n_zero_profit": int(len(zero)),
+        "n_known_nonzero_profit": int(len(known_nonzero)),
+        "purchased_rate": {
+            "zero_profit": _rate(zero, zero["purchased"] == 1),
+            "known_nonzero_profit": _rate(known_nonzero, known_nonzero["purchased"] == 1),
+        },
+        "closed_gt0_rate": {
+            "zero_profit": _rate(zero, zero["closed"] > 0),
+            "known_nonzero_profit": _rate(known_nonzero, known_nonzero["closed"] > 0),
+        },
+        "mean_ltv_months": {
+            "zero_profit": _mean_ltv(zero),
+            "known_nonzero_profit": _mean_ltv(known_nonzero),
+        },
+        "mean_cac": {
+            "zero_profit": float(zero["customer_acquisition_cost"].mean()) if len(zero) else None,
+            "known_nonzero_profit": (
+                float(known_nonzero["customer_acquisition_cost"].mean()) if len(known_nonzero) else None
+            ),
+        },
+    }
+
+
+def m3_top_decile(df: pd.DataFrame) -> dict:
+    """M3 -- top decile of cumulative_profit, among the rows where it's
+    known (the 29 missing are excluded from M3 only, never imputed,
+    never filtered by purchased). Primary: exact-K, K=ceil(0.1*N),
+    stable sort by profit DESC then source_row_id ASC -- K and its
+    actual fraction of N are both reported ("K/N", never claimed to be
+    exactly 10%). Sensitivity, reported alongside, not instead: every
+    record with profit >= the exact-K boundary value (inclusive ties)."""
+    known = df[df["cumulative_profit"].notna()]
+    n_missing = int(df["cumulative_profit"].isna().sum())
+    n = len(known)
+    total_profit = float(known["cumulative_profit"].sum())
+
+    ranked = known.sort_values(["cumulative_profit", "source_row_id"], ascending=[False, True])
+    k = math.ceil(0.1 * n)
+    exact_k = ranked.iloc[:k]
+    boundary_value = float(exact_k["cumulative_profit"].iloc[-1]) if k else None
+
+    if boundary_value is not None:
+        ties = known[known["cumulative_profit"] >= boundary_value]
+        n_at_boundary = int((known["cumulative_profit"] == boundary_value).sum())
+    else:
+        ties = known.iloc[0:0]
+        n_at_boundary = 0
+
+    def _share(frame: pd.DataFrame) -> float | None:
+        return float(frame["cumulative_profit"].sum() / total_profit) if total_profit else None
+
+    return {
+        "n_known": n,
+        "n_missing_profit": n_missing,
+        "K": k,
+        "K_fraction_of_N": (k / n) if n else None,
+        "boundary_value": boundary_value,
+        "n_at_boundary_value": n_at_boundary,
+        "exact_k": {"n_records": int(len(exact_k)), "profit_share": _share(exact_k)},
+        "inclusive_ties": {"n_records": int(len(ties)), "profit_share": _share(ties)},
+    }
+
+
+def m4_profit_by_tier(df: pd.DataFrame) -> dict:
+    """M4 -- cumulative_profit summed AND averaged per budget tier
+    (Low/Mid/High, plus gap), n per tier, missing profit values excluded
+    from the sum/mean and counted explicitly per tier -- never imputed."""
+    tiers = df["ad_budget"].apply(budget_tier)
+    out: dict = {}
+    for name in (*BUDGET_TIERS, None):
+        key = name if name is not None else "gap"
+        mask = tiers.isna() if name is None else (tiers == name)
+        profit = df.loc[mask, "cumulative_profit"]
+        known = profit.dropna()
+        out[key] = {
+            "n_records": int(mask.sum()),
+            "n_missing_profit": int(profit.isna().sum()),
+            "sum_cumulative_profit": float(known.sum()) if len(known) else None,
+            "mean_cumulative_profit": float(known.mean()) if len(known) else None,
+        }
+    return out
+
+
+# 16 non-binary numeric raw columns for M5 -- every NOT_NULL_INT_COLUMNS/
+# NULLABLE_INT_COLUMNS column except the two binary ones (purchased,
+# upsell). source_row_id (derived, not a raw column) is excluded by
+# construction -- it's simply not in either list.
+_M5_BINARY_COLUMNS = {"purchased", "upsell"}
+_M5_COLUMNS = [c for c in NOT_NULL_INT_COLUMNS + NULLABLE_INT_COLUMNS if c not in _M5_BINARY_COLUMNS]
+
+
+def m5_outliers(df: pd.DataFrame) -> dict:
+    """M5 -- IQR and p1/p99 outlier flags, kept strictly separate, never
+    unioned into one "outlier" measure and never triggering removal or
+    Winsorization (descriptive only). 16 non-binary numeric raw columns.
+    Quantiles computed per column on non-null values only,
+    interpolation="linear". Strict inequalities on both boundaries --
+    a value exactly at a boundary is not flagged."""
+    iqr_cells: dict[str, int] = {}
+    p1p99_cells: dict[str, int] = {}
+    missing_per_column: dict[str, int] = {}
+    iqr_flagged_rows: set[int] = set()
+    p1p99_flagged_rows: set[int] = set()
+
+    for col in _M5_COLUMNS:
+        series = df[col]
+        missing_per_column[col] = int(series.isna().sum())
+        valid = series.dropna()
+
+        q1 = valid.quantile(0.25, interpolation="linear")
+        q3 = valid.quantile(0.75, interpolation="linear")
+        iqr = q3 - q1
+        iqr_mask = (series < q1 - 1.5 * iqr) | (series > q3 + 1.5 * iqr)
+        iqr_cells[col] = int(iqr_mask.sum())
+        iqr_flagged_rows.update(int(x) for x in df.loc[iqr_mask, "source_row_id"])
+
+        p1 = valid.quantile(0.01, interpolation="linear")
+        p99 = valid.quantile(0.99, interpolation="linear")
+        p_mask = (series < p1) | (series > p99)
+        p1p99_cells[col] = int(p_mask.sum())
+        p1p99_flagged_rows.update(int(x) for x in df.loc[p_mask, "source_row_id"])
+
+    return {
+        "columns": list(_M5_COLUMNS),
+        "missing_per_column": missing_per_column,
+        "iqr": {
+            "cells_flagged_per_column": iqr_cells,
+            "n_unique_records_flagged": len(iqr_flagged_rows),
+        },
+        "p1_p99": {
+            "cells_flagged_per_column": p1p99_cells,
+            "n_unique_records_flagged": len(p1p99_flagged_rows),
+        },
+        "n_records_flagged_by_both_methods": len(iqr_flagged_rows & p1p99_flagged_rows),
+    }
+
+
+def m6_duplicate_profile(df: pd.DataFrame) -> dict:
+    """M6 -- profile of the duplicate groups: source_row_id, ad_budget,
+    group size, purchased/closed, and budget tier per group. Same
+    contract as duplicates() (checkpoint 7) -- reuses it directly rather
+    than recomputing group membership a second, competing way."""
+    return duplicates(df)
