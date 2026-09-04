@@ -1,13 +1,17 @@
 # פאזה 5 — ניקוי + EDA (`feat/analysis`)
 
-> **`planning_status: outline_only` · `execution_status: not_started`.**
-> המסמך הזה הוא **תוצר תכנון בלבד** — עבר שלושה סבבי ביקורת Codex–Claude
-> ואושר סופית ב-04.09.2026 (ר' §י). **הוא אינו הוראת ביצוע.** אין בו יצירת
-> `analysis.py`, `data_contract.py`, `features.py`, `FINDINGS.md` או כל
-> תוצר ניתוח אחר, ואין בו שינוי ל-`execution_status`. פאזה 5 עוברת לביצוע
-> רק לאחר אישור מפורש נפרד של המשתמש, לפי מדיניות השער האחיד ב-`SPEC.md`.
+> **`planning_status: approved_for_execution` · `execution_status: in_progress`.**
+> המסמך עבר שלושה סבבי ביקורת Codex–Claude ואושר סופית ב-04.09.2026 (ר' §י).
+> המשתמש נתן הוראת ביצוע מפורשת ונפרדת ב-04.09.2026: `branch feat/analysis`
+> **נפתח**, ו-**checkpoint 1 בוצע ואומת** (SHA-256 של ה-CSV תואם `PHASE0.md`).
+> ⚠ *תצלום זמן היסטורי — נכון עד לפני checkpoint 1 (04.09.2026, לפני הוראת
+> הביצוע): המסמך היה אז תוצר תכנון בלבד, `planning_status: outline_only`,
+> `execution_status: not_started`, ה-branch טרם נפתח, ואין בו יצירת*
+> `analysis.py`, `data_contract.py`, `features.py`, `FINDINGS.md` *או כל
+> תוצר ניתוח אחר. פאזה 5 עברה לביצוע רק לאחר אישור מפורש נפרד של המשתמש,
+> לפי מדיניות השער האחיד ב-`SPEC.md`.*
 
-**Branch:** `feat/analysis` (טרם נפתח).
+**Branch:** `feat/analysis` — **פתוח** (מ-`main`, אחרי commit `a079cae`).
 
 ---
 
@@ -444,8 +448,15 @@ Contract בן שלוש שכבות שנבדק אוטומטית — כך שפאז�
 
 ## יג. מעמד המסמך
 
-**`planning_status: outline_only`.** המסמך עבר שלושה סבבי ביקורת
-Codex–Claude ואושר סופית ב-04.09.2026, אך `ROADMAP.html` נשאר
-`outline_only` / `not_started` עד שהמשתמש יבצע את מעבר הסטטוס בעצמו
-ויתחיל את הביצוע בפועל. **אין בכתיבת מסמך זה אישור לבצע את פאזה 5, ליצור
-תוצרי ניתוח, או לשנות `execution_status`.**
+**`planning_status: approved_for_execution` · `execution_status: in_progress`.**
+המסמך עבר שלושה סבבי ביקורת Codex–Claude ואושר סופית ב-04.09.2026.
+`ROADMAP.html` עודכן בשני צעדים נפרדים, כל אחד באישור מפורש של המשתמש:
+תחילה `planning_status → approved_for_execution` (commit `a079cae` על
+`main`, עם כתיבת `PHASE5.md` עצמו), ולאחר הוראת ביצוע נפרדת —
+`execution_status: not_started → in_progress` (commit `82f558b` על
+`feat/analysis`, עם ראיית checkpoint 1).
+
+⚠ **תצלום זמן היסטורי** — נכון עד לפני הוראת הביצוע (04.09.2026): באותו
+שלב `planning_status` היה `outline_only`, `execution_status` היה
+`not_started`, ואין בכתיבת המסמך אז אישור לבצע את פאזה 5, ליצור תוצרי
+ניתוח, או לשנות `execution_status` — נדרשה הוראה נפרדת, שניתנה.
