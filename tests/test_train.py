@@ -458,3 +458,96 @@ def test_lift_at_k_base_rate_is_the_evaluation_sets_own_rate_not_a_constant():
     y_score = np.array([4, 3, 2, 1], dtype=float)
     assert tr.lift_at_k(y_true_a, y_score, k=0.25)["base_rate"] == pytest.approx(0.5)
     assert tr.lift_at_k(y_true_b, y_score, k=0.25)["base_rate"] == pytest.approx(0.25)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 5 -- negative-input tests (D21: every check gets a valid AND
+# an invalid case). The finding these were missing: a 4-element delta
+# array could silently satisfy a ">=4 of 5" veto condition -- these
+# prove that's no longer possible.
+# ---------------------------------------------------------------------------
+
+def test_one_se_stats_rejects_wrong_length():
+    with pytest.raises(ValueError, match="exactly 5"):
+        tr.one_se_stats([1, 2, 3, 4])  # 4, not 5
+    with pytest.raises(ValueError, match="exactly 5"):
+        tr.one_se_stats([1, 2, 3, 4, 5, 6])  # 6, not 5
+    with pytest.raises(ValueError):
+        tr.one_se_stats([])
+
+
+def test_paired_delta_stats_rejects_wrong_length():
+    with pytest.raises(ValueError, match="exactly 5"):
+        tr.paired_delta_stats([1, 1, 1, 1])  # 4, not 5
+    with pytest.raises(ValueError):
+        tr.paired_delta_stats([])
+
+
+def test_guardrail_vetoed_rejects_a_four_element_delta_array():
+    """The regression this guards: [1,1,1,1] has n_positive=4, which
+    would satisfy a naive ">=4" check even though it isn't "4 of 5" --
+    it's 4 of 4. Must raise, not silently veto (or silently not veto)."""
+    with pytest.raises(ValueError, match="exactly 5"):
+        tr.guardrail_vetoed(
+            delta_rmse=[1, 1, 1, 1],           # 4 values, all positive
+            delta_abs_bias=[0, 0, 0, 0, 0],    # 5 values
+        )
+
+
+def test_guardrail_vetoed_rejects_mismatched_lengths():
+    with pytest.raises(ValueError):
+        tr.guardrail_vetoed(
+            delta_rmse=[1, 1, 1, 1, 1],        # 5 values
+            delta_abs_bias=[0, 0, 0, 0],       # 4 values
+        )
+
+
+def test_conformal_quantile_rejects_empty_input():
+    with pytest.raises(ValueError, match="empty"):
+        tr.conformal_quantile([], alpha=0.05)
+
+
+@pytest.mark.parametrize("bad_alpha", [0.0, 1.0, -0.1, 1.5])
+def test_conformal_quantile_rejects_alpha_out_of_range(bad_alpha):
+    with pytest.raises(ValueError, match="alpha"):
+        tr.conformal_quantile([1, 2, 3], alpha=bad_alpha)
+
+
+def test_top_decile_mask_rejects_empty_input():
+    with pytest.raises(ValueError, match="empty"):
+        tr.top_decile_mask([])
+
+
+def test_top_decile_metrics_rejects_mismatched_lengths():
+    with pytest.raises(ValueError):
+        tr.top_decile_metrics([1, 2, 3], [1, 2])
+
+
+def test_lift_at_k_rejects_empty_input():
+    with pytest.raises(ValueError, match="empty"):
+        tr.lift_at_k([], [], k=0.1)
+
+
+def test_lift_at_k_rejects_mismatched_lengths():
+    with pytest.raises(ValueError):
+        tr.lift_at_k([1, 0, 1], [3, 2], k=0.1)
+
+
+@pytest.mark.parametrize("bad_k", [0.0, -0.1, 1.5])
+def test_lift_at_k_rejects_k_out_of_range(bad_k):
+    with pytest.raises(ValueError, match="k must be"):
+        tr.lift_at_k([1, 0, 1, 0], [4, 3, 2, 1], k=bad_k)
+
+
+def test_lift_at_k_handles_zero_positives_without_crashing():
+    """No ValueError -- an all-negative target is a valid evaluation
+    set (e.g. a small fold with no positive cases), not malformed
+    input. precision_at_k is a well-defined 0.0; lift is None because
+    dividing by a zero base_rate is undefined, not because anything
+    failed."""
+    y_true = np.array([0, 0, 0, 0], dtype=float)
+    y_score = np.array([4, 3, 2, 1], dtype=float)
+    result = tr.lift_at_k(y_true, y_score, k=0.25)
+    assert result["base_rate"] == pytest.approx(0.0)
+    assert result["precision_at_k"] == pytest.approx(0.0)
+    assert result["lift"] is None

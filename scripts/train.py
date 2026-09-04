@@ -189,14 +189,40 @@ def encode_referred_target(series: pd.Series) -> pd.Series:
 # scores, and no threshold here is chosen by looking at a result.
 # ---------------------------------------------------------------------------
 
+# Every candidate comparison in this project runs over exactly 5 CV
+# folds (SPEC.md, throughout) -- enforced once, here, rather than
+# trusting every caller to pass the right length. A 4-element array
+# must never silently satisfy a ">=4 of 5" rule.
+N_FOLDS = 5
+
+
+def _require_n_folds(values, name: str) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    if values.size != N_FOLDS:
+        raise ValueError(f"{name} must have exactly {N_FOLDS} values (one per CV fold), got {values.size}")
+    return values
+
+
+def _require_nonempty(values, name: str) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    if values.size == 0:
+        raise ValueError(f"{name} must not be empty")
+    return values
+
+
+def _require_matching_length(a, b, a_name: str, b_name: str) -> None:
+    if len(a) != len(b):
+        raise ValueError(f"{a_name} and {b_name} must have the same length, got {len(a)} vs {len(b)}")
+
+
 def one_se_stats(scores) -> tuple[float, float]:
     """A candidate's mean and standard ERROR over its 5 CV fold scores
-    (SPEC.md's One-SE rule): SE = std(scores, ddof=1) / sqrt(5).
-    ⚠ Standard error, not standard deviation -- the /sqrt(5) is
-    mandatory, and ddof=1 (sample std) is mandatory too."""
-    scores = np.asarray(scores, dtype=float)
+    (SPEC.md's One-SE rule: "מתוך 5 ציוני ה-CV שלו"): SE = std(scores,
+    ddof=1) / sqrt(5). ⚠ Standard error, not standard deviation -- the
+    /sqrt(5) is mandatory, and ddof=1 (sample std) is mandatory too."""
+    scores = _require_n_folds(scores, "scores")
     mean = float(scores.mean())
-    se = float(scores.std(ddof=1) / math.sqrt(len(scores)))
+    se = float(scores.std(ddof=1) / math.sqrt(N_FOLDS))
     return mean, se
 
 
@@ -212,16 +238,17 @@ def one_se_eligible(candidate_mean: float, best_mean: float, best_se: float,
 
 
 def paired_delta_stats(deltas) -> dict:
-    """mean, standard error (ddof=1, /sqrt(n)), and the count of
-    positive folds for a set of paired per-fold differences -- the
-    shared building block behind P6's guardrail veto (D7), P3's
+    """mean, standard error (ddof=1, /sqrt(5)), and the count of
+    positive folds for a set of exactly 5 paired per-fold differences
+    -- the shared building block behind P6's guardrail veto (D7), P3's
     regular-vs-weighted pairing (D11), and the duplicate-sensitivity
-    report (D16, report-only -- these numbers without a veto verdict)."""
-    deltas = np.asarray(deltas, dtype=float)
-    n = len(deltas)
+    report (D16, report-only -- these numbers without a veto verdict).
+    Requires exactly 5 values -- SPEC.md's paired comparisons are
+    always over the 5 CV folds, never a partial or padded set."""
+    deltas = _require_n_folds(deltas, "deltas")
     mean = float(deltas.mean())
-    se = float(deltas.std(ddof=1) / math.sqrt(n))
-    return {"mean": mean, "se": se, "n_positive": int((deltas > 0).sum()), "n_folds": n}
+    se = float(deltas.std(ddof=1) / math.sqrt(N_FOLDS))
+    return {"mean": mean, "se": se, "n_positive": int((deltas > 0).sum()), "n_folds": N_FOLDS}
 
 
 def guardrail_vetoed(delta_rmse, delta_abs_bias) -> dict:
@@ -229,8 +256,12 @@ def guardrail_vetoed(delta_rmse, delta_abs_bias) -> dict:
     vetoed if EITHER Δ_RMSE or Δ_absBias satisfies both (1) a
     consistent direction -- Δ>0 in at least 4 of 5 folds -- and (2) a
     magnitude beyond noise -- mean(Δ) > SE(Δ). Checked separately per
-    metric; a single metric failing both conditions is enough to veto.
-    A veto-only rule: it can disqualify a candidate, never select one."""
+    metric; a single metric satisfying both conditions is enough to
+    veto. A veto-only rule: it can disqualify a candidate, never select
+    one. Both inputs go through paired_delta_stats, which rejects
+    anything but exactly 5 values -- so a length mismatch between the
+    two, or either being padded/truncated, fails loudly here rather
+    than silently tripping (or missing) the ">=4 of 5" condition."""
     def _check(deltas):
         stats = paired_delta_stats(deltas)
         consistent_direction = stats["n_positive"] >= 4
@@ -248,7 +279,10 @@ def conformal_quantile(residuals, alpha: float = 0.05) -> float:
     numpy's naive interpolated quantile, which has no finite-sample
     coverage guarantee. Computed once on the calibration set's
     residuals, stored, never recomputed at request time."""
-    residuals = np.sort(np.abs(np.asarray(residuals, dtype=float)))
+    if not (0 < alpha < 1):
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    residuals = _require_nonempty(residuals, "residuals")
+    residuals = np.sort(np.abs(residuals))
     n = len(residuals)
     rank = min(math.ceil((n + 1) * (1 - alpha)), n)
     return float(residuals[rank - 1])
@@ -267,7 +301,7 @@ def top_decile_mask(y_true) -> np.ndarray:
     convention as scripts/analysis.py's m3_top_decile, stable tie-break
     by original position. Used for P6's guardrail metrics (SPEC.md:
     "מוגדר על cumulative_profit בפועל", never on a prediction)."""
-    y_true = np.asarray(y_true, dtype=float)
+    y_true = _require_nonempty(y_true, "y_true")
     n = len(y_true)
     k = math.ceil(0.1 * n)
     order = np.argsort(-y_true, kind="stable")
@@ -281,7 +315,8 @@ def top_decile_metrics(y_true, y_pred) -> dict:
     Bias_top10 = mean(pred - actual) -- the systematic error that
     harms a summing simulator, reported alongside RMSE_top10, never
     instead of it."""
-    y_true = np.asarray(y_true, dtype=float)
+    _require_matching_length(y_true, y_pred, "y_true", "y_pred")
+    y_true = _require_nonempty(y_true, "y_true")
     y_pred = np.asarray(y_pred, dtype=float)
     mask = top_decile_mask(y_true)
     yt, yp = y_true[mask], y_pred[mask]
@@ -298,8 +333,13 @@ def lift_at_k(y_true, y_score, k: float = 0.1) -> dict:
     precision@K is computed on -- never the population reference
     values (46.35% / 42.71%), which are report-only context, not the
     denominator. Exact-K = ceil(k*N), ranked by predicted score DESC,
-    same tie-break convention as top_decile_mask."""
-    y_true = np.asarray(y_true, dtype=float)
+    same tie-break convention as top_decile_mask. A target with zero
+    positives (base_rate=0) returns lift=None rather than dividing by
+    zero -- precision_at_k is still a well-defined 0.0 in that case."""
+    if not (0 < k <= 1):
+        raise ValueError(f"k must be in (0, 1], got {k}")
+    _require_matching_length(y_true, y_score, "y_true", "y_score")
+    y_true = _require_nonempty(y_true, "y_true")
     y_score = np.asarray(y_score, dtype=float)
     n = len(y_true)
     K = math.ceil(k * n)
