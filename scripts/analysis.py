@@ -33,8 +33,11 @@ from __future__ import annotations
 import io
 import json
 import math
+import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
+from string import Template
 from xml.sax.saxutils import escape as _xml_escape
 
 import matplotlib
@@ -61,11 +64,15 @@ BUDGET_TIERS = ("Low", "Mid", "High")
 
 
 def missing_values(df: pd.DataFrame) -> dict:
-    """Missing counts for the two nullable columns -- reuses
-    data_contract's own snapshot measurement rather than recomputing the
-    same three numbers a second way."""
+    """Missing counts for the two nullable columns, plus the file's total
+    row count -- reuses data_contract's own snapshot measurement rather
+    than recomputing these numbers a second way. n_rows added checkpoint
+    12, 2026-09-04: FINDINGS.md's population label (3,500) needs a
+    results-sourced value, not a hand-typed one, and _measure_snapshot
+    already computes it -- it just wasn't forwarded here yet."""
     snap = _measure_snapshot(df)
     return {
+        "n_rows": snap["n_rows"],
         "missing_ltv_months": snap["missing_ltv_months"],
         "missing_cumulative_profit": snap["missing_cumulative_profit"],
         "missing_any": snap["missing_any"],
@@ -827,6 +834,364 @@ def write_svgs(results: dict, out_dir: Path) -> dict[str, Path]:
     return written
 
 
+# ---------------------------------------------------------------------------
+# checkpoint 12 -- FINDINGS.md rendering, PHASE5.md D6 §4. Every analytical
+# number in _FINDINGS_TEMPLATE is a $placeholder resolved from `results` by
+# _findings_context() -- the context builder does formatting/projection
+# only (rounding, thousands separators, percentage display of two counts
+# that already both exist together in the same results sub-dict, None ->
+# "לא זמין") and introduces no new statistic. Placeholder names never
+# contain a digit, so scan_template_for_digit_sequences() can treat every
+# digit run found in the raw template as literal prose with no risk of
+# confusing a placeholder name for one.
+# ---------------------------------------------------------------------------
+
+def _comma(value: int) -> str:
+    """Thousands-separator display of an already-computed count."""
+    return f"{value:,}"
+
+
+def _pct(numerator: int, denominator: int, decimals: int) -> str:
+    """Percentage display of two counts that already both exist,
+    independently, as fields of the same results sub-dict (e.g.
+    calls_to_closed's n_calls_to_closed_ge_4 and n_purchased1) -- not a
+    new statistic: no relationship is introduced here between values
+    that weren't already stored together by a tested pure function."""
+    return f"{numerator / denominator * 100:.{decimals}f}"
+
+
+def _pct_from_fraction(fraction: float | None, decimals: int) -> str:
+    """Percentage display of an already-computed fraction (e.g. a
+    conversion_rate or funnel_dropoff stage, both already 0-1 floats in
+    results) -- multiply-by-100-and-round formatting, not a new
+    computation. None (undefined, e.g. an empty tier) is never rendered
+    as 0%, same principle as the SVG N/A handling (checkpoint 11)."""
+    return "לא זמין" if fraction is None else f"{fraction * 100:.{decimals}f}"
+
+
+def _num_or_na(value: float | None, decimals: int) -> str:
+    """Thousands-separator display of a float, or "לא זמין" for None --
+    never a fabricated 0 (same principle as _pct_from_fraction)."""
+    return "לא זמין" if value is None else f"{value:,.{decimals}f}"
+
+
+def _read_svg_description(svg_path: Path) -> str:
+    """Reads the accessible Hebrew <desc> back out of an already-rendered
+    SVG file (written by write_svgs) -- reused as FINDINGS.md's own
+    caption for that chart rather than a second hand-typed copy that
+    could drift from what the SVG itself says."""
+    ns = "{http://www.w3.org/2000/svg}"
+    root = ET.fromstring(Path(svg_path).read_text(encoding="utf-8"))
+    desc = root.find(f"{ns}desc")
+    return desc.text if desc is not None and desc.text else ""
+
+
+def _findings_context(results: dict, svg_dir: Path) -> dict[str, str]:
+    """Builds the flat {name: str} namespace string.Template substitutes
+    into _FINDINGS_TEMPLATE. Every value is read from `results` (via the
+    formatting helpers above) or read back from an already-rendered SVG's
+    own accessible description -- no DataFrame, no recomputation."""
+    mv, bt, dup = results["missing_values"], results["budget_tiers"], results["duplicates"]
+    corr, fd, ctc = results["correlations"], results["funnel_dropoff"], results["calls_to_closed"]
+    m1, m2 = results["m1_zero_profit"], results["m2_zero_profit_consistency"]
+    m3, m4, m5 = results["m3_top_decile"], results["m4_profit_by_tier"], results["m5_outliers"]
+    sm = results["source_metadata"]
+    zrs = m2["zero_rate_by_slice"]
+
+    return {
+        "pop_full": _comma(mv["n_rows"]),
+        "pop_known_profit": _comma(m3["n_known"]),
+        "pop_purchased": _comma(ctc["n_purchased1"]),
+        "source_sha": sm["source_sha256"],
+
+        "missing_ltv": str(mv["missing_ltv_months"]),
+        "missing_profit": str(mv["missing_cumulative_profit"]),
+        "missing_any": str(mv["missing_any"]),
+
+        "tier_low_n": _comma(bt["Low"]["n_records"]),
+        "tier_low_rate_pct": _pct_from_fraction(bt["Low"]["conversion_rate"], 1),
+        "tier_mid_n": _comma(bt["Mid"]["n_records"]),
+        "tier_mid_rate_pct": _pct_from_fraction(bt["Mid"]["conversion_rate"], 1),
+        "tier_high_n": _comma(bt["High"]["n_records"]),
+        "tier_high_rate_pct": _pct_from_fraction(bt["High"]["conversion_rate"], 1),
+        "tier_gap_n": _comma(bt["gap"]["n_records"]),
+
+        "dup_rows": str(dup["n_duplicate_rows"]),
+        "dup_groups": str(dup["n_groups"]),
+        "budget_distinct_n": str(len(results["ad_budget_leads_curve"])),
+
+        "corr_ltv": f"{corr['ltv_months']:.2f}",
+        "corr_upsell": f"{corr['upsell']:.2f}",
+        "corr_columns_n": str(len(corr)),
+
+        "dropoff_first_pct": _pct_from_fraction(fd["followup_1"], 1),
+        "dropoff_second_pct": _pct_from_fraction(fd["followup_2"], 1),
+        "dropoff_third_pct": _pct_from_fraction(fd["followup_3"], 1),
+        "dropoff_fourth_pct": _pct_from_fraction(fd["followup_4"], 1),
+        "dropoff_fifth_pct": _pct_from_fraction(fd["followup_5"], 1),
+
+        "p1_n": _comma(ctc["n_purchased1"]),
+        "ge4_n": _comma(ctc["n_calls_to_closed_ge_4"]),
+        "ge4_pct": _pct(ctc["n_calls_to_closed_ge_4"], ctc["n_purchased1"], 0),
+        "closed_eq1_n": _comma(ctc["n_closed_eq_1"]),
+        "closed_eq1_ge4_n": _comma(ctc["n_closed_eq_1_calls_ge_4"]),
+        "closed_eq1_ge4_pct": _pct(ctc["n_closed_eq_1_calls_ge_4"], ctc["n_closed_eq_1"], 2),
+
+        "zero_profit_n": _comma(m1["n_zero_profit"]),
+        "missing_profit_n": _comma(m1["n_missing_profit"]),
+        "negative_profit_n": str(m1["n_negative_profit"]),
+
+        "zero_rate_purchased_zero_pct": _pct_from_fraction(zrs["purchased_0"]["zero_rate"], 1),
+        "zero_rate_purchased_one_pct": _pct_from_fraction(zrs["purchased_1"]["zero_rate"], 1),
+        "zero_rate_closed_zero_pct": _pct_from_fraction(zrs["closed_eq_0"]["zero_rate"], 1),
+        "zero_rate_closed_pos_pct": _pct_from_fraction(zrs["closed_gt_0"]["zero_rate"], 1),
+        "mean_ltv_zero_group": _num_or_na(m2["mean_ltv_months"]["zero_profit"], 1),
+        "mean_ltv_known_group": _num_or_na(m2["mean_ltv_months"]["known_nonzero_profit"], 1),
+        "mean_cac_zero_group": _num_or_na(m2["mean_cac"]["zero_profit"], 0),
+        "mean_cac_known_group": _num_or_na(m2["mean_cac"]["known_nonzero_profit"], 0),
+
+        "decile_k": str(m3["K"]),
+        "decile_k_pct": _pct_from_fraction(m3["K_fraction_of_N"], 1),
+        "decile_boundary": _comma(int(m3["boundary_value"])),
+        "decile_n_at_boundary": str(m3["n_at_boundary_value"]),
+        "decile_ties_n": str(m3["inclusive_ties"]["n_records"]),
+        "decile_share_exact_pct": _pct_from_fraction(m3["exact_k"]["profit_share"], 1),
+        "decile_share_ties_pct": _pct_from_fraction(m3["inclusive_ties"]["profit_share"], 1),
+
+        "profit_low_n": _comma(m4["Low"]["n_records"]),
+        "profit_low_missing": str(m4["Low"]["n_missing_profit"]),
+        "profit_low_sum": _num_or_na(m4["Low"]["sum_cumulative_profit"], 0),
+        "profit_low_mean": _num_or_na(m4["Low"]["mean_cumulative_profit"], 0),
+        "profit_mid_n": _comma(m4["Mid"]["n_records"]),
+        "profit_mid_missing": str(m4["Mid"]["n_missing_profit"]),
+        "profit_mid_sum": _num_or_na(m4["Mid"]["sum_cumulative_profit"], 0),
+        "profit_mid_mean": _num_or_na(m4["Mid"]["mean_cumulative_profit"], 0),
+        "profit_high_n": _comma(m4["High"]["n_records"]),
+        "profit_high_missing": str(m4["High"]["n_missing_profit"]),
+        "profit_high_sum": _num_or_na(m4["High"]["sum_cumulative_profit"], 0),
+        "profit_high_mean": _num_or_na(m4["High"]["mean_cumulative_profit"], 0),
+        "profit_gap_n": str(m4["gap"]["n_records"]),
+        "profit_gap_missing": str(m4["gap"]["n_missing_profit"]),
+
+        "outlier_iqr_n": str(m5["iqr"]["n_unique_records_flagged"]),
+        "outlier_pctile_n": str(m5["p1_p99"]["n_unique_records_flagged"]),
+        "outlier_both_n": str(m5["n_records_flagged_by_both_methods"]),
+
+        "desc_funnel": _read_svg_description(svg_dir / "funnel_dropoff.svg"),
+        "desc_ad_budget": _read_svg_description(svg_dir / "ad_budget_leads_curve.svg"),
+        "desc_tier": _read_svg_description(svg_dir / "budget_tier_conversion.svg"),
+        "desc_calls": _read_svg_description(svg_dir / "calls_to_closed_distribution.svg"),
+        "desc_corr": _read_svg_description(svg_dir / "correlations_cumulative_profit.svg"),
+    }
+
+
+# The P5 conclusion -- word-for-word from SPEC.md § מסקנת P5, with only
+# the analytical numbers replaced by $placeholders. Every OTHER digit left
+# literal below (the "1" in purchased=1/closed=1, the "4"/"2" in the >=4/
+# >=2 thresholds) is a fixed metric-defining threshold, not a measured
+# finding -- SPEC.md itself writes these as literal condition values, not
+# results. tests/test_metrics.py verifies this resolves to an EXACT match
+# against SPEC.md's own live text (read from the file, not retyped), so a
+# transcription slip here fails a test rather than silently drifting.
+_P5_CONCLUSION_TEMPLATE = """\
+> הנתונים **אינם תומכים** בעצירה אוטומטית אחרי המעקב השלישי. שיעור הנשירה בשלב
+> הרביעי הוא הנמוך בשרשרת ($dropoff_fourth_pct%). בנוסף, ב-$ge4_n מתוך $p1_n רשומות שבהן
+> `purchased = 1` ($ge4_pct%) הערך **הממוצע** של `calls_to_closed` הוא 4 ומעלה,
+> ובתת-האוכלוסייה `closed = 1` — $closed_eq1_ge4_n מתוך $closed_eq1_n רשומות ($closed_eq1_ge4_pct%) מציגות
+> `calls_to_closed >= 4`.
+> **מה שהנתונים אינם מוכיחים:** `calls_to_closed` הוא ממוצע ברמת רשומה ולא
+> היסטוריה פר-עסקה, ולכן **אין לטעון ש-$ge4_pct% מהעסקאות הבודדות דרשו 4+ שיחות**
+> ואין לטעון שעצירה אחרי השלישית הייתה מוותרת על כל $ge4_n הרשומות.
+> תת-האוכלוסייה `closed = 1` נבדלת תיאורית בגודל, בתקציב, בהמרה ובמספר השיחות,
+> ולכן אינה מייצגת בהכרח את כלל הרשומות או העסקאות. **לא ניתן להסיק ממנה את
+> שיעור העסקאות הכולל ולא את כיוון ההטיה** — יחידת ההשוואה היא רשומה, ורשומת
+> `closed ≥ 2` נספרת כאחת אף שהיא מכילה כמה עסקאות.
+> הנתונים אגרגטיביים ואינם מאפשרים לאמוד סיבתיות או כדאיות כלכלית שולית.
+> **ההמלצה:** להמשיך את המעקבים באופן מבוקר, ולמדוד בניסוי תפעולי את שיעור
+> הסגירה השולי, זמן העבודה ועלות כל שלב.
+"""
+
+# Every analytical value below is a $placeholder resolved from `results`
+# via _findings_context() -- see that function's docstring for the "no new
+# computation" rule. Every finding carries a population label (3,500 /
+# 3,471 / 3,163) and a "dataset description" tag per PHASE5.md/SPEC.md §
+# מטריצת זמינות פיצ'רים -- none of this is a causal claim or a phase-6
+# feature-selection input (D3).
+_FINDINGS_TEMPLATE = Template("""\
+# FINDINGS.md — ניקוי + EDA (פאזה 5)
+
+מסמך זה מרונדר אוטומטית מתוך `results` (ר' `docs/findings.json`) ע"י
+`scripts/analysis.py`'s `render_findings_md` -- כל ערך אנליטי כאן הוא
+`$$placeholder` שנפתר מפלט פונקציית חישוב טהורה ובדוקה (PHASE5.md D6).
+מקור הנתונים: `funnel_marketing_data.csv`, `source_sha256=$source_sha`.
+
+⚠ **כל הממצאים במסמך זה הם `dataset description` בלבד** (SPEC.md §
+גרעיניות מעורבת's "מוסק בלבד" framing, PHASE5.md D3): שום ממצא כאן אינו
+טענה סיבתית, ואף אחד מהם אינו משמש לבחירת פיצ'רים, ספים או מודל בפאזה 6.
+
+## סקירת הקובץ (אוכלוסייה: $pop_full, dataset description)
+
+- שורות בקובץ: **$pop_full**.
+- חסרים: `ltv_months` -- $missing_ltv, `cumulative_profit` -- $missing_profit,
+  לפחות אחד מהשניים -- $missing_any.
+- כפילויות: $dup_rows שורות ב-$dup_groups קבוצות (זהות בכל 19 העמודות הגולמיות).
+
+## חבילה 1 — טייר תקציב, כפילויות, קורלציות (אוכלוסייה: $pop_full, dataset description)
+
+שיעור ההמרה הממוצע לפי טייר תקציב (ממוצע `closed/num_leads` לשורה):
+
+| טייר | n | שיעור המרה |
+|---|---|---|
+| Low | $tier_low_n | $tier_low_rate_pct% |
+| Mid | $tier_mid_n | $tier_mid_rate_pct% |
+| High | $tier_high_n | $tier_high_rate_pct% |
+| gap (1501-1999) | $tier_gap_n | לא מוגדר -- אין ערך `conversion_rate` |
+
+![Conversion rate by budget tier](budget_tier_conversion.svg)
+
+$desc_tier
+
+עקומת `ad_budget` → חציון `num_leads`, על $budget_distinct_n ערכי `ad_budget`
+בדידים:
+
+![ad_budget vs. median num_leads](ad_budget_leads_curve.svg)
+
+$desc_ad_budget
+
+קורלציית פירסון (r) מול `cumulative_profit`, לכל $corr_columns_n העמודות
+המספריות הגולמיות האחרות (למשל `ltv_months`: $corr_ltv, `upsell`: $corr_upsell):
+
+![Correlations with cumulative_profit](correlations_cumulative_profit.svg)
+
+$desc_corr
+
+## חבילה 5 — נשירה במשפך, calls_to_closed (אוכלוסייה: $pop_full / $pop_purchased, dataset description)
+
+נשירה בכל שלב במשפך (Σ/Σ, לא ממוצע יחסים לשורה), על $pop_full הרשומות:
+
+![Funnel dropoff by stage](funnel_dropoff.svg)
+
+$desc_funnel
+
+שלב 1: $dropoff_first_pct% · שלב 2: $dropoff_second_pct% · שלב 3: $dropoff_third_pct% ·
+שלב 4: $dropoff_fourth_pct% · שלב 5: $dropoff_fifth_pct%.
+
+התפלגות `calls_to_closed` בתוך אוכלוסיית `purchased=1` ($pop_purchased רשומות):
+
+![calls_to_closed distribution](calls_to_closed_distribution.svg)
+
+$desc_calls
+
+מתוך $p1_n רשומות `purchased=1`, ב-$ge4_n מהן ($ge4_pct%) `calls_to_closed`
+הממוצע הוא 4 ומעלה. בתת-האוכלוסייה `closed=1` ($closed_eq1_n רשומות),
+$closed_eq1_ge4_n מהן ($closed_eq1_ge4_pct%) מציגות `calls_to_closed >= 4`.
+
+## M1 — ספירת אפסים ב-cumulative_profit (אוכלוסייה: $pop_full, dataset description)
+
+$zero_profit_n שורות עם `cumulative_profit == 0`, בנפרד מ-$missing_profit_n
+השורות החסרות ומ-$negative_profit_n שורות שליליות. הקובץ מייצג אפס במפורש
+כ-0, ולכן הוא נספר בנפרד מ-`NaN` -- משמעותו העסקית אינה מוכרעת ללא מילון
+נתונים.
+
+## M2 — עקביות האפסים, לא לגיטימיות (אוכלוסייה: $pop_full, dataset description)
+
+⚠ אין כאן טענת לגיטימיות: אין מילון נתונים שמוכיח אם `0` הוא רווח אפס אמיתי
+או קידוד למשהו חסר (SPEC.md § גרעיניות מעורבת). ראיות עקביות בלבד:
+
+שיעור האפסים בכל חתך (P(profit=0|slice), המכנה גלוי):
+
+| חתך | שיעור אפסים |
+|---|---|
+| purchased=0 | $zero_rate_purchased_zero_pct% |
+| purchased=1 | $zero_rate_purchased_one_pct% |
+| closed=0 | $zero_rate_closed_zero_pct% |
+| closed>0 | $zero_rate_closed_pos_pct% |
+
+ממוצע `ltv_months`: קבוצת אפס $mean_ltv_zero_group, קבוצת ידוע-לא-אפס
+$mean_ltv_known_group. ממוצע CAC: קבוצת אפס $mean_cac_zero_group, קבוצת
+ידוע-לא-אפס $mean_cac_known_group.
+
+## M3 — עשירון עליון (אוכלוסייה: $pop_known_profit, dataset description)
+
+אוכלוסייה: $pop_known_profit הרשומות שבהן `cumulative_profit` ידוע
+($missing_profit המוחרגות מדווחות לצידו, לא מוטמעות ולא מסוננות). `K=$decile_k`
+($decile_k_pct%), ערך גבול $decile_boundary, עם $decile_n_at_boundary
+רשומות עליו בדיוק. חלק העשירון מסך הרווח: $decile_share_exact_pct%
+(exact-K, $decile_k רשומות) לעומת $decile_share_ties_pct% (inclusive-ties,
+$decile_ties_n רשומות).
+
+## M4 — רווח לפי טייר (אוכלוסייה: $pop_full, dataset description)
+
+| טייר | n | חסרים | סכום | ממוצע |
+|---|---|---|---|---|
+| Low | $profit_low_n | $profit_low_missing | $profit_low_sum | $profit_low_mean |
+| Mid | $profit_mid_n | $profit_mid_missing | $profit_mid_sum | $profit_mid_mean |
+| High | $profit_high_n | $profit_high_missing | $profit_high_sum | $profit_high_mean |
+| gap | $profit_gap_n | $profit_gap_missing | לא זמין | לא זמין |
+
+## M5 — ספירת outliers (אוכלוסייה: $pop_full, dataset description)
+
+שתי שיטות בנפרד, לעולם לא מאוחדות: `1.5×IQR` -- $outlier_iqr_n רשומות
+ייחודיות מסומנות; `p1/p99` -- $outlier_pctile_n רשומות ייחודיות מסומנות.
+חפיפה בין שתי השיטות: $outlier_both_n רשומות. סימון תיאורי בלבד -- אינו
+גורר מחיקה או Winsorization; הספים אינם עוברים לפאזה 6.
+
+## M6 — פרופיל הכפילויות (אוכלוסייה: $pop_full, dataset description)
+
+זהה במדויק לנתוני חבילה 1 לעיל ($dup_rows שורות ב-$dup_groups קבוצות)
+-- `m6_duplicate_profile()` הוא alias ל-`duplicates()`, לא הגדרה מתחרה.
+
+## מסקנת P5 — תיאורית, לא סיבתית (אוכלוסייה: $pop_full / $pop_purchased, dataset description)
+
+הניסוח הבא זהה מילולית לניסוח הנעול ב-SPEC.md § מסקנת P5:
+
+$p5_conclusion
+
+## מקור הנתונים
+
+`funnel_marketing_data.csv`, `source_sha256=$source_sha`. אין נגיעה
+ב-Supabase (D10). ראה `docs/findings.json` לפלט המלא, ו-checkpoints
+7-11 ב-`ROADMAP.html` לראיות המימוש והבדיקות.
+""")
+
+
+def scan_template_for_digit_sequences() -> dict[str, int]:
+    """Information output, never an assertion (PHASE5.md D6 §5, corrected
+    from an earlier assert+allowlist design that was brittle and proved
+    nothing about provenance -- see PHASE5.md §י round 2). Scans the RAW
+    template text (both _FINDINGS_TEMPLATE and the embedded
+    _P5_CONCLUSION_TEMPLATE), before substitution, for every digit run.
+    Placeholder names never contain a digit (by construction), so every
+    digit found here is literal prose -- checkpoint 12 requires pasting
+    this list into PHASE5.md §ח with a justification for each one, not
+    filtering any of them out here."""
+    raw = _FINDINGS_TEMPLATE.template + _P5_CONCLUSION_TEMPLATE
+    counts: dict[str, int] = {}
+    for match in re.findall(r"\d+", raw):
+        counts[match] = counts.get(match, 0) + 1
+    return dict(sorted(counts.items(), key=lambda kv: int(kv[0])))
+
+
+def render_findings_md(results: dict, svg_dir: Path) -> str:
+    """Renders FINDINGS.md's full text from `results` and the already-
+    rendered SVGs in `svg_dir` -- string.Template substitution only, no
+    analytical computation happens in this function itself (that's
+    _findings_context()'s job, and ultimately checkpoints 7-10's pure
+    functions')."""
+    ctx = _findings_context(results, svg_dir)
+    p5_conclusion = Template(_P5_CONCLUSION_TEMPLATE).substitute(ctx)
+    return _FINDINGS_TEMPLATE.substitute({**ctx, "p5_conclusion": p5_conclusion})
+
+
+def write_findings_md(results: dict, svg_dir: Path, out_path: Path) -> None:
+    """Writes render_findings_md()'s output to `out_path`. No timestamp,
+    run time, or library version is written -- source_sha (inside the
+    rendered text) is the only identifying value, and it's a content
+    hash, not an environment fact (same convention as write_findings_json)."""
+    text = render_findings_md(results, svg_dir)
+    Path(out_path).write_text(text, encoding="utf-8", newline="\n")
+
+
 if __name__ == "__main__":
     from scripts.load_data import DEFAULT_CSV, load_and_verify_csv
 
@@ -840,3 +1205,11 @@ if __name__ == "__main__":
 
     for _name, _path in write_svgs(_results, _docs_dir).items():
         print(f"wrote {_path} ({_path.stat().st_size} bytes)")
+
+    _findings_md_path = _docs_dir / "FINDINGS.md"
+    write_findings_md(_results, _docs_dir, _findings_md_path)
+    print(f"wrote {_findings_md_path}")
+
+    print("digit sequences remaining in the raw FINDINGS.md template (info only, PHASE5.md §ח):")
+    for _digits, _count in scan_template_for_digit_sequences().items():
+        print(f"  {_digits}  (x{_count})")

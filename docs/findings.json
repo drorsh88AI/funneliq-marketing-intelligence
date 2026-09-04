@@ -553,7 +553,8 @@
   "missing_values": {
     "missing_any": 33,
     "missing_cumulative_profit": 29,
-    "missing_ltv_months": 4
+    "missing_ltv_months": 4,
+    "n_rows": 3500
   },
   "source_metadata": {
     "source_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa"

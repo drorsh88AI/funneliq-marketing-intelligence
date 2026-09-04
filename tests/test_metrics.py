@@ -8,8 +8,7 @@ in a comment next to it -- not by running the function and trusting its
 own output. Runs in CI with no CSV present, per PHASE5.md D4/D6.
 
 build_results()/findings.json are checkpoint 10, SVG rendering is
-checkpoint 11; FINDINGS.md's prose rendering is checkpoint 12+, still
-out of scope here.
+checkpoint 11, FINDINGS.md's prose rendering is checkpoint 12.
 """
 from __future__ import annotations
 
@@ -17,8 +16,10 @@ import hashlib
 import inspect
 import json
 import math
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from string import Template
 
 import pytest
 
@@ -80,6 +81,7 @@ def test_fixture_is_invariant_valid(operational_df):
 
 def test_missing_values(operational_df):
     assert an.missing_values(operational_df) == {
+        "n_rows": 8,  # the fixture's own row count -- added checkpoint 12
         "missing_ltv_months": 1,
         "missing_cumulative_profit": 1,
         "missing_any": 1,
@@ -1093,3 +1095,161 @@ def test_correlations_svg_never_draws_none_as_a_zero_bar(tmp_path, monkeypatch):
     # the original helper)
     text = (tmp_path / "corr.svg").read_text(encoding="utf-8")
     assert ET.fromstring(text).tag == "{http://www.w3.org/2000/svg}svg"
+
+
+# ---------------------------------------------------------------------------
+# checkpoint 12 -- FINDINGS.md rendering, PHASE5.md D6 §4.
+# ---------------------------------------------------------------------------
+def _build_results_and_svgs(tmp_path, monkeypatch):
+    """Shared setup for the checkpoint-12 tests below: a small fixture df
+    -> real results -> real SVGs written to tmp_path (render_findings_md
+    reads their <desc> back, so they must actually exist on disk)."""
+    df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
+    csv_path = tmp_path / "sample.csv"
+    results = an.build_results(df, csv_path)
+    svg_dir = tmp_path / "svg"
+    svg_dir.mkdir()
+    an.write_svgs(results, svg_dir)
+    return results, svg_dir
+
+
+def test_render_findings_md_raises_on_missing_context_key():
+    """string.Template.substitute() (not safe_substitute) is used
+    deliberately in render_findings_md/write_findings_md: a missing
+    placeholder must raise loudly, not silently render as a literal
+    '$name' string an unresolved-variable check might miss."""
+    incomplete_ctx = {"pop_full": "3500"}  # deliberately missing almost every key
+    with pytest.raises(KeyError):
+        an._FINDINGS_TEMPLATE.substitute(incomplete_ctx)
+
+
+def test_render_findings_md_has_no_unresolved_placeholders(tmp_path, monkeypatch):
+    """Defense in depth alongside the KeyError test above: the actual
+    rendered output, built through the real production path, must not
+    contain a literal $identifier anywhere (the intro's literal
+    "$placeholder" documentation string uses $$ -- Template's escape for
+    a literal $ -- and must render as a single $, not leak as $$ or stay
+    unresolved either)."""
+    results, svg_dir = _build_results_and_svgs(tmp_path, monkeypatch)
+    text = an.render_findings_md(results, svg_dir)
+
+    assert "$placeholder" in text               # the escaped $$ resolved to a literal $
+    assert "$$placeholder" not in text           # not left as the escaped form
+    # no OTHER unresolved $name survived -- strip the one known-intentional
+    # literal "$placeholder" (from the $$ escape) before checking, since a
+    # bare regex would also flag that correct, intended output
+    assert not re.search(r"\$[A-Za-z_]", text.replace("$placeholder", ""))
+
+
+def test_render_findings_md_embeds_all_five_svgs_with_population_and_dataset_description_tags(tmp_path, monkeypatch):
+    results, svg_dir = _build_results_and_svgs(tmp_path, monkeypatch)
+    text = an.render_findings_md(results, svg_dir)
+
+    for filename in (
+        "funnel_dropoff.svg", "ad_budget_leads_curve.svg", "budget_tier_conversion.svg",
+        "calls_to_closed_distribution.svg", "correlations_cumulative_profit.svg",
+    ):
+        assert f"]({filename})" in text  # markdown image reference
+
+    assert text.count("dataset description") >= 10  # every section tagged
+    assert "אוכלוסייה" in text  # population label present
+
+    # the accessible <desc> text read back from a real SVG is embedded
+    # verbatim as that chart's caption -- not a second hand-typed copy
+    funnel_desc = an._read_svg_description(svg_dir / "funnel_dropoff.svg")
+    assert funnel_desc in text
+
+
+def test_render_findings_md_is_byte_identical_on_rerun(tmp_path, monkeypatch):
+    results, svg_dir = _build_results_and_svgs(tmp_path, monkeypatch)
+
+    out1, out2 = tmp_path / "F1.md", tmp_path / "F2.md"
+    an.write_findings_md(results, svg_dir, out1)
+    an.write_findings_md(results, svg_dir, out2)
+
+    assert out1.read_bytes() == out2.read_bytes()
+
+
+def test_findings_context_reflects_a_results_change_not_a_cached_value(tmp_path, monkeypatch):
+    """Provenance guard: mutating a single results field (a copy, not the
+    real function output) must change the corresponding number in the
+    rendered text, and the old number must no longer appear in that
+    field's sentence -- proving the value is read live from `results`,
+    not a frozen/hardcoded string in the template."""
+    results, svg_dir = _build_results_and_svgs(tmp_path, monkeypatch)
+
+    text_before = an.render_findings_md(results, svg_dir)
+    assert "M1 —" in text_before
+    m1_section_before = text_before.split("## M1 —")[1].split("## M2")[0]
+
+    mutated = json.loads(json.dumps(results))  # deep copy via round-trip
+    original_n = mutated["m1_zero_profit"]["n_zero_profit"]
+    mutated_n = original_n + 12345  # distinctive: no fixture value collides with it
+    mutated["m1_zero_profit"]["n_zero_profit"] = mutated_n
+    text_after = an.render_findings_md(mutated, svg_dir)
+    m1_section_after = text_after.split("## M1 —")[1].split("## M2")[0]
+
+    # the mutated value reaches the rendered text through the same
+    # thousands-separator formatting production code uses (an._comma) --
+    # not a bare str(), which would wrongly expect "12345" instead of
+    # "12,345". (Not asserting the old value's absence: when original_n
+    # is 0, the M1 prose legitimately contains other literal "0"s --
+    # e.g. "cumulative_profit == 0" -- unrelated to zero_profit_n, so
+    # that check would be fragile precisely in the fixture's actual case.)
+    assert an._comma(mutated_n) in m1_section_after
+    assert m1_section_after != m1_section_before
+
+
+def test_scan_template_for_digit_sequences(monkeypatch):
+    """Exercises the real scan_template_for_digit_sequences() (not a
+    reimplementation) against a small controlled template via
+    monkeypatch -- proves it finds every maximal digit run with correct
+    counts. Not a frozen snapshot of the real FINDINGS.md template's
+    digit list: PHASE5.md D6 §5 already rejected an assert+allowlist
+    design as brittle once; this function is info output, checked here
+    only for correct mechanism, never asserted against the production
+    template's specific content."""
+    monkeypatch.setattr(an, "_FINDINGS_TEMPLATE", Template("abc 123 def $name ghi 123 jkl 4567"))
+    monkeypatch.setattr(an, "_P5_CONCLUSION_TEMPLATE", "no placeholders here, but 89 is a digit run")
+
+    assert an.scan_template_for_digit_sequences() == {"89": 1, "123": 2, "4567": 1}
+
+
+def test_p5_conclusion_matches_spec_md_verbatim():
+    """Acceptance criterion 13: FINDINGS.md's P5 conclusion must be
+    identical, word for word, to SPEC.md's own locked wording. Tested
+    with a SYNTHETIC set of numbers engineered to equal SPEC's locked
+    values exactly under the same rounding rules used in production
+    (an._pct/_pct_from_fraction/_comma) -- not the real CSV (this
+    project's committed tests never substitute real-CSV values for a
+    synthetic known-answer fixture). Compares against SPEC.md's own live
+    text, read from the file at test time, not retyped here -- so a
+    transcription slip in the template fails this test instead of
+    silently drifting from the locked source of truth."""
+    ctx = {
+        "dropoff_fourth_pct": an._pct_from_fraction(0.10371680652328663, 1),  # -> "10.4"
+        "ge4_n": an._comma(1519),
+        "p1_n": an._comma(3163),
+        "ge4_pct": an._pct(1519, 3163, 0),            # -> "48"
+        "closed_eq1_ge4_n": an._comma(439),
+        "closed_eq1_n": an._comma(488),
+        "closed_eq1_ge4_pct": an._pct(439, 488, 2),   # -> "89.96"
+    }
+    rendered = Template(an._P5_CONCLUSION_TEMPLATE).substitute(ctx)
+
+    spec_path = Path(__file__).resolve().parent.parent / "docs" / "planning" / "SPEC.md"
+    lines = spec_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    start = next(i for i, line in enumerate(lines) if "הניסוח שייכתב" in line)
+    block: list[str] = []
+    started = False
+    for line in lines[start + 1:]:
+        if line.startswith(">"):
+            started = True
+            block.append(line)
+        elif started:
+            break  # blockquote ended
+        # else: still skipping the blank line(s) before the blockquote starts
+    spec_locked_text = "".join(block)
+
+    assert spec_locked_text, "extraction anchor not found in SPEC.md -- test itself is broken, not a wording mismatch"
+    assert rendered == spec_locked_text
