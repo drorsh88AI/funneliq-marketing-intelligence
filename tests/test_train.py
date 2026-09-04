@@ -1,6 +1,7 @@
-"""Tests for scripts/train.py -- checkpoint 3, the split layer only
-(PHASE6.md D2, D18/S6). Later checkpoints (folds, Pipelines, training)
-get their own test coverage as they're built.
+"""Tests for scripts/train.py -- checkpoint 3 (the split layer, D2,
+D18/S6) and checkpoint 4 (shared CV folds + preprocessing Pipelines,
+D3, D4, D5, D6). Later checkpoints (actual model training) get their
+own test coverage as they're built.
 
 Nothing here touches the real funnel_marketing_data.csv -- a synthetic
 fixture, loaded the same way load_data.py loads the real one (so
@@ -19,6 +20,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from app.features import budget_tier
 from scripts import load_data as ld
 from scripts import train as tr
 
@@ -31,6 +33,11 @@ from scripts import train as tr
 N_PURCHASED = 40
 N_NOT_PURCHASED = 20
 N = N_PURCHASED + N_NOT_PURCHASED
+
+# Spans all three budget_tier boundaries (Low <=1500 / Mid 2000-5000 /
+# High >5000) so checkpoint-4 pipeline tests actually exercise one-hot
+# encoding across multiple categories, not just one.
+TIER_BUDGETS = [500, 1200, 1500, 2000, 3000, 5000, 5500, 6000, 8000, 12000]
 
 
 def _build_fixture_text() -> str:
@@ -50,7 +57,7 @@ def _build_fixture_text() -> str:
     lines = [",".join(ld.EXPECTED_COLUMNS)]
     for i in range(N):
         row = [
-            str(1000 + i), str(20 + i % 5), str(15 + i % 4), str(5 + i % 3),
+            str(TIER_BUDGETS[i % len(TIER_BUDGETS)]), str(20 + i % 5), str(15 + i % 4), str(5 + i % 3),
             str(10 + i % 3), str(8 + i % 3), str(6 + i % 3), str(5 + i % 2), str(4 + i % 2),
             str(2 + i % 2), str(i % 2), str(1 + i % 3), str(1 + i % 2),
             str(500 + i), ltv_months[i], str(purchased[i]), str(upsell[i]),
@@ -195,3 +202,103 @@ def test_p4_sensitivity_population_size_and_no_holdout_overlap(df):
     # Not purchased-filtered -- this is exactly the point of the
     # counterfactual population (SPEC.md § אוכלוסיות אימון).
     assert set(sens_pop["purchased"]) == {0, 1}
+
+
+# ---------------------------------------------------------------------------
+# build_folds -- 5 shared folds over the train set (D3): valid partition,
+# no leakage between a fold's own train/val, stratification preserved.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("task", ["P2", "P3", "P4", "P6"])
+def test_build_folds_returns_five_folds_that_partition_the_train_set(df, task):
+    train_df = tr.build_task_train_frame(df, task)
+    folds = tr.build_folds(df, task)
+    assert len(folds) == 5
+
+    for tr_idx, va_idx in folds:
+        # Each fold's own train/val split is itself a clean, disjoint
+        # partition of the same train_df -- positional indices, not ids.
+        assert set(tr_idx).isdisjoint(set(va_idx))
+        assert set(tr_idx) | set(va_idx) == set(range(len(train_df)))
+
+
+def test_build_folds_is_deterministic_across_repeated_calls(df):
+    first = tr.build_folds(df, "P4")
+    second = tr.build_folds(df, "P4")
+    for (tr1, va1), (tr2, va2) in zip(first, second):
+        assert list(tr1) == list(tr2)
+        assert list(va1) == list(va2)
+
+
+@pytest.mark.parametrize("task", ["P3", "P4"])
+def test_build_folds_stratifies_validation_splits(df, task):
+    """Each fold's validation slice keeps both target classes present
+    -- a plain KFold on a class-sorted population could starve one
+    class out of a fold entirely; stratification must not let that
+    happen."""
+    train_df = tr.build_task_train_frame(df, task)
+    target = tr.TARGET[task]
+    folds = tr.build_folds(df, task)
+    for _, va_idx in folds:
+        classes = set(train_df.iloc[va_idx][target])
+        assert len(classes) == 2
+
+
+# ---------------------------------------------------------------------------
+# build_preprocessing_steps -- D4 (collinear column dropped), D5 (no
+# missing / no imputer), D6 (budget_tier derived in-Pipeline, P4 only).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("task", ["P2", "P3", "P4", "P6"])
+def test_model_feature_columns_drops_the_collinear_column(task):
+    cols = tr.model_feature_columns(task)
+    assert tr.DROPPED_COLLINEAR not in cols
+    assert "num_leads" in cols
+    assert "leads_answered" in cols
+    assert "answer_rate" not in cols  # never added, per D4
+
+
+def test_budget_tier_only_added_for_p4(df):
+    for task in ("P2", "P3", "P6"):
+        steps = tr.build_preprocessing_steps(task, encode_budget_tier=False)
+        assert all(name != "budget_tier" for name, _ in steps)
+
+    steps = tr.build_preprocessing_steps("P4", encode_budget_tier=False)
+    assert any(name == "budget_tier" for name, _ in steps)
+
+
+def test_p4_pipeline_passthrough_keeps_budget_tier_as_one_raw_column(df):
+    train_df = tr.build_task_train_frame(df, "P4")
+    X = train_df
+    for _, transformer in tr.build_preprocessing_steps("P4", encode_budget_tier=False):
+        X = transformer.fit_transform(X)
+    n_numeric = len(tr.model_feature_columns("P4"))
+    assert X.shape == (len(train_df), n_numeric + 1)  # +1 raw budget_tier column
+
+
+def test_p4_pipeline_one_hot_expands_budget_tier_into_multiple_columns(df):
+    train_df = tr.build_task_train_frame(df, "P4")
+    X = train_df
+    for _, transformer in tr.build_preprocessing_steps("P4", encode_budget_tier=True):
+        X = transformer.fit_transform(X)
+    n_numeric = len(tr.model_feature_columns("P4"))
+    n_tiers_present = train_df["ad_budget"].map(budget_tier).nunique()
+    assert n_tiers_present >= 2, "fixture must span more than one budget tier"
+    assert X.shape == (len(train_df), n_numeric + n_tiers_present)
+
+
+def test_preprocessing_pipeline_produces_no_missing_values(df):
+    """D5: no imputer anywhere -- only safe because the real data has
+    zero missing feature values (measured in PHASE6.md §ב). On this
+    fixture, every selected feature column is fully populated too."""
+    for task in ("P2", "P3", "P4", "P6"):
+        train_df = tr.build_task_train_frame(df, task)
+        assert train_df[tr.model_feature_columns(task)].isna().sum().sum() == 0
+
+
+def test_encode_referred_target_maps_yes_no_to_one_zero(df):
+    train_df = tr.build_task_train_frame(df, "P4")
+    encoded = tr.encode_referred_target(train_df["referred"])
+    assert set(encoded.unique()) == {0, 1}
+    assert (encoded[train_df["referred"] == "Yes"] == 1).all()
+    assert (encoded[train_df["referred"] == "No"] == 0).all()
