@@ -21,7 +21,7 @@ from scripts import analysis as an
 from scripts import load_data as ld
 
 # ---------------------------------------------------------------------------
-# Shared 7-row fixture for missing_values / budget_tiers / duplicates /
+# Shared 8-row fixture for missing_values / budget_tiers / duplicates /
 # duplicate_sensitivity / ad_budget_leads_curve. Rows A-G; row B is an
 # EXACT duplicate of row A (all 19 raw columns identical) -- the fixture's
 # only duplicate pair. Row G is the fixture's only row with missing
@@ -113,24 +113,57 @@ def test_duplicates(operational_df):
 
 
 def test_duplicate_sensitivity(operational_df):
+    """Both legs SPEC.md requires in phase 5 (P6's leg stays deferred to
+    phase 6, PHASE5.md D7): package 1 (Low-tier conversion rate) and
+    package 5 (funnel_dropoff on all rows), each with vs. without the
+    single excess duplicate row (B) in this fixture."""
     result = an.duplicate_sensitivity(operational_df)
-
-    assert result["population"] == "budget_tier == Low"
     assert result["n_excess_removed"] == 1  # keep="first" drops only row B
 
-    assert result["with_duplicates"]["n_records"] == 5
-    assert result["with_duplicates"]["conversion_rate"] == pytest.approx(
+    # --- package 1 leg: unchanged from checkpoint 7, now nested ---
+    p1 = result["package1_low_tier"]
+    assert p1["population"] == "budget_tier == Low"
+    assert p1["with_duplicates"]["n_records"] == 5
+    assert p1["with_duplicates"]["conversion_rate"] == pytest.approx(
         (0.1 + 0.1 + 0.1 + 1 / 14 + 0.0) / 5
     )
-
-    assert result["without_excess_duplicates"]["n_records"] == 4  # A, C, F, G
-    assert result["without_excess_duplicates"]["conversion_rate"] == pytest.approx(
+    assert p1["without_excess_duplicates"]["n_records"] == 4  # A, C, F, G
+    assert p1["without_excess_duplicates"]["conversion_rate"] == pytest.approx(
         (0.1 + 0.1 + 1 / 14 + 0.0) / 4
     )
+    expected_p1_delta = (0.1 + 0.1 + 0.1 + 1 / 14 + 0.0) / 5 - (0.1 + 0.1 + 1 / 14 + 0.0) / 4
+    assert p1["delta"] == pytest.approx(expected_p1_delta)
 
-    # reported even though it's small -- never skipped
-    expected_delta = (0.1 + 0.1 + 0.1 + 1 / 14 + 0.0) / 5 - (0.1 + 0.1 + 1 / 14 + 0.0) / 4
-    assert result["delta"] == pytest.approx(expected_delta)
+    # --- package 5 leg: funnel_dropoff on all 8 rows vs. all 7 without B ---
+    # leads_answered per row: A=8,B=8,C=15,D=30,E=70,F=10,G=3,H=4
+    #   sum(with)=148, sum(without B)=140
+    # followup_1:  with sum=117, without=111
+    # followup_2:  with sum=96,  without=91
+    # followup_3:  with sum=76,  without=72
+    # followup_4:  with sum=58,  without=55
+    # followup_5:  with sum=41,  without=39
+    p5 = result["package5_funnel_dropoff"]
+    assert p5["population"] == "all rows"
+
+    with_expected = {
+        "followup_1": 1 - 117 / 148,
+        "followup_2": 1 - 96 / 117,
+        "followup_3": 1 - 76 / 96,
+        "followup_4": 1 - 58 / 76,
+        "followup_5": 1 - 41 / 58,
+    }
+    without_expected = {
+        "followup_1": 1 - 111 / 140,
+        "followup_2": 1 - 91 / 111,
+        "followup_3": 1 - 72 / 91,
+        "followup_4": 1 - 55 / 72,
+        "followup_5": 1 - 39 / 55,
+    }
+    for stage in with_expected:
+        assert p5["with_duplicates"][stage] == pytest.approx(with_expected[stage])
+        assert p5["without_excess_duplicates"][stage] == pytest.approx(without_expected[stage])
+        # reported even though every stage's delta is small -- never skipped
+        assert p5["delta"][stage] == pytest.approx(with_expected[stage] - without_expected[stage])
 
 
 def test_ad_budget_leads_curve(operational_df):
@@ -194,3 +227,101 @@ def test_correlations_perfect_linear_and_constant_columns(correlation_df):
         assert result[col] is None, col
 
     assert set(result) == set(constant_columns) | {"ad_budget"}
+
+
+# ---------------------------------------------------------------------------
+# funnel_dropoff() -- Σ/Σ, not a per-row mean of ratios. A 2-row fixture
+# with simple integer sums, so every stage's fraction is hand-verifiable.
+#
+#   row  leads_answered  fu1  fu2  fu3  fu4  fu5
+#   1    10              8    6    4    2    1
+#   2    20              15   10   8    5    3
+#   sum  30              23   16   12   7    4
+# ---------------------------------------------------------------------------
+FUNNEL_DROPOFF_CSV_TEXT = (
+    ",".join(ld.EXPECTED_COLUMNS) + "\n"
+    "500,13,10,3,8,6,4,2,1,1,0,0,3,100,5.0,1,0,200.0,No\n"
+    "800,23,20,3,15,10,8,5,3,2,1,4,5,150,8.0,1,0,400.0,No\n"
+)
+
+
+@pytest.fixture
+def funnel_dropoff_df(tmp_path, monkeypatch):
+    return _load(FUNNEL_DROPOFF_CSV_TEXT, tmp_path, monkeypatch)
+
+
+def test_funnel_dropoff_uses_sum_over_sum_not_mean_of_row_ratios(funnel_dropoff_df):
+    result = an.funnel_dropoff(funnel_dropoff_df)
+    assert result["followup_1"] == pytest.approx(1 - 23 / 30)  # 7/30
+    assert result["followup_2"] == pytest.approx(1 - 16 / 23)  # 7/23
+    assert result["followup_3"] == pytest.approx(1 - 12 / 16)  # 4/16 = 0.25
+    assert result["followup_4"] == pytest.approx(1 - 7 / 12)   # 5/12
+    assert result["followup_5"] == pytest.approx(1 - 4 / 7)    # 3/7
+
+    # the per-row-mean alternative PHASE0.md checked and rejected would
+    # give a DIFFERENT answer here -- row 1's own ratio is 1-8/10=0.2,
+    # row 2's is 1-15/20=0.25, mean=0.225 -- proves this is really Σ/Σ,
+    # not silently the rejected formula
+    per_row_mean_alternative = ((1 - 8 / 10) + (1 - 15 / 20)) / 2
+    assert result["followup_1"] != pytest.approx(per_row_mean_alternative)
+
+
+# ---------------------------------------------------------------------------
+# calls_to_closed() -- purchased=1 population only. 4 purchased rows with
+# distinct closed/calls_to_closed combinations, plus 1 purchased=0 row
+# that must be excluded entirely from every count below.
+#
+#   row  purchased  closed  calls_to_closed
+#   P1   1          1       5
+#   P2   1          1       3
+#   P3   1          2       2
+#   P4   1          3       1
+#   P5   0          0       0   (excluded -- not purchased)
+# ---------------------------------------------------------------------------
+CALLS_TO_CLOSED_CSV_TEXT = (
+    ",".join(ld.EXPECTED_COLUMNS) + "\n"
+    "500,10,8,2,6,5,4,3,2,1,1,5,3,100,10.0,1,0,500.0,No\n"    # P1
+    "800,15,12,3,10,8,6,4,3,2,1,3,4,120,12.0,1,0,600.0,No\n"  # P2
+    "1000,25,20,5,16,13,10,7,5,3,2,2,5,150,15.0,1,1,1200.0,Yes\n"  # P3
+    "1500,30,25,5,20,16,12,8,6,3,3,1,6,180,20.0,1,1,2000.0,Yes\n"  # P4
+    "2000,40,35,5,28,22,17,12,8,8,0,0,2,200,5.0,0,0,100.0,No\n"    # P5 (not purchased)
+)
+
+
+@pytest.fixture
+def calls_to_closed_df(tmp_path, monkeypatch):
+    return _load(CALLS_TO_CLOSED_CSV_TEXT, tmp_path, monkeypatch)
+
+
+def test_calls_to_closed(calls_to_closed_df):
+    result = an.calls_to_closed(calls_to_closed_df)
+
+    assert result["n_purchased1"] == 4  # P1-P4; P5 excluded
+    assert result["n_calls_to_closed_ge_4"] == 1  # only P1 (5 >= 4)
+    assert result["n_closed_eq_1"] == 2   # P1, P2
+    assert result["n_closed_ge_2"] == 2   # P3, P4
+    assert result["n_closed_eq_1_calls_ge_4"] == 1  # within {P1,P2}, only P1
+
+    assert result["mean_calls_to_closed_closed_eq_1"] == pytest.approx((5 + 3) / 2)  # 4.0
+    assert result["mean_calls_to_closed_closed_ge_2"] == pytest.approx((2 + 1) / 2)  # 1.5
+
+    # corr([1,1,2,3], [5,3,2,1]) computed by hand:
+    #   means: closed=1.75, calls=2.75
+    #   deviations: closed=[-.75,-.75,.25,1.25]  calls=[2.25,.25,-.75,-1.75]
+    #   sum(products) = -1.6875-.1875-.1875-2.1875 = -4.25
+    #   sum(closed_dev^2) = .5625+.5625+.0625+1.5625 = 2.75
+    #   sum(calls_dev^2)  = 5.0625+.0625+.5625+3.0625 = 8.75
+    #   r = -4.25 / sqrt(2.75 * 8.75) = -4.25 / sqrt(24.0625)
+    import math
+    expected_r = -4.25 / math.sqrt(2.75 * 8.75)
+    assert result["corr_closed_calls_to_closed"] == pytest.approx(expected_r)
+
+
+def test_calls_to_closed_excludes_purchased_0_from_every_count(calls_to_closed_df):
+    """P5 (purchased=0, closed=0, calls_to_closed=0) would change several
+    counts if it leaked in -- explicit proof it doesn't."""
+    result = an.calls_to_closed(calls_to_closed_df)
+    assert result["n_purchased1"] == 4
+    # if P5 leaked in, n_closed_eq_1 would still be 2 but n_purchased1
+    # would be 5 -- the population count is the tell-tale
+    assert result["n_purchased1"] != len(calls_to_closed_df)

@@ -1,4 +1,5 @@
-"""Package 1 (ניקוי + EDA) pure computation functions -- PHASE5.md checkpoint 7.
+"""Package 1 + package 5 (ניקוי + EDA) pure computation functions --
+PHASE5.md checkpoints 7 and 8.
 
 Every function takes a DataFrame (already through
 load_data.load_and_verify_csv -- SHA-256 verified, source_row_id added,
@@ -7,9 +8,7 @@ reads inside these functions -- matches the design in PHASE5.md D6.
 tests/test_metrics.py proves each one against a small fixture with a
 by-hand-computed answer.
 
-Package 5 (funnel dropout, calls_to_closed distribution, funnel-level
-duplicate sensitivity) is NOT implemented here -- checkpoint 8, not this
-one. M1-M6 are checkpoint 9. build_results()/findings rendering are
+M1-M6 are checkpoint 9. build_results()/findings rendering are
 checkpoint 10+. Nothing here performs modeling, splits data, or touches
 Supabase (D10).
 
@@ -99,12 +98,20 @@ def duplicates(df: pd.DataFrame) -> dict:
 
 
 def duplicate_sensitivity(df: pd.DataFrame) -> dict:
-    """Package 1's sensitivity leg only (SPEC.md's other two legs --
-    package 5's funnel/dropout metrics, and P6 -- are out of scope here;
-    P6's leg is deferred to phase 6 entirely, PHASE5.md D7). Compares the
-    Low-tier conversion rate with the full data against the same metric
-    with the 10 excess duplicate rows removed (keep="first" per group) --
-    reported even if the difference is negligible, never skipped."""
+    """Both non-P6 sensitivity legs SPEC.md requires (PHASE5.md D7): the
+    P6 leg is deferred to phase 6 entirely, not implemented here.
+
+    - package 1: budget_tier == Low conversion rate (closed/num_leads
+      mean per row) -- the tier every one of the 10 excess duplicate
+      rows falls in.
+    - package 5: the funnel_dropoff() stage rates, on the full
+      population (dropout is a campaign-level funnel metric, not
+      tier-scoped).
+
+    Each leg compares the metric with the full data against the same
+    metric with the 10 excess duplicate rows removed (keep="first" per
+    group) -- reported even when the difference is negligible, never
+    skipped."""
     excess_mask = df.duplicated(subset=EXPECTED_COLUMNS, keep="first")
     without = df[~excess_mask]
 
@@ -117,18 +124,35 @@ def duplicate_sensitivity(df: pd.DataFrame) -> dict:
             "conversion_rate": float(rate.mean()) if mask.any() else None,
         }
 
-    with_dups = _low_tier_rate(df)
-    without_excess = _low_tier_rate(without)
-    delta = None
-    if with_dups["conversion_rate"] is not None and without_excess["conversion_rate"] is not None:
-        delta = with_dups["conversion_rate"] - without_excess["conversion_rate"]
+    with_low, without_low = _low_tier_rate(df), _low_tier_rate(without)
+    low_delta = None
+    if with_low["conversion_rate"] is not None and without_low["conversion_rate"] is not None:
+        low_delta = with_low["conversion_rate"] - without_low["conversion_rate"]
+
+    with_dropoff, without_dropoff = funnel_dropoff(df), funnel_dropoff(without)
+    dropoff_delta = {
+        stage: (
+            with_dropoff[stage] - without_dropoff[stage]
+            if with_dropoff[stage] is not None and without_dropoff[stage] is not None
+            else None
+        )
+        for stage in with_dropoff
+    }
 
     return {
-        "population": "budget_tier == Low",
-        "with_duplicates": with_dups,
-        "without_excess_duplicates": without_excess,
-        "delta": delta,
         "n_excess_removed": int(excess_mask.sum()),
+        "package1_low_tier": {
+            "population": "budget_tier == Low",
+            "with_duplicates": with_low,
+            "without_excess_duplicates": without_low,
+            "delta": low_delta,
+        },
+        "package5_funnel_dropoff": {
+            "population": "all rows",
+            "with_duplicates": with_dropoff,
+            "without_excess_duplicates": without_dropoff,
+            "delta": dropoff_delta,
+        },
     }
 
 
@@ -160,3 +184,61 @@ def ad_budget_leads_curve(df: pd.DataFrame) -> dict:
             "median_num_leads": float(group["num_leads"].median()),
         }
     return out
+
+
+# The funnel stage chain, cumulative-sum dropout rate at each step
+# (mirrors data_contract's FUNNEL_CHAIN -- not reimported to keep this
+# module's only cross-file dependency the ones it already has).
+_FUNNEL_CHAIN = [
+    "leads_answered", "followup_1", "followup_2", "followup_3",
+    "followup_4", "followup_5",
+]
+
+
+def funnel_dropoff(df: pd.DataFrame) -> dict:
+    """Stage-by-stage dropout rate, one per followup stage, using
+    cumulative sums (Σ/Σ) -- 1 - Σ(stage)/Σ(previous stage) -- NOT a
+    per-row mean of individual ratios. PHASE0.md verified this by
+    checking both formulas against the documented reference values: Σ/Σ
+    matches exactly (21.7/25.7/18.6/10.4/29.2), the per-row-mean
+    alternative is off by up to 0.6 percentage points and was rejected.
+    Runs over whatever population df represents -- dropout is a
+    campaign-level funnel metric, not scoped to purchased=1."""
+    out: dict = {}
+    for i, (prev_col, cur_col) in enumerate(zip(_FUNNEL_CHAIN, _FUNNEL_CHAIN[1:]), start=1):
+        prev_sum = df[prev_col].sum()
+        cur_sum = df[cur_col].sum()
+        out[f"followup_{i}"] = float(1 - cur_sum / prev_sum) if prev_sum else None
+    return out
+
+
+def calls_to_closed(df: pd.DataFrame) -> dict:
+    """Distribution of calls_to_closed within the purchased=1 population
+    -- SPEC.md's own established reading of this column (PHASE0.md's
+    verified reference numbers). calls_to_closed is documented as a
+    record-level average, not a per-deal call history (SPEC.md § עובדות
+    שנמדדו) -- every quantity below stays explicit about which unit
+    (record vs. deal) and which subpopulation it's counted over, per
+    SPEC.md's warning against conflating the two."""
+    p1 = df[df["purchased"] == 1]
+    n_p1 = len(p1)
+
+    closed1 = p1[p1["closed"] == 1]
+    closed2p = p1[p1["closed"] >= 2]
+
+    return {
+        "n_purchased1": int(n_p1),
+        "n_calls_to_closed_ge_4": int((p1["calls_to_closed"] >= 4).sum()),
+        "n_closed_eq_1": int(len(closed1)),
+        "n_closed_ge_2": int(len(closed2p)),
+        "n_closed_eq_1_calls_ge_4": int((closed1["calls_to_closed"] >= 4).sum()),
+        "mean_calls_to_closed_closed_eq_1": (
+            float(closed1["calls_to_closed"].mean()) if len(closed1) else None
+        ),
+        "mean_calls_to_closed_closed_ge_2": (
+            float(closed2p["calls_to_closed"].mean()) if len(closed2p) else None
+        ),
+        "corr_closed_calls_to_closed": (
+            float(p1["closed"].corr(p1["calls_to_closed"])) if n_p1 else None
+        ),
+    }
