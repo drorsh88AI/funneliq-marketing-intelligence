@@ -727,3 +727,81 @@ def test_metric_summary_known_answer_mean_std_se_and_sign_correction():
     # std and se are genuinely different numbers -- std = se * sqrt(5).
     assert result["std_mae"] == pytest.approx(result["se_mae"] * math.sqrt(5))
     assert result["std_mae"] != pytest.approx(result["se_mae"])
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 7 -- the P3 pieces that involve zero model fitting: the
+# class-weight ratio formula, the manual rules (D11), and the lift
+# scorer wrapper. train_p3/train_p3_weighted_comparison (real
+# RandomizedSearchCV/cross_validate fits) stay local-only per D21, same
+# precedent as train_p2 in checkpoint 6.
+# ---------------------------------------------------------------------------
+
+def test_p3_class_weight_ratio_known_answer():
+    y = pd.Series([1, 1, 0, 0, 0])  # 2 positive, 3 negative
+    assert tr._p3_class_weight_ratio(y) == pytest.approx(3 / 2)
+
+
+def test_p3_class_weight_ratio_matches_train_set_counts(df):
+    """Checked against the train set's own class counts, independently
+    recomputed -- not assumed from the population's 20/20 balance,
+    which a stratified split of a 24-or-25-row train set can't
+    preserve exactly after two rounds of rounding."""
+    train_df = tr.build_task_train_frame(df, "P3")
+    y = train_df[tr.TARGET["P3"]]
+    expected = (y == 0).sum() / (y == 1).sum()
+    assert tr._p3_class_weight_ratio(y) == pytest.approx(expected)
+
+
+def test_lift_at_10_score_func_matches_lift_at_k(df):
+    y_true = np.array([1, 0, 1, 0, 1, 0, 1, 0, 1, 0], dtype=float)
+    y_score = np.array([10, 9, 1, 2, 3, 4, 5, 6, 7, 8], dtype=float)
+    expected = tr.lift_at_k(y_true, y_score, k=0.1)["lift"]
+    assert tr._lift_at_10_score_func(y_true, y_score) == pytest.approx(expected)
+
+
+def test_train_p3_manual_rules_thresholds_are_train_medians(df):
+    """Zero-fit rules -- no model.fit() anywhere in this path, so this
+    runs the real function end to end on the synthetic fixture (not a
+    training smoke test D21 would rule out)."""
+    train_df = tr.build_task_train_frame(df, "P3")
+    rules = tr.train_p3_manual_rules(df)
+
+    assert set(rules) == {"brief_rule", "operational_rule"}
+    for name in rules:
+        assert "description" in rules[name]
+        assert "thresholds" in rules[name]
+        for metric in ("roc_auc", "accuracy", "precision", "recall", "f1"):
+            assert f"fold_scores_{metric}" in rules[name]
+            assert len(rules[name][f"fold_scores_{metric}"]) == 5
+            assert f"mean_{metric}" in rules[name]
+            assert f"std_{metric}" in rules[name]
+
+    assert rules["brief_rule"]["thresholds"]["ltv_months_gt"] == pytest.approx(
+        train_df["ltv_months"].median()
+    )
+    assert rules["brief_rule"]["thresholds"]["customer_acquisition_cost_lt"] == pytest.approx(
+        train_df["customer_acquisition_cost"].median()
+    )
+    assert rules["operational_rule"]["thresholds"]["calls_to_closed_gt"] == pytest.approx(
+        train_df["calls_to_closed"].median()
+    )
+
+
+def test_train_p3_manual_rules_predictions_match_the_and_condition(df):
+    """Directly recomputes the brief rule's prediction from the raw
+    columns and thresholds, independent of train_p3_manual_rules'
+    own internals -- proves the AND condition is what's actually
+    scored, not just that some plausible-looking numbers came out."""
+    train_df = tr.build_task_train_frame(df, "P3")
+    y = train_df[tr.TARGET["P3"]].to_numpy()
+    folds = tr.build_folds(df, "P3")
+
+    rules = tr.train_p3_manual_rules(df)
+    ltv_t = rules["brief_rule"]["thresholds"]["ltv_months_gt"]
+    cac_t = rules["brief_rule"]["thresholds"]["customer_acquisition_cost_lt"]
+    pred = ((train_df["ltv_months"] > ltv_t) & (train_df["customer_acquisition_cost"] < cac_t)).to_numpy().astype(int)
+
+    expected = tr._p3_rule_fold_metrics(y, pred, folds)
+    assert rules["brief_rule"]["fold_scores_accuracy"] == expected["fold_scores_accuracy"]
+    assert rules["brief_rule"]["mean_roc_auc"] == pytest.approx(expected["mean_roc_auc"])

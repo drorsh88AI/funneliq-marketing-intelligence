@@ -25,9 +25,11 @@ from scripts.load_data import load_and_verify_csv  # noqa: E402
 
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
-from sklearn.dummy import DummyRegressor
-from sklearn.linear_model import LinearRegression
+from sklearn.dummy import DummyClassifier, DummyRegressor
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score, make_scorer, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import (
     KFold,
     RandomizedSearchCV,
@@ -37,9 +39,9 @@ from sklearn.model_selection import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder
-from catboost import CatBoostRegressor
-from lightgbm import LGBMRegressor
-from xgboost import XGBRegressor
+from catboost import CatBoostClassifier, CatBoostRegressor
+from lightgbm import LGBMClassifier, LGBMRegressor
+from xgboost import XGBClassifier, XGBRegressor
 
 # ---------------------------------------------------------------------------
 # Checkpoint 3 -- split layer (PHASE6.md D2, D18/S6).
@@ -529,19 +531,22 @@ def _baseline_candidate(estimator, preprocessing_steps, X, y, folds, scoring: di
     return {"fold_scores": fold_scores}
 
 
-def _metric_summary(fold_scores: dict, role: str, best_params: dict | None = None) -> dict:
+def _metric_summary(fold_scores: dict, role: str, best_params: dict | None = None,
+                     negated_scorers: set = P2_NEGATED_SCORERS) -> dict:
     """One {fold_scores_<metric>, mean_<metric>, std_<metric>,
     se_<metric>} quadruple per metric in fold_scores, sign-corrected
-    back to each metric's natural scale. mean ± std is what D13's "ב-CV
-    — per-fold + ממוצע ± std" column asks for and what gets reported;
-    se (= std/sqrt(5)) is kept alongside as a separate field for the
-    One-SE rule's own use in checkpoint 10 -- std and se are different
-    numbers (se = std/√5), not two names for the same one."""
+    back to each metric's natural scale for every name in
+    `negated_scorers` (sklearn's neg_* scorer convention). mean ± std
+    is what D13's "ב-CV — per-fold + ממוצע ± std" column asks for and
+    what gets reported; se (= std/sqrt(5)) is kept alongside as a
+    separate field for the One-SE rule's own use in checkpoint 10 --
+    std and se are different numbers (se = std/√5), not two names for
+    the same one."""
     out: dict = {"role": role}
     if best_params is not None:
         out["best_params"] = best_params
     for name, scores in fold_scores.items():
-        natural_scores = [-s for s in scores] if name in P2_NEGATED_SCORERS else list(scores)
+        natural_scores = [-s for s in scores] if name in negated_scorers else list(scores)
         mean, se = one_se_stats(natural_scores)
         std = se * math.sqrt(N_FOLDS)
         out[f"fold_scores_{name}"] = natural_scores
@@ -582,6 +587,214 @@ def train_p2(df: pd.DataFrame) -> dict:
         results[name] = _metric_summary(candidate["fold_scores"], role)
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 7 -- P3: search + Baselines + regular-vs-weighted (D11) +
+# two manual rules (D11).
+# ---------------------------------------------------------------------------
+
+def _lift_at_10_score_func(y_true, y_score) -> float:
+    """Wraps checkpoint 5's lift_at_k as an sklearn scorer function
+    (make_scorer(response_method='predict_proba') hands this the
+    positive-class column already extracted, verified empirically
+    against sklearn 1.9.0 before writing this)."""
+    return lift_at_k(y_true, y_score, k=0.1)["lift"]
+
+
+# D13's full metric set for P3: ROC-AUC is primary; PR-AUC, Accuracy,
+# Precision, Recall, F1, Lift@10%, Brier and log loss (tagged
+# uncalibrated -- no calibrator exists yet, that's checkpoint 11) are
+# secondary and reported alongside, all in the SAME multi-metric search
+# -- zero extra fits, same principle checkpoint 6 was corrected to use
+# for P2's RMSE/R². K∈{5%,20%} for Lift is explicitly optional
+# ("רשאים להתלוות") per SPEC -- skipped here, not required.
+P3_SCORING = {
+    "roc_auc": "roc_auc",
+    "pr_auc": "average_precision",
+    "accuracy": "accuracy",
+    "precision": "precision",
+    "recall": "recall",
+    "f1": "f1",
+    "brier": "neg_brier_score",
+    "log_loss": "neg_log_loss",
+    "lift_at_10": make_scorer(_lift_at_10_score_func, response_method="predict_proba"),
+}
+P3_PRIMARY_METRIC = "roc_auc"
+P3_NEGATED_SCORERS = {"brier", "log_loss"}
+
+
+def make_p3_boosters() -> dict:
+    """The three classifiers the brief requires for P3, each with the
+    same locked param_distributions as P2 (identical hyperparameter
+    names across regression/classification for each library)."""
+    return {
+        "xgboost": (
+            XGBClassifier(random_state=SEARCH_RANDOM_STATE, n_jobs=SEARCH_N_JOBS, verbosity=0, eval_metric="logloss"),
+            xgboost_param_distributions(),
+        ),
+        "lightgbm": (
+            LGBMClassifier(random_state=SEARCH_RANDOM_STATE, n_jobs=SEARCH_N_JOBS, verbose=-1),
+            lightgbm_param_distributions(),
+        ),
+        "catboost": (
+            CatBoostClassifier(random_state=SEARCH_RANDOM_STATE, thread_count=SEARCH_N_JOBS, verbose=False),
+            catboost_param_distributions(),
+        ),
+    }
+
+
+def train_p3(df: pd.DataFrame) -> dict:
+    """Checkpoint 7: P3's three required boosters (searched) + two
+    Baselines (Dummy, Logistic), all scored on the same 5 shared folds
+    over P3's train set, on all of D13's metrics (ROC-AUC primary; the
+    rest report-only). Selection (One-SE eligibility + the RSS
+    tie-break) is checkpoint 10's job, and uses ROC-AUC only."""
+    task = "P3"
+    train_df = build_task_train_frame(df, task)
+    y = train_df[TARGET[task]]
+    folds = build_folds(df, task)
+    preprocessing_steps = build_preprocessing_steps(task, encode_budget_tier=False)
+
+    results = {}
+    for name, (estimator, param_distributions) in make_p3_boosters().items():
+        candidate = _search_candidate(
+            estimator, param_distributions, preprocessing_steps, train_df, y, folds,
+            P3_SCORING, refit=P3_PRIMARY_METRIC,
+        )
+        results[name] = _metric_summary(
+            candidate["fold_scores"], "candidate", candidate["best_params"], negated_scorers=P3_NEGATED_SCORERS,
+        )
+
+    baselines = {
+        "dummy": DummyClassifier(strategy="most_frequent"),
+        # max_iter=5000 -- P3's unscaled features (ad_budget in the
+        # thousands next to 0-100 counts) need ~3,500 lbfgs iterations
+        # to converge; verified empirically (1000 does not converge,
+        # 5000 does with headroom, 20000 changes nothing further).
+        "logistic": LogisticRegression(max_iter=5000),
+    }
+    for name, estimator in baselines.items():
+        candidate = _baseline_candidate(estimator, preprocessing_steps, train_df, y, folds, P3_SCORING)
+        role = "benchmark" if name == "dummy" else "baseline"
+        results[name] = _metric_summary(candidate["fold_scores"], role, negated_scorers=P3_NEGATED_SCORERS)
+
+    return results
+
+
+def _p3_class_weight_ratio(y) -> float:
+    """scale_pos_weight = n_negative / n_positive, computed from the
+    train fold's own labels -- the same formula for every booster
+    (D11: "אותה נוסחה", not per-library magic)."""
+    y = pd.Series(y)
+    n_pos = int((y == 1).sum())
+    n_neg = int((y == 0).sum())
+    return n_neg / n_pos
+
+
+def train_p3_weighted_comparison(df: pd.DataFrame, p3_results: dict) -> dict:
+    """D11: for each of the three boosters, a paired arm using the SAME
+    winning hyperparameters as the regular search (no new search), with
+    class weighting added via scale_pos_weight -- decided on ROC-AUC
+    alone (D11: "לא Brier" -- sigmoid is a monotonic transform, ROC-AUC
+    is invariant to it, Brier isn't). The regular arm's ROC-AUC scores
+    are reused from p3_results (already computed, zero extra fits);
+    only the weighted arm is fit fresh -- 5 fits x 3 boosters = 15,
+    matching D11's stated budget exactly."""
+    task = "P3"
+    train_df = build_task_train_frame(df, task)
+    y = train_df[TARGET[task]]
+    folds = build_folds(df, task)
+    preprocessing_steps = build_preprocessing_steps(task, encode_budget_tier=False)
+    ratio = _p3_class_weight_ratio(y)
+
+    comparison = {}
+    for name, (estimator, _) in make_p3_boosters().items():
+        best_params = {k.removeprefix("model__"): v for k, v in p3_results[name]["best_params"].items()}
+        weighted_estimator = clone(estimator).set_params(**best_params, scale_pos_weight=ratio)
+        weighted_pipeline = Pipeline(preprocessing_steps + [("model", weighted_estimator)])
+        weighted_scores = cross_validate(weighted_pipeline, train_df, y, cv=folds, scoring="roc_auc")["test_score"]
+
+        wt_mean, wt_se = one_se_stats([float(s) for s in weighted_scores])
+        reg_mean = p3_results[name]["mean_roc_auc"]
+
+        comparison[name] = {
+            "class_weight_ratio": ratio,
+            "regular_mean_roc_auc": reg_mean,
+            "weighted_fold_scores_roc_auc": [float(s) for s in weighted_scores],
+            "weighted_mean_roc_auc": wt_mean,
+            "weighted_std_roc_auc": wt_se * math.sqrt(N_FOLDS),
+            "weighted_se_roc_auc": wt_se,
+            "weighted_better": wt_mean > reg_mean,
+        }
+    return comparison
+
+
+def _p3_rule_fold_metrics(y: np.ndarray, pred: np.ndarray, folds) -> dict:
+    """A zero-fit rule's per-fold metrics -- P3's folds are
+    StratifiedKFold (checkpoint 4), so every validation slice has both
+    classes present; no defensive branch needed for a degenerate
+    single-class fold. ROC-AUC/PR-AUC on a hard 0/1 prediction is the
+    degenerate single-operating-point case, still well-defined."""
+    fold_scores = {"roc_auc": [], "accuracy": [], "precision": [], "recall": [], "f1": []}
+    for _, val_idx in folds:
+        yt, yp = y[val_idx], pred[val_idx]
+        fold_scores["roc_auc"].append(roc_auc_score(yt, yp))
+        fold_scores["accuracy"].append(accuracy_score(yt, yp))
+        fold_scores["precision"].append(precision_score(yt, yp, zero_division=0))
+        fold_scores["recall"].append(recall_score(yt, yp, zero_division=0))
+        fold_scores["f1"].append(f1_score(yt, yp, zero_division=0))
+    return _metric_summary(fold_scores, role="rule", negated_scorers=set())
+
+
+def train_p3_manual_rules(df: pd.DataFrame) -> dict:
+    """D11's two hand-rules (SPEC.md § החרגות דליפה), zero fits,
+    thresholds locked from train medians -- never the Holdout, never
+    looked at after the fact.
+
+    (a) the brief's rule: ltv_months > median AND
+        customer_acquisition_cost < median. Shown explicitly as a
+        RETROSPECTIVE comparison -- ltv_months is Excluded from
+        FEATURES["P3"], not available at P3's snapshot.
+    (b) an operational alternative using ONLY FEATURES["P3"] columns --
+        the fair comparison to the model: calls_to_closed > median
+        (an engagement signal available at the snapshot, replacing the
+        unavailable ltv_months) AND customer_acquisition_cost < median
+        (the cost signal, still available for P3, kept from the
+        brief's rule). This specific feature pairing for rule (b) is
+        an implementation choice -- SPEC fixes the mechanism (a
+        rule using only P3-legal features, train-median thresholds)
+        but not which features; flagged here for review."""
+    task = "P3"
+    train_df = build_task_train_frame(df, task)
+    y = train_df[TARGET[task]].to_numpy()
+    folds = build_folds(df, task)
+
+    ltv_threshold = float(train_df["ltv_months"].median())
+    cac_threshold = float(train_df["customer_acquisition_cost"].median())
+    calls_threshold = float(train_df["calls_to_closed"].median())
+
+    brief_pred = (
+        (train_df["ltv_months"] > ltv_threshold) & (train_df["customer_acquisition_cost"] < cac_threshold)
+    ).to_numpy().astype(int)
+    operational_pred = (
+        (train_df["calls_to_closed"] > calls_threshold) & (train_df["customer_acquisition_cost"] < cac_threshold)
+    ).to_numpy().astype(int)
+
+    return {
+        "brief_rule": {
+            "description": "ltv_months > train median AND customer_acquisition_cost < train median "
+                            "-- retrospective; ltv_months unavailable at P3's snapshot",
+            "thresholds": {"ltv_months_gt": ltv_threshold, "customer_acquisition_cost_lt": cac_threshold},
+            **_p3_rule_fold_metrics(y, brief_pred, folds),
+        },
+        "operational_rule": {
+            "description": "calls_to_closed > train median AND customer_acquisition_cost < train median "
+                            "-- uses only FEATURES['P3'] columns",
+            "thresholds": {"calls_to_closed_gt": calls_threshold, "customer_acquisition_cost_lt": cac_threshold},
+            **_p3_rule_fold_metrics(y, operational_pred, folds),
+        },
+    }
 
 
 def read_metrics_json(path: Path) -> dict:
@@ -655,8 +868,28 @@ if __name__ == "__main__":
               f"RMSE={r['mean_rmse']:.4f}+-{r['std_rmse']:.4f} "
               f"R2={r['mean_r2']:.4f}+-{r['std_r2']:.4f}")
 
+    print("--- checkpoint 7: P3 search + Baselines + weighted + manual rules ---")
+    p3_results = train_p3(df)
+    for name, r in sorted(p3_results.items()):
+        print(f"P3/{name}: role={r['role']} "
+              f"ROC-AUC={r['mean_roc_auc']:.4f}+-{r['std_roc_auc']:.4f} "
+              f"Lift@10%={r['mean_lift_at_10']:.4f}")
+
+    p3_weighted = train_p3_weighted_comparison(df, p3_results)
+    for name, r in sorted(p3_weighted.items()):
+        print(f"P3/{name} weighted: regular={r['regular_mean_roc_auc']:.4f} "
+              f"weighted={r['weighted_mean_roc_auc']:.4f}+-{r['weighted_std_roc_auc']:.4f} "
+              f"better={r['weighted_better']}")
+
+    p3_rules = train_p3_manual_rules(df)
+    for name, r in sorted(p3_rules.items()):
+        print(f"P3/{name}: ROC-AUC={r['mean_roc_auc']:.4f} F1={r['mean_f1']:.4f} thresholds={r['thresholds']}")
+
     metrics_path = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
     all_metrics = read_metrics_json(metrics_path)
     all_metrics["P2"] = p2_results
+    all_metrics["P3"] = p3_results
+    all_metrics["P3_weighted_comparison"] = p3_weighted
+    all_metrics["P3_manual_rules"] = p3_rules
     write_metrics_json(all_metrics, metrics_path)
     print(f"wrote {metrics_path}")
