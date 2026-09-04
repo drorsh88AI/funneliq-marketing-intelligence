@@ -246,18 +246,29 @@ def funnel_dropoff(df: pd.DataFrame) -> dict:
 
 
 def calls_to_closed(df: pd.DataFrame) -> dict:
-    """Distribution of calls_to_closed within the purchased=1 population
-    -- SPEC.md's own established reading of this column (PHASE0.md's
-    verified reference numbers). calls_to_closed is documented as a
-    record-level average, not a per-deal call history (SPEC.md § עובדות
-    שנמדדו) -- every quantity below stays explicit about which unit
-    (record vs. deal) and which subpopulation it's counted over, per
-    SPEC.md's warning against conflating the two."""
+    """calls_to_closed within the purchased=1 population -- SPEC.md's own
+    established reading of this column (PHASE0.md's verified reference
+    numbers). calls_to_closed is documented as a record-level average,
+    not a per-deal call history (SPEC.md § עובדות שנמדדו) -- every
+    quantity below stays explicit about which unit (record vs. deal) and
+    which subpopulation it's counted over, per SPEC.md's warning against
+    conflating the two.
+
+    frequency_by_calls_to_closed is the actual distribution SPEC.md
+    package 5/PHASE5.md checkpoint 8 asks for: exact observed
+    calls_to_closed value -> record count, over purchased=1, with no
+    invented bins -- a value that never occurs in this population simply
+    has no key (checkpoint 11 correction, 2026-09-04: the two per-
+    closed-subgroup means below are complementary summary evidence, not
+    themselves "the distribution" -- that label belongs to this field)."""
     p1 = df[df["purchased"] == 1]
     n_p1 = len(p1)
 
     closed1 = p1[p1["closed"] == 1]
     closed2p = p1[p1["closed"] >= 2]
+
+    freq = p1["calls_to_closed"].value_counts()
+    frequency_by_calls_to_closed = {int(k): int(v) for k, v in sorted(freq.items())}
 
     return {
         "n_purchased1": int(n_p1),
@@ -272,6 +283,7 @@ def calls_to_closed(df: pd.DataFrame) -> dict:
             float(closed2p["calls_to_closed"].mean()) if len(closed2p) else None
         ),
         "corr_closed_calls_to_closed": _safe_corr(p1["closed"], p1["calls_to_closed"]),
+        "frequency_by_calls_to_closed": frequency_by_calls_to_closed,
     }
 
 
@@ -599,15 +611,47 @@ def _write_svg_with_description(fig, out_path: Path, title_en: str, description_
     Path(out_path).write_text(svg_text, encoding="utf-8", newline="\n")
 
 
+def _bar_with_na(ax, categories: list, values: list, color: str) -> None:
+    """Draws one vertical bar per (category, value) pair whose value is
+    not None -- a None value gets no bar (never a fabricated 0-height
+    one, which would be indistinguishable from a genuinely measured
+    zero) and is marked "N/A" in text near the axis baseline instead, so
+    the category still appears rather than silently vanishing.
+    (checkpoint 11 correction, 2026-09-04: None was previously drawn as
+    a real 0.)"""
+    xs = list(range(len(categories)))
+    ax.set_xticks(xs)
+    ax.set_xticklabels(categories)
+    for x, v in zip(xs, values):
+        if v is None:
+            ax.text(x, 0, "N/A", ha="center", va="bottom", fontsize=8, color="#666666")
+        else:
+            ax.bar([x], [v], color=color)
+
+
+def _barh_with_na(ax, categories: list, values: list, color: str) -> None:
+    """Horizontal-bar counterpart of _bar_with_na -- used by
+    _svg_correlations, where a None (undefined r) must never render as
+    r=0."""
+    ys = list(range(len(categories)))
+    ax.set_yticks(ys)
+    ax.set_yticklabels(categories)
+    for y, v in zip(ys, values):
+        if v is None:
+            ax.text(0, y, "N/A", ha="left", va="center", fontsize=8, color="#666666")
+        else:
+            ax.barh([y], [v], color=color)
+
+
 _FUNNEL_STAGE_KEYS = ["followup_1", "followup_2", "followup_3", "followup_4", "followup_5"]
 
 
 def _svg_funnel_dropoff(results: dict, out_path: Path) -> None:
     data = results["funnel_dropoff"]
-    values = [data[k] if data[k] is not None else 0.0 for k in _FUNNEL_STAGE_KEYS]
+    values = [data[k] for k in _FUNNEL_STAGE_KEYS]  # None preserved -- never zeroed
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(_FUNNEL_STAGE_KEYS, values, color="#4C72B0")
+    _bar_with_na(ax, _FUNNEL_STAGE_KEYS, values, color="#4C72B0")
     ax.set_ylim(bottom=0)
     ax.set_xlabel("funnel stage")
     ax.set_ylabel("dropout rate (1 - stage_sum/prev_sum)")
@@ -619,9 +663,11 @@ def _svg_funnel_dropoff(results: dict, out_path: Path) -> None:
         description_he=(
             "תרשים עמודות: שיעור הנשירה בכל שלב במשפך השיווקי, מ-leads_answered "
             "ועד followup_5. כל עמודה מחושבת כ-1 פחות סכום השלב חלקי סכום השלב "
-            "הקודם (Σ/Σ), לא כממוצע יחסים לשורה. כל הערכים לקוחים ישירות מ-"
-            "results['funnel_dropoff'], בלי חישוב חוזר מה-CSV. סטטוס: תיאור "
-            "דטהסט (dataset description) בלבד, לפי D3 -- לא נמצא בו קשר סיבתי."
+            "הקודם (Σ/Σ), לא כממוצע יחסים לשורה. שלב ללא ערך מוגדר (למשל "
+            "כשסכום השלב הקודם הוא אפס) מסומן N/A במפורש ולא מצויר כעמודת "
+            "אפס. כל הערכים לקוחים ישירות מ-results['funnel_dropoff'], בלי "
+            "חישוב חוזר מה-CSV. סטטוס: תיאור דטהסט (dataset description) "
+            "בלבד, לפי D3 -- לא נמצא בו קשר סיבתי."
         ),
     )
     plt.close(fig)
@@ -655,11 +701,11 @@ def _svg_ad_budget_leads_curve(results: dict, out_path: Path) -> None:
 def _svg_budget_tier_conversion(results: dict, out_path: Path) -> None:
     data = results["budget_tiers"]
     tiers = list(BUDGET_TIERS)  # explicit ("Low","Mid","High") order, not dict order
-    rates = [data[t]["conversion_rate"] if data[t]["conversion_rate"] is not None else 0.0 for t in tiers]
+    rates = [data[t]["conversion_rate"] for t in tiers]  # None preserved -- never zeroed
     gap_n = data["gap"]["n_records"]  # read from results, not recomputed
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(tiers, rates, color="#55A868")
+    _bar_with_na(ax, tiers, rates, color="#55A868")
     ax.set_ylim(bottom=0)
     ax.set_xlabel("budget tier")
     ax.set_ylabel("conversion rate (mean of closed/num_leads per row)")
@@ -672,39 +718,49 @@ def _svg_budget_tier_conversion(results: dict, out_path: Path) -> None:
             "תרשים עמודות: שיעור ההמרה הממוצע (closed/num_leads לשורה) בכל "
             "אחד משלושת טייירי התקציב Low/Mid/High. הטייר 'gap' (טווח "
             f"ad_budget 1501-1999, {gap_n} רשומות בקובץ) אינו כלול בתרשים -- "
-            "אין לו conversion_rate מוגדר ב-results, רק ספירת רשומות. כל "
-            "הערכים לקוחים ישירות מ-results['budget_tiers'], בלי חישוב חוזר "
-            "מה-CSV."
+            "אין לו conversion_rate מוגדר ב-results, רק ספירת רשומות. טייר "
+            "עם conversion_rate=None (למשל אפס רשומות באוכלוסייה) מסומן N/A "
+            "במפורש ולא מצויר כעמודת אפס. כל הערכים לקוחים ישירות מ-"
+            "results['budget_tiers'], בלי חישוב חוזר מה-CSV."
         ),
     )
     plt.close(fig)
 
 
 def _svg_calls_to_closed_distribution(results: dict, out_path: Path) -> None:
+    """The actual distribution (checkpoint 11 correction, 2026-09-04): one
+    bar per exact observed calls_to_closed value, height = record count,
+    within purchased=1. No invented bins -- a value with no bar simply
+    never occurs in this population. Round 1 of this chart plotted the
+    mean calls_to_closed for the closed=1 vs. closed>=2 subgroups, which
+    is a real, useful comparison but is not a distribution of
+    calls_to_closed itself; that comparison is still available in
+    results['calls_to_closed']'s mean_calls_to_closed_closed_eq_1/
+    _closed_ge_2 fields, just not charted here or called a distribution."""
     data = results["calls_to_closed"]
-    labels = ["closed = 1", "closed >= 2"]
-    means = [
-        data["mean_calls_to_closed_closed_eq_1"] or 0.0,
-        data["mean_calls_to_closed_closed_ge_2"] or 0.0,
-    ]
+    freq = data["frequency_by_calls_to_closed"]
+    calls_values = sorted(freq.keys())  # explicit numeric-ascending order, not dict order
+    counts = [freq[v] for v in calls_values]
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(labels, means, color="#C44E52")
+    ax.bar(calls_values, counts, color="#C44E52")
     ax.set_ylim(bottom=0)
-    ax.set_xlabel("closed subgroup, within purchased=1 population")
-    ax.set_ylabel("mean calls_to_closed")
-    ax.set_title("calls_to_closed distribution by closed subgroup")
+    ax.set_xlabel("calls_to_closed (exact observed value)")
+    ax.set_ylabel("record count")
+    ax.set_title("calls_to_closed distribution (purchased=1 population)")
     fig.tight_layout()
     _write_svg_with_description(
         fig, out_path,
-        title_en="calls_to_closed distribution by closed subgroup",
+        title_en="calls_to_closed distribution (purchased=1 population)",
         description_he=(
-            "תרשים עמודות: ממוצע calls_to_closed בתוך אוכלוסיית purchased=1, "
-            "בהשוואה בין רשומות closed=1 "
-            f"(n={data['n_closed_eq_1']}) לרשומות closed>=2 "
-            f"(n={data['n_closed_ge_2']}). calls_to_closed מתועד ב-SPEC.md "
-            "כממוצע ברמת רשומה, לא כהיסטוריית שיחות לעסקה בודדת. כל הערכים "
-            "לקוחים ישירות מ-results['calls_to_closed'], בלי חישוב חוזר מה-CSV."
+            "תרשים עמודות: התפלגות calls_to_closed בפועל בתוך אוכלוסיית "
+            "purchased=1 -- לכל ערך calls_to_closed שנצפה בקובץ (ציר x), "
+            "ספירת הרשומות עם אותו ערך בדיוק (ציר y), בלי חלוקה ל-bins "
+            f"מומצאים. סך התדירויות שווה n_purchased1={data['n_purchased1']}. "
+            "calls_to_closed מתועד ב-SPEC.md כממוצע ברמת רשומה, לא כהיסטוריית "
+            "שיחות לעסקה בודדת. כל הערכים לקוחים ישירות מ-"
+            "results['calls_to_closed']['frequency_by_calls_to_closed'], בלי "
+            "חישוב חוזר מה-CSV."
         ),
     )
     plt.close(fig)
@@ -713,10 +769,10 @@ def _svg_calls_to_closed_distribution(results: dict, out_path: Path) -> None:
 def _svg_correlations(results: dict, out_path: Path) -> None:
     data = results["correlations"]
     cols = sorted(data.keys())  # explicit alphabetical order, not dict order
-    values = [data[c] if data[c] is not None else 0.0 for c in cols]
+    values = [data[c] for c in cols]  # None preserved -- an undefined r is never drawn as r=0
 
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.barh(cols, values, color="#8172B2")
+    _barh_with_na(ax, cols, values, color="#8172B2")
     # Correlation is bidirectional (r in [-1, 1]) -- a bar chart of it can't
     # honestly "start at zero" the way a count/rate chart can without
     # hiding negative bars. Fixed to the full valid r range instead of the
@@ -735,10 +791,11 @@ def _svg_correlations(results: dict, out_path: Path) -> None:
             "תרשים עמודות אופקי: מקדם המתאם של פירסון (r) בין כל אחת מ-17 "
             "העמודות המספריות הגולמיות (למעט cumulative_profit עצמו) לבין "
             "cumulative_profit, ממוין בסדר אלפביתי לפי שם עמודה. עמודה עם "
-            "שונות אפס או פחות משני זוגות תקפים מוצגת כ-0 (None ב-results, "
-            "לא NaN). כל הערכים לקוחים ישירות מ-results['correlations'], בלי "
-            "חישוב חוזר מה-CSV. תיאור דטהסט בלבד -- לא בסיס לבחירת פיצ'רים "
-            "(D3)."
+            "שונות אפס או פחות משני זוגות תקפים (None ב-results, לא NaN) "
+            "מסומנת N/A במפורש ואינה מצוירת -- אינה שקולה ל-r=0, שהוא ערך "
+            "אמיתי (העדר קשר קווי נמדד). כל הערכים לקוחים ישירות מ-"
+            "results['correlations'], בלי חישוב חוזר מה-CSV. תיאור דטהסט "
+            "בלבד -- לא בסיס לבחירת פיצ'רים (D3)."
         ),
     )
     plt.close(fig)

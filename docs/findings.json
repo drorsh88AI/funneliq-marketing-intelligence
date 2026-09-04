@@ -84,6 +84,17 @@
   },
   "calls_to_closed": {
     "corr_closed_calls_to_closed": -0.23766798628303804,
+    "frequency_by_calls_to_closed": {
+      "1": 86,
+      "2": 987,
+      "3": 571,
+      "4": 343,
+      "5": 654,
+      "6": 376,
+      "7": 127,
+      "8": 18,
+      "9": 1
+    },
     "mean_calls_to_closed_closed_eq_1": 5.649590163934426,
     "mean_calls_to_closed_closed_ge_2": 3.3480373831775703,
     "n_calls_to_closed_ge_4": 1519,

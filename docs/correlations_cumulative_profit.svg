@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="576pt" height="432pt" viewBox="0 0 576 432" xmlns="http://www.w3.org/2000/svg" version="1.1"><title>Correlations with cumulative_profit</title><desc>תרשים עמודות אופקי: מקדם המתאם של פירסון (r) בין כל אחת מ-17 העמודות המספריות הגולמיות (למעט cumulative_profit עצמו) לבין cumulative_profit, ממוין בסדר אלפביתי לפי שם עמודה. עמודה עם שונות אפס או פחות משני זוגות תקפים מוצגת כ-0 (None ב-results, לא NaN). כל הערכים לקוחים ישירות מ-results['correlations'], בלי חישוב חוזר מה-CSV. תיאור דטהסט בלבד -- לא בסיס לבחירת פיצ'רים (D3).</desc>
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="576pt" height="432pt" viewBox="0 0 576 432" xmlns="http://www.w3.org/2000/svg" version="1.1"><title>Correlations with cumulative_profit</title><desc>תרשים עמודות אופקי: מקדם המתאם של פירסון (r) בין כל אחת מ-17 העמודות המספריות הגולמיות (למעט cumulative_profit עצמו) לבין cumulative_profit, ממוין בסדר אלפביתי לפי שם עמודה. עמודה עם שונות אפס או פחות משני זוגות תקפים (None ב-results, לא NaN) מסומנת N/A במפורש ואינה מצוירת -- אינה שקולה ל-r=0, שהוא ערך אמיתי (העדר קשר קווי נמדד). כל הערכים לקוחים ישירות מ-results['correlations'], בלי חישוב חוזר מה-CSV. תיאור דטהסט בלבד -- לא בסיס לבחירת פיצ'רים (D3).</desc>
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>

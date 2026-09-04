@@ -327,6 +327,15 @@ def test_calls_to_closed(calls_to_closed_df):
     expected_r = -4.25 / math.sqrt(2.75 * 8.75)
     assert result["corr_closed_calls_to_closed"] == pytest.approx(expected_r)
 
+    # frequency_by_calls_to_closed: P1-P4 have calls_to_closed 5,3,2,1 --
+    # four distinct values, each occurring once. Sum of frequencies must
+    # equal n_purchased1 (checkpoint 11 correction, 2026-09-04: this is
+    # the actual distribution -- the two per-closed-subgroup means above
+    # are complementary summary evidence, not themselves "the
+    # distribution").
+    assert result["frequency_by_calls_to_closed"] == {1: 1, 2: 1, 3: 1, 5: 1}
+    assert sum(result["frequency_by_calls_to_closed"].values()) == result["n_purchased1"]
+
 
 def test_calls_to_closed_excludes_adversarial_purchased_0_row_from_every_metric(calls_to_closed_df):
     """P5 is adversarial, not incidental: closed=2 would join the
@@ -352,6 +361,10 @@ def test_calls_to_closed_excludes_adversarial_purchased_0_row_from_every_metric(
     import math
     expected_r = -4.25 / math.sqrt(2.75 * 8.75)  # same derivation as test_calls_to_closed
     assert result["corr_closed_calls_to_closed"] == pytest.approx(expected_r)
+
+    # NOT {..., 999: 1} -- P5's extreme calls_to_closed=999 must not appear
+    # as its own bucket in the distribution either
+    assert result["frequency_by_calls_to_closed"] == {1: 1, 2: 1, 3: 1, 5: 1}
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +400,7 @@ def test_calls_to_closed_single_record_population_correlation_is_none_not_nan(si
     assert result["mean_calls_to_closed_closed_ge_2"] is None  # empty bucket -> None, not NaN
 
     assert result["corr_closed_calls_to_closed"] is None  # undefined with n=1, not NaN
+    assert result["frequency_by_calls_to_closed"] == {5: 1}
 
     serialized = json.dumps(result)
     assert "NaN" not in serialized
@@ -969,6 +983,7 @@ def test_write_svgs_works_from_a_fabricated_results_dict_with_no_dataframe_anywh
             "mean_calls_to_closed_closed_eq_1": 1.23,
             "mean_calls_to_closed_closed_ge_2": 8.76,
             "corr_closed_calls_to_closed": None,
+            "frequency_by_calls_to_closed": {2: 3, 5: 4, 9: 2},
         },
         "correlations": {"ad_budget": 0.5, "num_leads": None, "closed": -0.5},
     }
@@ -996,3 +1011,62 @@ def test_write_svgs_is_byte_identical_on_rerun(tmp_path, monkeypatch):
 
     for filename in _EXPECTED_SVG_FILENAMES:
         assert (out1 / filename).read_bytes() == (out2 / filename).read_bytes()
+
+
+# ---------------------------------------------------------------------------
+# checkpoint 11 correction, 2026-09-04 (Codex finding on commit f50a542):
+# None must never render as a drawn 0-height bar -- indistinguishable from
+# a genuinely measured zero, and actively wrong for correlations (r=0 is a
+# real, meaningful value; None means undefined). Tested directly against
+# matplotlib's own Axes object model (ax.patches for bars, ax.texts for
+# the "N/A" label) -- not by grepping SVG bytes, since matplotlib renders
+# text as vector glyph paths, not literal XML text nodes, so a string
+# search for "N/A" in the SVG would never find it even when correct.
+# ---------------------------------------------------------------------------
+def test_bar_with_na_never_draws_a_bar_for_none():
+    fig, ax = an.plt.subplots()
+    an._bar_with_na(ax, ["a", "b", "c"], [1.0, None, 3.0], color="#000000")
+
+    assert len(ax.patches) == 2  # exactly 2 real bars -- "b" gets none, not a 0-height one
+    assert sorted(p.get_height() for p in ax.patches) == [1.0, 3.0]
+
+    assert [t.get_text() for t in ax.texts] == ["N/A"]  # exactly one N/A label, for "b"
+    an.plt.close(fig)
+
+
+def test_barh_with_na_never_draws_a_bar_for_none():
+    """Same guard, horizontal orientation -- what _svg_correlations uses.
+    Includes a negative value: a real negative correlation must still be
+    drawn (not confused with the None/undefined case)."""
+    fig, ax = an.plt.subplots()
+    an._barh_with_na(ax, ["x", "y", "z"], [0.5, None, -0.5], color="#000000")
+
+    assert len(ax.patches) == 2
+    assert sorted(p.get_width() for p in ax.patches) == [-0.5, 0.5]
+
+    assert [t.get_text() for t in ax.texts] == ["N/A"]
+    an.plt.close(fig)
+
+
+def test_correlations_svg_never_draws_none_as_a_zero_bar(tmp_path):
+    """End-to-end guard on the actual chart builder: a column with
+    correlations[col] is None must produce no bar in the rendered figure
+    -- not a bar at r=0, which would misreport "no linear relationship"
+    for a column whose r is genuinely undefined."""
+    fake_results = {
+        "correlations": {"defined_positive": 0.7, "undefined": None, "defined_negative": -0.3},
+    }
+    fig_before = len(an.plt.get_fignums())
+    an._svg_correlations(fake_results, tmp_path / "corr.svg")
+    assert len(an.plt.get_fignums()) == fig_before  # the chart function closes its own figure
+
+    text = (tmp_path / "corr.svg").read_text(encoding="utf-8")
+    # 2 real bars (defined_positive, defined_negative) -- confirmed via a
+    # freshly-built figure using the same helper, not by parsing the SVG's
+    # glyph-path text (see test_barh_with_na_never_draws_a_bar_for_none for
+    # why that would silently pass even if broken)
+    fig, ax = an.plt.subplots()
+    an._barh_with_na(ax, ["defined_negative", "defined_positive", "undefined"], [-0.3, 0.7, None], color="#8172B2")
+    assert len(ax.patches) == 2
+    an.plt.close(fig)
+    assert ET.fromstring(text).tag == "{http://www.w3.org/2000/svg}svg"  # still valid output

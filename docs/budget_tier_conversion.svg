@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="432pt" height="288pt" viewBox="0 0 432 288" xmlns="http://www.w3.org/2000/svg" version="1.1"><title>Conversion rate by budget tier (Low/Mid/High)</title><desc>תרשים עמודות: שיעור ההמרה הממוצע (closed/num_leads לשורה) בכל אחד משלושת טייירי התקציב Low/Mid/High. הטייר 'gap' (טווח ad_budget 1501-1999, 0 רשומות בקובץ) אינו כלול בתרשים -- אין לו conversion_rate מוגדר ב-results, רק ספירת רשומות. כל הערכים לקוחים ישירות מ-results['budget_tiers'], בלי חישוב חוזר מה-CSV.</desc>
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="432pt" height="288pt" viewBox="0 0 432 288" xmlns="http://www.w3.org/2000/svg" version="1.1"><title>Conversion rate by budget tier (Low/Mid/High)</title><desc>תרשים עמודות: שיעור ההמרה הממוצע (closed/num_leads לשורה) בכל אחד משלושת טייירי התקציב Low/Mid/High. הטייר 'gap' (טווח ad_budget 1501-1999, 0 רשומות בקובץ) אינו כלול בתרשים -- אין לו conversion_rate מוגדר ב-results, רק ספירת רשומות. טייר עם conversion_rate=None (למשל אפס רשומות באוכלוסייה) מסומן N/A במפורש ולא מצויר כעמודת אפס. כל הערכים לקוחים ישירות מ-results['budget_tiers'], בלי חישוב חוזר מה-CSV.</desc>
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
