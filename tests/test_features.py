@@ -105,12 +105,21 @@ def test_feature_lists_are_the_19_columns_minus_target_and_excluded():
         assert feat.FEATURES[task] == [c for c in EXPECTED_COLUMNS if c not in drop]
 
 
-def test_p6_is_the_only_task_where_purchased_is_a_feature():
+def test_purchased_is_excluded_for_p2_p3_p4_and_derived_for_p6():
     """purchased varies in P6's unfiltered population but is constant
     (nunique=1) in P2/P3/P4's purchased=1 population -- SPEC.md § אוכלוסיות
-    אימון. This is the one place the four tasks' feature sets genuinely
-    differ beyond their own target/leakage columns."""
-    assert feat.column_status("purchased", "P6") == "Feature"
+    אימון, so it's Excluded there for a population reason, not leakage.
+    For P6 it is NOT a direct Feature either, despite varying in the
+    population: P6's snapshot availability test is "ad_budget בלבד" (§
+    נקודות חיזוי) -- at budget-allocation time nothing is known about
+    whether a purchase will happen, so purchased is Derived (substituted
+    from the budget-tier profile) exactly like every other P6 candidate
+    that isn't ad_budget itself. Granularity (customer- vs campaign-level)
+    describes what a column MEANS, not when it's available -- the two
+    must not be conflated (this is the exact bug a review round caught:
+    an earlier version treated "customer-level" as if it answered the
+    availability question)."""
+    assert feat.column_status("purchased", "P6") == "Derived"
     for task in ("P2", "P3", "P4"):
         assert feat.column_status("purchased", task) == "Excluded"
 
@@ -125,38 +134,48 @@ def test_collinear_trio_is_a_feature_candidate_in_every_task():
 
 # ---------------------------------------------------------------------------
 # Four statuses, not three (SPEC.md § מטריצת זמינות פיצ'רים: Feature /
-# Target / נגזרת / מוחרגת). P6's snapshot says only ad_budget is known
-# directly -- "שאר המשפך נגזר מפרופיל" -- so every other campaign-level
-# funnel column must be Derived for P6, not folded into Feature.
+# Target / נגזרת / מוחרגת). The decisive availability test at P6's
+# snapshot is "ad_budget בלבד" (§ נקודות חיזוי) -- ad_budget alone is
+# known directly; every OTHER P6 candidate is Derived, regardless of
+# whether it happens to be campaign-level or customer-level. Granularity
+# answers what a column means, not when it's available -- conflating the
+# two is exactly the bug an earlier round of review caught (purchased was
+# wrongly kept as a direct Feature on a granularity argument).
 # ---------------------------------------------------------------------------
 
-# The campaign-level "funnel" columns other than ad_budget itself
-# (SPEC.md § גרעיניות מעורבת's own campaign-level list, minus ad_budget).
-_FUNNEL_COLUMNS_EXCEPT_AD_BUDGET = (
+# Hand-listed independently of app/features.py's own derivation
+# (FEATURES["P6"] - {"ad_budget"}), so this test isn't tautological -- it
+# checks the code's OUTPUT against a reference grounded directly in
+# SPEC.md, not against its own formula. All 15 P6 candidates minus
+# ad_budget: the collinear trio, the five followup stages, not_closed,
+# closed, calls_to_closed, calls_to_not_closed, CAC, and purchased.
+_P6_DERIVED_REFERENCE = (
     "num_leads", "leads_answered", "leads_not_answered",
     "followup_1", "followup_2", "followup_3", "followup_4", "followup_5",
     "not_closed", "closed", "calls_to_closed", "calls_to_not_closed",
-    "customer_acquisition_cost",
+    "customer_acquisition_cost", "purchased",
 )
 
 
-def test_p6_only_ad_budget_is_a_direct_feature_among_funnel_data():
+def test_p6_only_ad_budget_is_a_direct_feature():
     """SPEC.md § נקודות חיזוי: at the P6 snapshot (budget allocation
-    moment), ad_budget alone is known directly -- every other
-    campaign-level funnel column must be Derived, not Feature, for P6."""
+    moment), ad_budget alone is known directly -- every other P6
+    candidate, purchased included, must be Derived, not Feature."""
     assert feat.column_status("ad_budget", "P6") == "Feature"
-    for col in _FUNNEL_COLUMNS_EXCEPT_AD_BUDGET:
+    for col in _P6_DERIVED_REFERENCE:
         assert feat.column_status(col, "P6") == "Derived", col
 
 
 def test_every_profile_substituted_column_is_marked_derived():
-    """DERIVED_FROM_PROFILE["P6"] must be exactly the funnel columns other
-    than ad_budget -- not a subset (something silently still Feature) and
-    not a superset (something wrongly marked Derived, e.g. purchased,
-    which is customer-level, not part of "המשפך")."""
-    assert feat.DERIVED_FROM_PROFILE["P6"] == set(_FUNNEL_COLUMNS_EXCEPT_AD_BUDGET)
-    assert "purchased" not in feat.DERIVED_FROM_PROFILE["P6"]
-    assert feat.column_status("purchased", "P6") == "Feature"
+    """DERIVED_FROM_PROFILE["P6"] must be exactly the 14-column reference
+    -- not a subset (something silently still Feature) and not a superset
+    (something wrongly marked Derived that shouldn't be, e.g. the target
+    or an excluded column leaking in)."""
+    assert feat.DERIVED_FROM_PROFILE["P6"] == set(_P6_DERIVED_REFERENCE)
+    assert len(feat.DERIVED_FROM_PROFILE["P6"]) == 14
+    assert "ad_budget" not in feat.DERIVED_FROM_PROFILE["P6"]
+    assert feat.TARGET["P6"] not in feat.DERIVED_FROM_PROFILE["P6"]
+    assert feat.DERIVED_FROM_PROFILE["P6"].isdisjoint(feat.EXCLUDED["P6"])
 
 
 def test_only_p6_ever_has_a_derived_column():

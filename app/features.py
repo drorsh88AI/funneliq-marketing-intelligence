@@ -10,14 +10,17 @@ drift apart. Grounded directly in SPEC.md § החרגות דליפה, § אוכ�
 target relationship (SPEC.md's D3 rule for this phase).
 
 Four statuses, not three (SPEC.md § מטריצת זמינות פיצ'רים names all four:
-Feature / Target / נגזרת / מוחרגת). P6's snapshot is explicit that only
-`ad_budget` is known directly at prediction time -- "שאר המשפך נגזר
-מפרופיל" (§ נקודות חיזוי): every other campaign-level funnel column is a
-real training feature, but at serving time its value is substituted from
-a median profile per budget tier (חבילה 6), not read from the column
-itself. That is exactly what "Derived" (נגזרת) names, and it applies to
-P6 only -- P2/P3/P4's snapshot (end of campaign cycle) has every funnel
-aggregate available directly, no substitution needed.
+Feature / Target / נגזרת / מוחרגת). The decisive availability test for
+P6's snapshot is exactly "`ad_budget` בלבד" (§ נקודות חיזוי) -- ad_budget
+alone is known directly at prediction time; nothing else is, regardless
+of whether a candidate column happens to be campaign-level or
+customer-level ("שאר המשפך" is illustrative wording there, not a
+narrower rule -- every other P6 candidate, `purchased` included, is
+substituted from a median profile per budget tier at serving time
+(חבילה 6), not read from the column itself. That is exactly what
+"Derived" (נגזרת) names, and it applies to P6 only -- P2/P3/P4's
+snapshot (end of campaign cycle) has every candidate column available
+directly, no substitution needed.
 
 Not connected to app/main.py and does not perform any modeling in phase 5
 -- imported by tests only. Phase 6 wires it into the actual training/
@@ -66,29 +69,6 @@ EXCLUDED = {
 # phase-6 Pipeline-build decision, not made or implemented here.
 COLLINEAR_TRIO = ("num_leads", "leads_answered", "leads_not_answered")
 
-# P6 only: every campaign-level "funnel" column except ad_budget itself
-# (SPEC.md § גרעיניות מעורבת defines "המשפך" as exactly this set:
-# num_leads, the five followup stages, closed, not_closed, calls_to_*,
-# CAC -- ad_budget is listed separately). At the P6 snapshot (budget
-# allocation moment) none of these is known for a hypothetical new
-# budget -- § נקודות חיזוי's "שאר המשפך נגזר מפרופיל" -- so each is
-# substituted from the median profile for that budget tier at serving
-# time (חבילה 6), computed from training data within each fold. Still a
-# real, observed training feature; only the SERVING-time value is
-# profile-derived, not the training signal itself.
-#
-# `purchased` is deliberately NOT in this set: it is customer-level, not
-# part of "המשפך" as SPEC.md defines the term, and stays a direct Feature
-# for P6 (it varies in the unfiltered population -- see EXCLUDED above).
-DERIVED_FROM_PROFILE = {
-    "P6": {
-        "num_leads", "leads_answered", "leads_not_answered",
-        "followup_1", "followup_2", "followup_3", "followup_4", "followup_5",
-        "not_closed", "closed", "calls_to_closed", "calls_to_not_closed",
-        "customer_acquisition_cost",
-    },
-}
-
 
 def _feature_list(task: str) -> list[str]:
     """Every raw column that is neither the task's target nor excluded --
@@ -102,6 +82,23 @@ def _feature_list(task: str) -> list[str]:
 
 
 FEATURES = {task: _feature_list(task) for task in TARGET}
+
+# P6 only. The decisive availability test at P6's snapshot (budget
+# allocation moment) is "ad_budget בלבד" (§ נקודות חיזוי) -- computed as
+# every P6 candidate EXCEPT ad_budget, directly from FEATURES["P6"] rather
+# than hand-listed a second time, so this set can never silently drift
+# from what FEATURES actually contains (the bug a prior round of review
+# caught: purchased was hand-kept out of an earlier version of this set
+# on a granularity argument -- "customer-level, not part of המשפך" -- that
+# does not answer the availability question SPEC.md's snapshot rule
+# actually asks. Every candidate other than ad_budget, purchased included,
+# is substituted from the median profile per budget tier at serving time
+# (חבילה 6), computed from training data within each fold. Still a real,
+# observed training feature; only the SERVING-time value is
+# profile-derived, not the training signal itself.
+DERIVED_FROM_PROFILE = {
+    "P6": frozenset(FEATURES["P6"]) - {"ad_budget"},
+}
 
 
 def column_status(column: str, task: str) -> str:
