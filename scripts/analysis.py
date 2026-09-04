@@ -8,7 +8,11 @@ reads inside these functions -- matches the design in PHASE5.md D6.
 tests/test_metrics.py proves each one against a small fixture with a
 by-hand-computed answer.
 
-build_results()/findings rendering are checkpoint 10+. Nothing here
+build_results() (checkpoint 10) merges these functions' output plus
+source_metadata() -- the one function below that touches the filesystem
+-- into `results`, nested by function name (PHASE5.md D6 §3, corrected
+2026-09-04: a flat key union collides for real across several of these
+functions). findings.json rendering is checkpoint 12+. Nothing here
 performs modeling, splits data, or touches Supabase (D10).
 
 ⚠ Every value returned here is a dataset description (SPEC.md §
@@ -18,6 +22,7 @@ or a model in phase 6 (D3's table of what may/may not cross into phase 6).
 """
 from __future__ import annotations
 
+import json
 import math
 import sys
 from pathlib import Path
@@ -32,6 +37,7 @@ from scripts.data_contract import (  # noqa: E402
     NULLABLE_INT_COLUMNS,
     _measure_snapshot,
 )
+from scripts.load_data import sha256_of  # noqa: E402
 
 BUDGET_TIERS = ("Low", "Mid", "High")
 
@@ -461,3 +467,75 @@ def m6_duplicate_profile(df: pd.DataFrame) -> dict:
     contract as duplicates() (checkpoint 7) -- reuses it directly rather
     than recomputing group membership a second, competing way."""
     return duplicates(df)
+
+
+def source_metadata(csv_path: Path) -> dict:
+    """The one function in this module that touches the filesystem --
+    deterministic I/O, not pure, but its entire output is determined by
+    the file's bytes. Reuses load_data.sha256_of (no second hashing
+    implementation) rather than re-verifying against EXPECTED_SHA256:
+    that verification already happened in load_and_verify_csv before df
+    reached any function here; this just reports what it read. Existing
+    is what lets build_results()'s closure test include source_sha256
+    with no exempt metadata key (PHASE5.md D6 §3)."""
+    return {"source_sha256": sha256_of(Path(csv_path))}
+
+
+# Every pure metric function whose output belongs in results, in no
+# particular order -- build_results()'s closure test derives the
+# expected key set from this tuple, so adding a function here is what
+# makes it show up in results (not a second, hand-typed list).
+ALL_METRIC_FUNCS = (
+    missing_values, budget_tiers, duplicates, duplicate_sensitivity,
+    correlations, ad_budget_leads_curve, funnel_dropoff, calls_to_closed,
+    m1_zero_profit, m2_zero_profit_consistency, m3_top_decile,
+    m4_profit_by_tier, m5_outliers, m6_duplicate_profile,
+)
+
+
+def build_results(df: pd.DataFrame, csv_path: Path) -> dict:
+    """Merge only -- results[f.__name__] = f(df) for every function in
+    ALL_METRIC_FUNCS, plus results["source_metadata"] = source_metadata(csv_path).
+
+    Nested by function name, NOT a flat union of each function's own
+    keys. PHASE5.md D6 §3 originally specified a flat union; checking it
+    against the real functions (checkpoint 10) found 14 real top-level
+    key collisions, several with genuinely different values under the
+    same name (e.g. correlations()["followup_1"] is a Pearson r,
+    funnel_dropoff()["followup_1"] is a per-stage dropout dict) -- a flat
+    merge would silently drop one of them. Nesting makes that
+    structurally impossible and needs no merge-order decision; the
+    'no hidden or declared exception' rule from D6 §3 still holds at the
+    function-name level. Corrected in PHASE5.md 2026-09-04."""
+    results = {f.__name__: f(df) for f in ALL_METRIC_FUNCS}
+    results["source_metadata"] = source_metadata(csv_path)
+    return results
+
+
+def write_findings_json(results: dict, out_path: Path) -> None:
+    """findings.json = the serialization of results, nothing else
+    (PHASE5.md D6 §4) -- no recomputation, no added field. sort_keys
+    makes the bytes independent of dict insertion order, so a re-run
+    from the same CSV produces an identical file (checkpoint 13's
+    git diff --exit-code). allow_nan=False turns any stray NaN into a
+    loud json.dump failure instead of the invalid bareword `NaN` Python
+    would otherwise emit (RFC 8259) -- every function here already
+    guards against that (_safe_corr), so this is a second, independent
+    line of defense, not the only one. No timestamp, run time, library
+    version, or local path is written; source_sha256 (inside
+    results["source_metadata"]) is the only identifying value, and it's
+    a content hash, not an environment fact."""
+    out_path = Path(out_path)
+    with out_path.open("w", encoding="utf-8", newline="\n") as f:
+        json.dump(results, f, sort_keys=True, indent=2, allow_nan=False, ensure_ascii=False)
+        f.write("\n")
+
+
+if __name__ == "__main__":
+    from scripts.load_data import DEFAULT_CSV, load_and_verify_csv
+
+    _df = load_and_verify_csv(DEFAULT_CSV)
+    _results = build_results(_df, DEFAULT_CSV)
+    _out_path = Path(__file__).resolve().parent.parent / "docs" / "findings.json"
+    write_findings_json(_results, _out_path)
+    print(f"wrote {_out_path}")

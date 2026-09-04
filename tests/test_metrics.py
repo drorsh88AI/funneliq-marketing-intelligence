@@ -7,11 +7,13 @@ with the expected value for each assertion computed BY HAND and written
 in a comment next to it -- not by running the function and trusting its
 own output. Runs in CI with no CSV present, per PHASE5.md D4/D6.
 
-build_results()/findings rendering are out of scope -- checkpoint 10+.
+build_results()/findings.json are checkpoints 10+; FINDINGS.md rendering
+and SVGs are checkpoints 11-12, still out of scope here.
 """
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from pathlib import Path
 
@@ -371,8 +373,6 @@ def test_calls_to_closed_single_record_population_correlation_is_none_not_nan(si
     """n_p1=1: correlation is undefined (fewer than two valid pairs), not
     computable as any real number -- must come back as None, and the
     whole dict must be JSON-serializable without emitting a bareword NaN."""
-    import json
-
     result = an.calls_to_closed(single_record_df)
 
     assert result["n_purchased1"] == 1
@@ -723,3 +723,99 @@ def test_m5_p1_p99_matches_pandas_own_quantile_definition(m5_at_boundary_df):
 # ---------------------------------------------------------------------------
 def test_m6_duplicate_profile_reuses_duplicates_output_exactly(operational_df):
     assert an.m6_duplicate_profile(operational_df) == an.duplicates(operational_df)
+
+
+# ---------------------------------------------------------------------------
+# checkpoint 10 -- source_metadata, build_results, write_findings_json.
+#
+# build_results is a NESTED merge (results[func.__name__] = func(df)), not
+# a flat union of each function's own keys. PHASE5.md D6 §3 originally
+# specified flat union; checking it against the real functions found 14
+# real top-level key collisions (e.g. correlations()["followup_1"] is a
+# Pearson r, funnel_dropoff()["followup_1"] is a per-stage dropout dict --
+# same key, different values). Corrected in PHASE5.md 2026-09-04, user
+# approved. test_build_results_closure below tests the corrected, nested
+# contract.
+# ---------------------------------------------------------------------------
+def test_source_metadata_fixed_fixture(tmp_path):
+    """source_metadata reads a fixed file's bytes and reports its SHA-256.
+    The expected hash is HAND-TYPED below, not computed by this test --
+    computing it here would be circular (PHASE5.md D6 §2)."""
+    p = tmp_path / "fixed.txt"
+    p.write_bytes(b"source_metadata fixed fixture content\n")
+
+    assert an.source_metadata(p) == {
+        "source_sha256": "f353ca665d47627697c0feb2644f3c1c960783a7c590d339bf43a012525ff2b8"
+    }
+
+
+def test_build_results_closure(tmp_path, monkeypatch):
+    """set(results) is exactly {f.__name__ for f in ALL_METRIC_FUNCS} |
+    {"source_metadata"} -- no hidden or declared exception, no manual
+    metadata key. Each nested value equals calling the function directly:
+    build_results never recomputes, only merges."""
+    df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
+    csv_path = tmp_path / "sample.csv"  # the exact path _load() writes to
+
+    results = an.build_results(df, csv_path)
+
+    expected_keys = {f.__name__ for f in an.ALL_METRIC_FUNCS} | {"source_metadata"}
+    assert set(results) == expected_keys
+
+    for f in an.ALL_METRIC_FUNCS:
+        assert results[f.__name__] == f(df)
+    assert results["source_metadata"] == {
+        "source_sha256": hashlib.sha256(csv_path.read_bytes()).hexdigest()
+    }
+
+
+def test_build_results_has_no_flat_key_collision_now_that_it_is_nested(tmp_path, monkeypatch):
+    """Regression guard for the collision that forced the nested-merge
+    correction: a flat union of budget_tiers()/m4_profit_by_tier()'s tier
+    keys (Low/Mid/High/gap) and correlations()/funnel_dropoff()'s
+    followup_1..5 keys would silently drop one side. Nested, both survive
+    intact and independently addressable."""
+    df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
+    csv_path = tmp_path / "sample.csv"
+    results = an.build_results(df, csv_path)
+
+    assert results["budget_tiers"]["Low"] != results["m4_profit_by_tier"]["Low"]
+    assert set(results["budget_tiers"]["Low"]) == {"n_records", "conversion_rate"}
+    assert set(results["m4_profit_by_tier"]["Low"]) == {
+        "n_records", "n_missing_profit", "sum_cumulative_profit", "mean_cumulative_profit",
+    }
+
+
+def test_write_findings_json_is_deterministic_json_no_volatile_metadata(tmp_path, monkeypatch):
+    df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
+    csv_path = tmp_path / "sample.csv"
+
+    out1 = tmp_path / "findings1.json"
+    out2 = tmp_path / "findings2.json"
+    # two independently rebuilt results dicts, not the same object twice
+    an.write_findings_json(an.build_results(df, csv_path), out1)
+    an.write_findings_json(an.build_results(df, csv_path), out2)
+
+    bytes1 = out1.read_bytes()
+    assert bytes1 == out2.read_bytes()  # re-run -> byte-identical file
+
+    text = bytes1.decode("utf-8")
+    assert "NaN" not in text  # no invalid bareword NaN anywhere
+    parsed = json.loads(text)  # must be strictly valid JSON
+    assert set(parsed) == {f.__name__ for f in an.ALL_METRIC_FUNCS} | {"source_metadata"}
+    assert "source_sha256" in parsed["source_metadata"]
+
+    # no volatile/environment metadata and no local filesystem path leaked
+    for forbidden in ("timestamp", "run_time", "runtime", "generated_at", str(tmp_path)):
+        assert forbidden not in text
+
+
+def test_write_findings_json_raises_on_nan_instead_of_writing_invalid_json(tmp_path):
+    """allow_nan=False turns a stray NaN into a loud ValueError, not the
+    invalid bareword `NaN` Python's json module would otherwise silently
+    emit (not valid per RFC 8259)."""
+    bad_results = {"some_func": {"value": float("nan")}}
+    out = tmp_path / "bad.json"
+
+    with pytest.raises(ValueError):
+        an.write_findings_json(bad_results, out)
