@@ -366,6 +366,21 @@
       (מקור האמת היחיד), לא אוטומטית מ-git או מה-CI. <b>פאזה לא תסומן
       "הושלם" רק משום שקבצים נוצרו</b> — נדרש ששלושת שדות הקבלה שלה (תוצר /
       בדיקת קבלה / ראיה) התקיימו בפועל.
+      <br><br>
+      <b>אותו עיקרון חל על כל <span class="ltr">checkpoint</span> בודד
+      בתוך פאזה בביצוע, לא רק על הפאזה כולה.</b> מימוש ואימות עצמי של קלוד
+      אינם מספיקים כדי לסמן <span class="inline-code">s:"done"</span>.
+      <span class="ltr">checkpoint</span> שקלוד ביצע ואימת עצמאית מסומן
+      <span class="inline-code">s:"awaiting_approval"</span> (הערך הקיים,
+      לא ערך חדש — כבר בשימוש כ-<span class="ltr">execution_status</span>
+      של פאזה 4 באותה משמעות בדיוק); הוא הופך ל-
+      <span class="inline-code">s:"done"</span> רק לאחר שהמשתמש מעביר
+      אותו בביקורת Codex (או נותן אישור סופי מפורש אחר) ומאשר שאין ממצא
+      פתוח. אם הביקורת מוצאת ממצא, הוא מתוקן תחת אותו checkpoint ונשאר
+      <span class="inline-code">awaiting_approval</span> עד סבב נוסף —
+      לא <span class="inline-code">done</span> מוקדם מדי ולא
+      <span class="inline-code">not_started</span> תוך מחיקת עבודה שכבר
+      נעשתה. חל על כל הפאזות מכאן ואילך.
     </div>
 
     <div class="policy-card" id="policy-gate">
