@@ -342,9 +342,56 @@ Contract בן שלוש שכבות שנבדק אוטומטית — כך שפאז�
 
 ## ח. ראיות שיישמרו
 
-*(ממולא בזמן הביצוע — לא בשלב התכנון.)*
+### ח.1 — checkpoint 5: מסלול ה-integration המקומי, פלט מלא (04.09.2026)
 
-- פלט מלא של checkpoint 5 (integration מול ה-CSV המלא, שלוש השכבות).
+הרצה של `load_data.load_and_verify_csv` על `funnel_marketing_data.csv`
+(שורש הפרויקט, מחוץ ל-repo לפי `.gitignore`), ולאחריה שלוש שכבות
+`data_contract.py` לפי הסדר. **בלי נתיב מקומי ובלי secrets** בפלט —
+מקור הקובץ מזוהה רק בשמו, לא בנתיב המלא במחשב.
+
+```
+== checkpoint 5: local integration path via load_and_verify_csv ==
+
+Source: funnel_marketing_data.csv (repo root, .gitignore'd, local only)
+Expected SHA-256 (load_data.EXPECTED_SHA256): 8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa
+
+load_and_verify_csv: OK -- SHA-256 matched, header matched, source_row_id added
+  shape (with source_row_id): (3500, 20)  (expect (3500, 20))
+
+-- Layer A: check_schema(df) --
+  violations: []
+
+-- Layer B: check_invariants(df) --
+  violations: []
+
+-- Layer C: check_snapshot(df, expected) -- full 15 keys --
+  expected['n_rows'] = 3500
+  expected['missing_ltv_months'] = 4
+  expected['missing_cumulative_profit'] = 29
+  expected['missing_any'] = 33
+  expected['duplicate_rows'] = 19
+  expected['duplicate_groups'] = 9
+  expected['distinct_ad_budgets'] = 16
+  expected['ad_budget_values'] = [500, 800, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 10000, 12000, 15000, 20000]
+  expected['gap_1501_1999_count'] = 0
+  expected['edge_closed_gt0_purchased0'] = 155
+  expected['edge_purchased0_ltv_gt0'] = 333
+  expected['n_purchased1'] = 3163
+  expected['n_upsell1_within_purchased1'] = 1466
+  expected['n_upsell0_within_purchased1'] = 1697
+  expected['n_referred_yes_within_purchased1'] = 1351
+
+  violations: []
+
+== RESULT: all three layers, zero violations. checkpoint 5 PASSED ==
+```
+
+כל 15 ערכי ה-Snapshot תואמים במדויק את `PHASE0.md` — אין ערך שנותר לא
+מאומת. `set(_measure_snapshot(df))` הושווה ל-`set(EXPECTED_SNAPSHOT)`
+ונמצא זהה (אין מפתח שנוסף/הוסר בלי עדכון כאן).
+
+### ח.2 — ראיות עתידיות (ממולא בהמשך הביצוע)
+
 - רשימת רצפי הספרות שנותרו בתבנית `FINDINGS.md` (checkpoint 12), עם
   הצדקה לכל פריט.
 - פלט `git diff --exit-code` של checkpoint 13.
