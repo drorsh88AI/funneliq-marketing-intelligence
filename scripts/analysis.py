@@ -1,5 +1,6 @@
 """Package 1 + package 5 + M1-M6 (ניקוי + EDA) pure computation functions --
-PHASE5.md checkpoints 7, 8, and 9.
+PHASE5.md checkpoints 7, 8, 9, plus checkpoints 10-11's build_results,
+findings.json, and SVG rendering.
 
 Every function takes a DataFrame (already through
 load_data.load_and_verify_csv -- SHA-256 verified, source_row_id added,
@@ -15,9 +16,12 @@ not func.__name__ (PHASE5.md D6 §3, corrected 2026-09-04 in two rounds:
 a flat key union collides for real across several of these functions,
 and __name__ is not a stable data contract). write_findings_json()
 serializes `results` straight to docs/findings.json -- also checkpoint
-10, already implemented here. Only FINDINGS.md's prose rendering (with
-$placeholder substitution) and the SVG charts are checkpoints 11-12.
-Nothing here performs modeling, splits data, or touches Supabase (D10).
+10, already implemented here. write_svgs() (checkpoint 11) renders the 5
+PHASE5.md D9 charts from `results` alone -- every builder in SVG_BUILDERS
+takes `results`, never a DataFrame, so recomputing a value from the CSV
+inside a chart is structurally impossible. Only FINDINGS.md's prose
+rendering (with $placeholder substitution) is checkpoint 12+. Nothing
+here performs modeling, splits data, or touches Supabase (D10).
 
 ⚠ Every value returned here is a dataset description (SPEC.md §
 גרעיניות מעורבת's "מוסק בלבד" framing, and PHASE5.md D3): none of it is a
@@ -26,11 +30,21 @@ or a model in phase 6 (D3's table of what may/may not cross into phase 6).
 """
 from __future__ import annotations
 
+import io
 import json
 import math
 import sys
 from pathlib import Path
+from xml.sax.saxutils import escape as _xml_escape
 
+import matplotlib
+matplotlib.use("Agg")  # headless -- no display/GUI toolkit needed, CI-safe
+# Without a fixed hashsalt, matplotlib's SVG backend IDs every clip path
+# with a random uuid4 fragment -- same figure, different bytes every run.
+# A fixed salt makes those IDs a deterministic hash instead, which is what
+# makes write_svgs() reproducible (PHASE5.md D9 / D6's determinism bar).
+matplotlib.rcParams["svg.hashsalt"] = "funneliq-phase5-checkpoint11"
+import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -556,11 +570,216 @@ def write_findings_json(results: dict, out_path: Path) -> None:
         f.write("\n")
 
 
+# ---------------------------------------------------------------------------
+# checkpoint 11 -- 5 static SVG charts, PHASE5.md D9. Every builder below
+# takes `results: dict` ONLY (never a DataFrame) -- that's what makes
+# recomputing a metric from the CSV structurally impossible here, not a
+# promise kept by convention. English axis/tick labels (matplotlib does no
+# bidi text shaping, so Hebrew glyphs drawn on a chart render in the wrong
+# visual order); the Hebrew caption/explanation instead lives in each SVG's
+# own accessible <title>/<desc> (see _write_svg_with_description), which
+# also serves as the required accessible textual description -- one
+# mechanism satisfies both requirements instead of two.
+# ---------------------------------------------------------------------------
+
+def _write_svg_with_description(fig, out_path: Path, title_en: str, description_he: str) -> None:
+    """Serializes `fig` to `out_path` as SVG with an accessible <title>/
+    <desc> pair injected right after the opening <svg> tag -- screen
+    readers and other assistive tech read these; matplotlib's savefig
+    doesn't add them on its own. metadata={"Date": None} strips the
+    generation-timestamp SVG backend embeds by default, so re-rendering
+    the same figure produces byte-identical output (no volatile
+    metadata, PHASE5.md D9)."""
+    buf = io.BytesIO()
+    fig.savefig(buf, format="svg", metadata={"Date": None})
+    svg_text = buf.getvalue().decode("utf-8")
+    accessible = f"<title>{_xml_escape(title_en)}</title><desc>{_xml_escape(description_he)}</desc>"
+    open_tag_end = svg_text.index(">", svg_text.index("<svg")) + 1
+    svg_text = svg_text[:open_tag_end] + accessible + svg_text[open_tag_end:]
+    Path(out_path).write_text(svg_text, encoding="utf-8", newline="\n")
+
+
+_FUNNEL_STAGE_KEYS = ["followup_1", "followup_2", "followup_3", "followup_4", "followup_5"]
+
+
+def _svg_funnel_dropoff(results: dict, out_path: Path) -> None:
+    data = results["funnel_dropoff"]
+    values = [data[k] if data[k] is not None else 0.0 for k in _FUNNEL_STAGE_KEYS]
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.bar(_FUNNEL_STAGE_KEYS, values, color="#4C72B0")
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel("funnel stage")
+    ax.set_ylabel("dropout rate (1 - stage_sum/prev_sum)")
+    ax.set_title("Funnel dropoff by stage")
+    fig.tight_layout()
+    _write_svg_with_description(
+        fig, out_path,
+        title_en="Funnel dropoff by stage (followup_1..followup_5)",
+        description_he=(
+            "תרשים עמודות: שיעור הנשירה בכל שלב במשפך השיווקי, מ-leads_answered "
+            "ועד followup_5. כל עמודה מחושבת כ-1 פחות סכום השלב חלקי סכום השלב "
+            "הקודם (Σ/Σ), לא כממוצע יחסים לשורה. כל הערכים לקוחים ישירות מ-"
+            "results['funnel_dropoff'], בלי חישוב חוזר מה-CSV. סטטוס: תיאור "
+            "דטהסט (dataset description) בלבד, לפי D3 -- לא נמצא בו קשר סיבתי."
+        ),
+    )
+    plt.close(fig)
+
+
+def _svg_ad_budget_leads_curve(results: dict, out_path: Path) -> None:
+    data = results["ad_budget_leads_curve"]
+    budgets = sorted(data.keys())  # explicit numeric-ascending order, not dict order
+    medians = [data[b]["median_num_leads"] for b in budgets]
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(budgets, medians, marker="o", color="#DD8452")
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel("ad_budget")
+    ax.set_ylabel("median num_leads")
+    ax.set_title("ad_budget vs. median num_leads")
+    fig.tight_layout()
+    _write_svg_with_description(
+        fig, out_path,
+        title_en="ad_budget vs. median num_leads curve",
+        description_he=(
+            "תרשים קו: החציון של num_leads עבור כל אחד מ-16 ערכי ad_budget "
+            "הבדידים בקובץ, מסודר בסדר עולה לפי ad_budget. כל נקודה לקוחה "
+            "ישירות מ-results['ad_budget_leads_curve'], בלי חישוב חוזר מה-CSV. "
+            "תיאור דטהסט בלבד -- אין כאן מסקנה על יעילות תקציב."
+        ),
+    )
+    plt.close(fig)
+
+
+def _svg_budget_tier_conversion(results: dict, out_path: Path) -> None:
+    data = results["budget_tiers"]
+    tiers = list(BUDGET_TIERS)  # explicit ("Low","Mid","High") order, not dict order
+    rates = [data[t]["conversion_rate"] if data[t]["conversion_rate"] is not None else 0.0 for t in tiers]
+    gap_n = data["gap"]["n_records"]  # read from results, not recomputed
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.bar(tiers, rates, color="#55A868")
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel("budget tier")
+    ax.set_ylabel("conversion rate (mean of closed/num_leads per row)")
+    ax.set_title("Conversion rate by budget tier")
+    fig.tight_layout()
+    _write_svg_with_description(
+        fig, out_path,
+        title_en="Conversion rate by budget tier (Low/Mid/High)",
+        description_he=(
+            "תרשים עמודות: שיעור ההמרה הממוצע (closed/num_leads לשורה) בכל "
+            "אחד משלושת טייירי התקציב Low/Mid/High. הטייר 'gap' (טווח "
+            f"ad_budget 1501-1999, {gap_n} רשומות בקובץ) אינו כלול בתרשים -- "
+            "אין לו conversion_rate מוגדר ב-results, רק ספירת רשומות. כל "
+            "הערכים לקוחים ישירות מ-results['budget_tiers'], בלי חישוב חוזר "
+            "מה-CSV."
+        ),
+    )
+    plt.close(fig)
+
+
+def _svg_calls_to_closed_distribution(results: dict, out_path: Path) -> None:
+    data = results["calls_to_closed"]
+    labels = ["closed = 1", "closed >= 2"]
+    means = [
+        data["mean_calls_to_closed_closed_eq_1"] or 0.0,
+        data["mean_calls_to_closed_closed_ge_2"] or 0.0,
+    ]
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.bar(labels, means, color="#C44E52")
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel("closed subgroup, within purchased=1 population")
+    ax.set_ylabel("mean calls_to_closed")
+    ax.set_title("calls_to_closed distribution by closed subgroup")
+    fig.tight_layout()
+    _write_svg_with_description(
+        fig, out_path,
+        title_en="calls_to_closed distribution by closed subgroup",
+        description_he=(
+            "תרשים עמודות: ממוצע calls_to_closed בתוך אוכלוסיית purchased=1, "
+            "בהשוואה בין רשומות closed=1 "
+            f"(n={data['n_closed_eq_1']}) לרשומות closed>=2 "
+            f"(n={data['n_closed_ge_2']}). calls_to_closed מתועד ב-SPEC.md "
+            "כממוצע ברמת רשומה, לא כהיסטוריית שיחות לעסקה בודדת. כל הערכים "
+            "לקוחים ישירות מ-results['calls_to_closed'], בלי חישוב חוזר מה-CSV."
+        ),
+    )
+    plt.close(fig)
+
+
+def _svg_correlations(results: dict, out_path: Path) -> None:
+    data = results["correlations"]
+    cols = sorted(data.keys())  # explicit alphabetical order, not dict order
+    values = [data[c] if data[c] is not None else 0.0 for c in cols]
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.barh(cols, values, color="#8172B2")
+    # Correlation is bidirectional (r in [-1, 1]) -- a bar chart of it can't
+    # honestly "start at zero" the way a count/rate chart can without
+    # hiding negative bars. Fixed to the full valid r range instead of the
+    # data's own min/max, so zero is always the visible baseline and the
+    # axis never truncates toward whichever values this run happens to have.
+    ax.set_xlim(-1, 1)
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.set_xlabel("Pearson r vs. cumulative_profit")
+    ax.set_ylabel("column")
+    ax.set_title("Correlations with cumulative_profit")
+    fig.tight_layout()
+    _write_svg_with_description(
+        fig, out_path,
+        title_en="Correlations with cumulative_profit",
+        description_he=(
+            "תרשים עמודות אופקי: מקדם המתאם של פירסון (r) בין כל אחת מ-17 "
+            "העמודות המספריות הגולמיות (למעט cumulative_profit עצמו) לבין "
+            "cumulative_profit, ממוין בסדר אלפביתי לפי שם עמודה. עמודה עם "
+            "שונות אפס או פחות משני זוגות תקפים מוצגת כ-0 (None ב-results, "
+            "לא NaN). כל הערכים לקוחים ישירות מ-results['correlations'], בלי "
+            "חישוב חוזר מה-CSV. תיאור דטהסט בלבד -- לא בסיס לבחירת פיצ'רים "
+            "(D3)."
+        ),
+    )
+    plt.close(fig)
+
+
+# Explicit filename -> builder registry, keyed by string (same reasoning as
+# RESULT_BUILDERS, checkpoint 10: a filename derived from a function's
+# __name__ is not a stable contract either).
+SVG_BUILDERS = {
+    "funnel_dropoff.svg": _svg_funnel_dropoff,
+    "ad_budget_leads_curve.svg": _svg_ad_budget_leads_curve,
+    "budget_tier_conversion.svg": _svg_budget_tier_conversion,
+    "calls_to_closed_distribution.svg": _svg_calls_to_closed_distribution,
+    "correlations_cumulative_profit.svg": _svg_correlations,
+}
+
+
+def write_svgs(results: dict, out_dir: Path) -> dict[str, Path]:
+    """Renders all 5 PHASE5.md D9 charts from `results` into `out_dir`.
+    Returns {filename: path}. Every builder in SVG_BUILDERS takes only
+    `results` (never a DataFrame), so there is no code path here that
+    could recompute a value from the CSV."""
+    out_dir = Path(out_dir)
+    written: dict[str, Path] = {}
+    for filename, builder in SVG_BUILDERS.items():
+        out_path = out_dir / filename
+        builder(results, out_path)
+        written[filename] = out_path
+    return written
+
+
 if __name__ == "__main__":
     from scripts.load_data import DEFAULT_CSV, load_and_verify_csv
 
     _df = load_and_verify_csv(DEFAULT_CSV)
     _results = build_results(_df, DEFAULT_CSV)
-    _out_path = Path(__file__).resolve().parent.parent / "docs" / "findings.json"
+    _docs_dir = Path(__file__).resolve().parent.parent / "docs"
+
+    _out_path = _docs_dir / "findings.json"
     write_findings_json(_results, _out_path)
     print(f"wrote {_out_path}")
+
+    for _name, _path in write_svgs(_results, _docs_dir).items():
+        print(f"wrote {_path} ({_path.stat().st_size} bytes)")

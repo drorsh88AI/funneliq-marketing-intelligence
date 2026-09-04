@@ -7,14 +7,17 @@ with the expected value for each assertion computed BY HAND and written
 in a comment next to it -- not by running the function and trusting its
 own output. Runs in CI with no CSV present, per PHASE5.md D4/D6.
 
-build_results()/findings.json are checkpoints 10+; FINDINGS.md rendering
-and SVGs are checkpoints 11-12, still out of scope here.
+build_results()/findings.json are checkpoint 10, SVG rendering is
+checkpoint 11; FINDINGS.md's prose rendering is checkpoint 12+, still
+out of scope here.
 """
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import math
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -865,3 +868,131 @@ def test_write_findings_json_raises_on_nan_instead_of_writing_invalid_json(tmp_p
 
     with pytest.raises(ValueError):
         an.write_findings_json(bad_results, out)
+
+
+# ---------------------------------------------------------------------------
+# checkpoint 11 -- 5 SVG charts, PHASE5.md D9. Every SVG_BUILDERS entry
+# takes `results` only (never a DataFrame), which is what makes
+# recomputing a metric from the CSV inside a chart structurally
+# impossible, not just a documented convention.
+# ---------------------------------------------------------------------------
+_EXPECTED_SVG_FILENAMES = {
+    "funnel_dropoff.svg",
+    "ad_budget_leads_curve.svg",
+    "budget_tier_conversion.svg",
+    "calls_to_closed_distribution.svg",
+    "correlations_cumulative_profit.svg",
+}
+
+
+def test_svg_builders_take_only_results_dict_no_dataframe():
+    """Structural proof, not a convention: none of the 5 chart builders
+    can even accept a DataFrame -- their signature is exactly
+    (results, out_path)."""
+    assert set(an.SVG_BUILDERS) == _EXPECTED_SVG_FILENAMES
+    for builder in an.SVG_BUILDERS.values():
+        params = list(inspect.signature(builder).parameters)
+        assert params == ["results", "out_path"]
+        assert not any("df" in p.lower() or "frame" in p.lower() for p in params)
+
+
+def test_write_svgs_creates_exactly_the_five_expected_files(tmp_path, monkeypatch):
+    df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
+    csv_path = tmp_path / "sample.csv"
+    results = an.build_results(df, csv_path)
+
+    out_dir = tmp_path / "svg_out"
+    out_dir.mkdir()
+    written = an.write_svgs(results, out_dir)
+
+    assert set(written) == _EXPECTED_SVG_FILENAMES
+    on_disk = {p.name for p in out_dir.glob("*")}
+    assert on_disk == _EXPECTED_SVG_FILENAMES  # exactly 5 files, nothing extra
+
+
+def test_write_svgs_output_is_valid_svg_with_accessible_description(tmp_path, monkeypatch):
+    df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
+    csv_path = tmp_path / "sample.csv"
+    results = an.build_results(df, csv_path)
+
+    out_dir = tmp_path / "svg_out"
+    out_dir.mkdir()
+    written = an.write_svgs(results, out_dir)
+
+    ns = "{http://www.w3.org/2000/svg}"
+    for path in written.values():
+        text = path.read_text(encoding="utf-8")
+        root = ET.fromstring(text)  # raises if not well-formed XML
+        assert root.tag == f"{ns}svg"
+
+        title = root.find(f"{ns}title")
+        desc = root.find(f"{ns}desc")
+        assert title is not None and (title.text or "").strip()
+        assert desc is not None and (desc.text or "").strip()
+        # accessible description is the Hebrew caption/explanation --
+        # technical chart labels stay English (matplotlib does no bidi
+        # text shaping, so Hebrew glyphs drawn on the chart itself would
+        # render in the wrong visual order)
+        assert any("֐" <= ch <= "׿" for ch in desc.text)
+
+        # no volatile metadata (generation date, run time, local path)
+        for forbidden in ("2026-", "AppData", str(tmp_path)):
+            assert forbidden not in text
+
+
+def test_write_svgs_works_from_a_fabricated_results_dict_with_no_dataframe_anywhere(tmp_path):
+    """The strongest provenance proof: this test never constructs a
+    DataFrame or loads any CSV at all -- results is a hand-typed dict with
+    distinctive, made-up numbers. If any chart builder tried to recompute
+    a value from a CSV, there would be no CSV or DataFrame in scope for it
+    to use; if it silently invented a value instead of reading `results`,
+    the fabricated numbers below couldn't possibly be reflected in
+    write_svgs()'s successful, complete output."""
+    fake_results = {
+        "funnel_dropoff": {
+            "followup_1": 0.987654, "followup_2": 0.111111, "followup_3": None,
+            "followup_4": 0.5, "followup_5": 0.0,
+        },
+        "ad_budget_leads_curve": {
+            999999: {"n": 1, "median_num_leads": 424242.0},
+            111: {"n": 2, "median_num_leads": 3.5},
+        },
+        "budget_tiers": {
+            "Low": {"n_records": 7, "conversion_rate": 0.42},
+            "Mid": {"n_records": 0, "conversion_rate": None},
+            "High": {"n_records": 3, "conversion_rate": 0.99},
+            "gap": {"n_records": 5},
+        },
+        "calls_to_closed": {
+            "n_purchased1": 9, "n_calls_to_closed_ge_4": 1, "n_closed_eq_1": 4,
+            "n_closed_ge_2": 5, "n_closed_eq_1_calls_ge_4": 1,
+            "mean_calls_to_closed_closed_eq_1": 1.23,
+            "mean_calls_to_closed_closed_ge_2": 8.76,
+            "corr_closed_calls_to_closed": None,
+        },
+        "correlations": {"ad_budget": 0.5, "num_leads": None, "closed": -0.5},
+    }
+
+    out_dir = tmp_path / "svg_out"
+    out_dir.mkdir()
+    written = an.write_svgs(fake_results, out_dir)
+
+    assert set(written) == _EXPECTED_SVG_FILENAMES
+    for path in written.values():
+        assert path.exists() and path.stat().st_size > 0
+        ET.fromstring(path.read_text(encoding="utf-8"))  # still valid SVG/XML
+
+
+def test_write_svgs_is_byte_identical_on_rerun(tmp_path, monkeypatch):
+    df = _load(OPERATIONAL_CSV_TEXT, tmp_path, monkeypatch)
+    csv_path = tmp_path / "sample.csv"
+    results = an.build_results(df, csv_path)
+
+    out1, out2 = tmp_path / "svg_out1", tmp_path / "svg_out2"
+    out1.mkdir()
+    out2.mkdir()
+    an.write_svgs(results, out1)
+    an.write_svgs(results, out2)
+
+    for filename in _EXPECTED_SVG_FILENAMES:
+        assert (out1 / filename).read_bytes() == (out2 / filename).read_bytes()
