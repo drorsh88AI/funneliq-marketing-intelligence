@@ -628,3 +628,64 @@ def test_lift_at_k_rejects_non_finite_y_score(bad):
 def test_require_finite_1d_rejects_non_one_dimensional_input():
     with pytest.raises(ValueError, match="one-dimensional"):
         tr.one_se_stats([[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]])
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 6 -- read/write_metrics_json (D14): round-trip, determinism,
+# allow_nan=False, and no silently-injected volatile fields. Synthetic
+# dicts only -- D21 rules out full training in CI, not testing the
+# read/write plumbing itself.
+# ---------------------------------------------------------------------------
+
+def test_write_metrics_json_round_trip(tmp_path):
+    data = {"P2": {"xgboost": {"role": "candidate", "mean_mae": 2.08, "fold_scores_mae": [1, 2, 3]}}}
+    path = tmp_path / "metrics.json"
+    tr.write_metrics_json(data, path)
+    assert tr.read_metrics_json(path) == data
+
+
+def test_read_metrics_json_returns_empty_dict_when_file_absent(tmp_path):
+    assert tr.read_metrics_json(tmp_path / "does_not_exist.json") == {}
+
+
+def test_write_metrics_json_is_deterministic_byte_for_byte(tmp_path):
+    """Same content in a different dict insertion order must still
+    produce byte-identical output (sort_keys) -- a re-run from the same
+    CSV must reproduce the file exactly (checkpoint 6's own real-CSV
+    determinism check relies on this)."""
+    data_a = {"P2": {"linear": {"role": "baseline", "fold_scores_mae": [1.0, 2.0]}}}
+    data_b = {"P2": {"linear": {"fold_scores_mae": [1.0, 2.0], "role": "baseline"}}}
+    path_a, path_b = tmp_path / "a.json", tmp_path / "b.json"
+    tr.write_metrics_json(data_a, path_a)
+    tr.write_metrics_json(data_b, path_b)
+    assert path_a.read_bytes() == path_b.read_bytes()
+
+
+def test_write_metrics_json_rejects_nan(tmp_path):
+    data = {"P2": {"xgboost": {"mean_mae": float("nan")}}}
+    with pytest.raises(ValueError):
+        tr.write_metrics_json(data, tmp_path / "out.json")
+
+
+def test_write_metrics_json_never_injects_volatile_fields(tmp_path):
+    """metrics.json must stay purely deterministic content -- D14
+    requires volatile facts (timestamp, git sha, RSS, run time) to live
+    in run_metadata.json instead, never here. Locks that
+    write_metrics_json itself never silently adds any of them."""
+    data = {
+        "P2": {
+            "xgboost": {
+                "role": "candidate",
+                "fold_scores_mae": [1.0, 2.0, 3.0, 4.0, 5.0],
+                "mean_mae": 3.0,
+                "best_params": {"model__max_depth": 4},
+            },
+        }
+    }
+    path = tmp_path / "metrics.json"
+    tr.write_metrics_json(data, path)
+    assert tr.read_metrics_json(path) == data  # nothing added, nothing dropped
+
+    text = path.read_text(encoding="utf-8").lower()
+    for term in ("timestamp", "git_sha", "git sha", "rss", "run_time", "runtime", "duration"):
+        assert term not in text, f"unexpected volatile field marker {term!r} in metrics.json"

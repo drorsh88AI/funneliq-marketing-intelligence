@@ -476,10 +476,27 @@ def make_p2_boosters() -> dict:
     }
 
 
-def _search_candidate(estimator, param_distributions, preprocessing_steps, X, y, folds, scoring: str) -> dict:
+# P2's full metric set (D13): MAE is the primary metric that drives
+# selection; RMSE and R² are secondary and reported alongside, on the
+# exact same winning fold model -- multi-metric scoring computes all
+# three per fold without an extra fit, verified empirically against
+# sklearn 1.9.0 before writing this (RandomizedSearchCV(scoring=dict,
+# refit=<primary>) exposes split{k}_test_<name> for every name in the
+# dict, all at the same best_index_).
+P2_SCORING = {"mae": "neg_mean_absolute_error", "rmse": "neg_root_mean_squared_error", "r2": "r2"}
+P2_PRIMARY_METRIC = "mae"
+# Scorers sklearn negates (lower-is-better made higher-is-better) --
+# these get sign-flipped back to their natural scale before reporting;
+# r2 is already reported on its natural (higher-is-better) scale.
+P2_NEGATED_SCORERS = {"mae", "rmse"}
+
+
+def _search_candidate(estimator, param_distributions, preprocessing_steps, X, y, folds,
+                       scoring: dict, refit: str) -> dict:
     """Runs one RandomizedSearchCV over the shared folds and extracts
-    the winning configuration's 5 per-fold scores from cv_results_ at
-    best_index_ (D3) -- no second CV run for the winner."""
+    the winning configuration's 5 per-fold scores, for every metric in
+    `scoring`, from cv_results_ at best_index_ (D3) -- no second CV run
+    for the winner, and no second CV run per extra metric either."""
     pipeline = Pipeline(preprocessing_steps + [("model", estimator)])
     search = RandomizedSearchCV(
         pipeline,
@@ -487,64 +504,76 @@ def _search_candidate(estimator, param_distributions, preprocessing_steps, X, y,
         n_iter=SEARCH_N_ITER,
         cv=folds,
         scoring=scoring,
+        refit=refit,
         random_state=SEARCH_RANDOM_STATE,
         n_jobs=SEARCH_N_JOBS,
     )
     search.fit(X, y)
     best = search.best_index_
-    fold_scores = [
-        float(search.cv_results_[f"split{k}_test_score"][best]) for k in range(N_FOLDS)
-    ]
+    fold_scores = {
+        name: [float(search.cv_results_[f"split{k}_test_{name}"][best]) for k in range(N_FOLDS)]
+        for name in scoring
+    }
     return {"best_params": search.best_params_, "fold_scores": fold_scores}
 
 
-def _baseline_candidate(estimator, preprocessing_steps, X, y, folds, scoring: str) -> dict:
+def _baseline_candidate(estimator, preprocessing_steps, X, y, folds, scoring: dict) -> dict:
     """A Baseline has no hyperparameters in the locked grid -- scored
     directly with cross_validate on the same shared folds, not a
-    RandomizedSearchCV of one candidate."""
+    RandomizedSearchCV of one candidate. cross_validate(scoring=dict)
+    returns one test_<name> array per metric, same folds, one fit
+    each -- no extra CV run per metric."""
     pipeline = Pipeline(preprocessing_steps + [("model", estimator)])
     result = cross_validate(pipeline, X, y, cv=folds, scoring=scoring)
-    return {"fold_scores": [float(s) for s in result["test_score"]]}
+    fold_scores = {name: [float(s) for s in result[f"test_{name}"]] for name in scoring}
+    return {"fold_scores": fold_scores}
+
+
+def _metric_summary(fold_scores: dict, role: str, best_params: dict | None = None) -> dict:
+    """One {fold_scores_<metric>, mean_<metric>, se_<metric>} triple
+    per metric in fold_scores, sign-corrected back to each metric's
+    natural scale (D13's "ב-CV — per-fold + ממוצע ± std" column)."""
+    out: dict = {"role": role}
+    if best_params is not None:
+        out["best_params"] = best_params
+    for name, scores in fold_scores.items():
+        natural_scores = [-s for s in scores] if name in P2_NEGATED_SCORERS else list(scores)
+        mean, se = one_se_stats(natural_scores)
+        out[f"fold_scores_{name}"] = natural_scores
+        out[f"mean_{name}"] = mean
+        out[f"se_{name}"] = se
+    return out
 
 
 def train_p2(df: pd.DataFrame) -> dict:
     """Checkpoint 6: P2's three required boosters (searched) + two
     Baselines (Dummy, Linear), all scored on the same 5 shared folds
-    over P2's train set. Scores are stored on the metric's natural
-    scale (MAE, positive) -- sklearn's neg_mean_absolute_error sign is
-    an implementation detail of the scorer, not the reported unit.
-    Selection (One-SE eligibility + the RSS tie-break) is checkpoint
-    10's job across all four tasks, not this function's."""
+    over P2's train set, on all three of D13's metrics (MAE primary,
+    RMSE + R² secondary). Selection (One-SE eligibility + the RSS
+    tie-break) is checkpoint 10's job across all four tasks, and uses
+    MAE only -- RMSE/R² here are report-only."""
     task = "P2"
     train_df = build_task_train_frame(df, task)
     y = train_df[TARGET[task]]
     folds = build_folds(df, task)
     preprocessing_steps = build_preprocessing_steps(task, encode_budget_tier=False)
-    scoring = SCORING[task]
 
     results = {}
     for name, (estimator, param_distributions) in make_p2_boosters().items():
-        candidate = _search_candidate(estimator, param_distributions, preprocessing_steps, train_df, y, folds, scoring)
-        mae_scores = [-s for s in candidate["fold_scores"]]  # neg_MAE -> MAE
-        mean, se = one_se_stats(mae_scores)
-        results[name] = {
-            "role": "candidate",
-            "best_params": candidate["best_params"],
-            "fold_scores_mae": mae_scores,
-            "mean_mae": mean,
-            "se_mae": se,
-        }
+        candidate = _search_candidate(
+            estimator, param_distributions, preprocessing_steps, train_df, y, folds,
+            P2_SCORING, refit=P2_PRIMARY_METRIC,
+        )
+        results[name] = _metric_summary(candidate["fold_scores"], "candidate", candidate["best_params"])
 
     baselines = {
         "dummy": DummyRegressor(strategy="mean"),
         "linear": LinearRegression(),
     }
     for name, estimator in baselines.items():
-        candidate = _baseline_candidate(estimator, preprocessing_steps, train_df, y, folds, scoring)
-        mae_scores = [-s for s in candidate["fold_scores"]]
-        mean, se = one_se_stats(mae_scores)
+        candidate = _baseline_candidate(estimator, preprocessing_steps, train_df, y, folds, P2_SCORING)
         role = "benchmark" if name == "dummy" else "baseline"
-        results[name] = {"role": role, "fold_scores_mae": mae_scores, "mean_mae": mean, "se_mae": se}
+        results[name] = _metric_summary(candidate["fold_scores"], role)
 
     return results
 
@@ -615,7 +644,10 @@ if __name__ == "__main__":
     print("--- checkpoint 6: P2 search + Baselines ---")
     p2_results = train_p2(df)
     for name, r in sorted(p2_results.items()):
-        print(f"P2/{name}: role={r['role']} mean_mae={r['mean_mae']:.4f} se_mae={r['se_mae']:.4f}")
+        print(f"P2/{name}: role={r['role']} "
+              f"MAE={r['mean_mae']:.4f}+-{r['se_mae']:.4f} "
+              f"RMSE={r['mean_rmse']:.4f}+-{r['se_rmse']:.4f} "
+              f"R2={r['mean_r2']:.4f}+-{r['se_r2']:.4f}")
 
     metrics_path = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
     all_metrics = read_metrics_json(metrics_path)
