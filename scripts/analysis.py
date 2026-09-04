@@ -156,6 +156,18 @@ def duplicate_sensitivity(df: pd.DataFrame) -> dict:
     }
 
 
+def _safe_corr(a: pd.Series, b: pd.Series) -> float | None:
+    """Pearson r, with every NaN-producing case (fewer than two valid
+    pairs after alignment, zero variance in either side, or an empty
+    input) turned into None instead of a NaN float. NaN is not valid
+    JSON (json.dumps emits the bareword `NaN`, which no strict JSON
+    parser accepts) -- findings.json must never carry one, so every
+    caller of this module routes correlations through here rather than
+    calling .corr() directly."""
+    r = a.corr(b)
+    return None if pd.isna(r) else float(r)
+
+
 def correlations(df: pd.DataFrame) -> dict:
     """Pearson r of every other numeric raw column against
     cumulative_profit -- a dataset-description table (SPEC.md § עובדות
@@ -164,13 +176,10 @@ def correlations(df: pd.DataFrame) -> dict:
     features). pandas' Series.corr() drops NaN pairwise, so each column's
     own missing values and cumulative_profit's 29 missing are each
     handled independently, per pair. A constant column (zero variance)
-    correlates to NaN -- reported as None, not silently omitted."""
+    correlates to NaN -- reported as None (_safe_corr), not silently
+    omitted and never a raw NaN."""
     candidates = [c for c in NOT_NULL_INT_COLUMNS + NULLABLE_INT_COLUMNS if c != "cumulative_profit"]
-    out: dict = {}
-    for col in candidates:
-        r = df[col].corr(df["cumulative_profit"])
-        out[col] = None if pd.isna(r) else float(r)
-    return out
+    return {col: _safe_corr(df[col], df["cumulative_profit"]) for col in candidates}
 
 
 def ad_budget_leads_curve(df: pd.DataFrame) -> dict:
@@ -238,7 +247,5 @@ def calls_to_closed(df: pd.DataFrame) -> dict:
         "mean_calls_to_closed_closed_ge_2": (
             float(closed2p["calls_to_closed"].mean()) if len(closed2p) else None
         ),
-        "corr_closed_calls_to_closed": (
-            float(p1["closed"].corr(p1["calls_to_closed"])) if n_p1 else None
-        ),
+        "corr_closed_calls_to_closed": _safe_corr(p1["closed"], p1["calls_to_closed"]),
     }

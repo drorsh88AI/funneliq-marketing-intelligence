@@ -268,15 +268,21 @@ def test_funnel_dropoff_uses_sum_over_sum_not_mean_of_row_ratios(funnel_dropoff_
 
 # ---------------------------------------------------------------------------
 # calls_to_closed() -- purchased=1 population only. 4 purchased rows with
-# distinct closed/calls_to_closed combinations, plus 1 purchased=0 row
-# that must be excluded entirely from every count below.
+# distinct closed/calls_to_closed combinations, plus one ADVERSARIAL
+# purchased=0 row (P5): closed=2 (lands in the closed>=2 bucket if the
+# purchased filter leaks) and calls_to_closed=999 (an extreme outlier
+# that would wreck mean_calls_to_closed_closed_ge_2 and the correlation
+# if it leaked in). A boring excluded row (e.g. closed=0) wouldn't land
+# in either bucket and so wouldn't perturb most metrics even if the
+# filter were broken -- P5 is deliberately built to break every metric
+# below if the exclusion has any bug, not just the population count.
 #
 #   row  purchased  closed  calls_to_closed
 #   P1   1          1       5
 #   P2   1          1       3
 #   P3   1          2       2
 #   P4   1          3       1
-#   P5   0          0       0   (excluded -- not purchased)
+#   P5   0          2       999   (adversarial -- must be excluded)
 # ---------------------------------------------------------------------------
 CALLS_TO_CLOSED_CSV_TEXT = (
     ",".join(ld.EXPECTED_COLUMNS) + "\n"
@@ -284,7 +290,7 @@ CALLS_TO_CLOSED_CSV_TEXT = (
     "800,15,12,3,10,8,6,4,3,2,1,3,4,120,12.0,1,0,600.0,No\n"  # P2
     "1000,25,20,5,16,13,10,7,5,3,2,2,5,150,15.0,1,1,1200.0,Yes\n"  # P3
     "1500,30,25,5,20,16,12,8,6,3,3,1,6,180,20.0,1,1,2000.0,Yes\n"  # P4
-    "2000,40,35,5,28,22,17,12,8,8,0,0,2,200,5.0,0,0,100.0,No\n"    # P5 (not purchased)
+    "2000,40,35,5,28,22,17,12,8,6,2,999,5,200,5.0,0,0,100.0,No\n"  # P5 (adversarial, not purchased)
 )
 
 
@@ -317,11 +323,67 @@ def test_calls_to_closed(calls_to_closed_df):
     assert result["corr_closed_calls_to_closed"] == pytest.approx(expected_r)
 
 
-def test_calls_to_closed_excludes_purchased_0_from_every_count(calls_to_closed_df):
-    """P5 (purchased=0, closed=0, calls_to_closed=0) would change several
-    counts if it leaked in -- explicit proof it doesn't."""
+def test_calls_to_closed_excludes_adversarial_purchased_0_row_from_every_metric(calls_to_closed_df):
+    """P5 is adversarial, not incidental: closed=2 would join the
+    closed>=2 bucket (making n_closed_ge_2=3, not 2) and
+    calls_to_closed=999 would drag mean_calls_to_closed_closed_ge_2 from
+    1.5 to (2+1+999)/3=334.0 and distort the correlation, if the
+    purchased=1 filter leaked it in anywhere. Every field below must
+    still equal the exact 4-row (P1-P4) known answer -- not just the
+    population count, which a boring excluded row could pass by
+    accident even with a broken filter."""
     result = an.calls_to_closed(calls_to_closed_df)
+
     assert result["n_purchased1"] == 4
-    # if P5 leaked in, n_closed_eq_1 would still be 2 but n_purchased1
-    # would be 5 -- the population count is the tell-tale
-    assert result["n_purchased1"] != len(calls_to_closed_df)
+    assert result["n_calls_to_closed_ge_4"] == 1
+    assert result["n_closed_eq_1"] == 2
+    assert result["n_closed_ge_2"] == 2  # NOT 3 -- P5's closed=2 must not join this bucket
+    assert result["n_closed_eq_1_calls_ge_4"] == 1
+
+    assert result["mean_calls_to_closed_closed_eq_1"] == pytest.approx((5 + 3) / 2)
+    # NOT (2+1+999)/3=334.0 -- P5's extreme calls_to_closed must not leak in
+    assert result["mean_calls_to_closed_closed_ge_2"] == pytest.approx((2 + 1) / 2)
+
+    import math
+    expected_r = -4.25 / math.sqrt(2.75 * 8.75)  # same derivation as test_calls_to_closed
+    assert result["corr_closed_calls_to_closed"] == pytest.approx(expected_r)
+
+
+# ---------------------------------------------------------------------------
+# A single-record purchased=1 population -- pandas' Series.corr() on a
+# lone point is mathematically undefined (needs at least two pairs) and
+# returns NaN, not an exception. Proves _safe_corr() (used by both
+# calls_to_closed and correlations) turns that into None, not a raw NaN
+# that would break findings.json's JSON validity later.
+# ---------------------------------------------------------------------------
+SINGLE_RECORD_CSV_TEXT = (
+    ",".join(ld.EXPECTED_COLUMNS) + "\n"
+    "500,10,8,2,6,5,4,3,2,1,1,5,3,100,10.0,1,0,500.0,No\n"
+)
+
+
+@pytest.fixture
+def single_record_df(tmp_path, monkeypatch):
+    return _load(SINGLE_RECORD_CSV_TEXT, tmp_path, monkeypatch)
+
+
+def test_calls_to_closed_single_record_population_correlation_is_none_not_nan(single_record_df):
+    """n_p1=1: correlation is undefined (fewer than two valid pairs), not
+    computable as any real number -- must come back as None, and the
+    whole dict must be JSON-serializable without emitting a bareword NaN."""
+    import json
+
+    result = an.calls_to_closed(single_record_df)
+
+    assert result["n_purchased1"] == 1
+    assert result["n_calls_to_closed_ge_4"] == 1   # calls_to_closed=5 >= 4
+    assert result["n_closed_eq_1"] == 1
+    assert result["n_closed_ge_2"] == 0             # empty bucket
+    assert result["n_closed_eq_1_calls_ge_4"] == 1
+    assert result["mean_calls_to_closed_closed_eq_1"] == pytest.approx(5.0)
+    assert result["mean_calls_to_closed_closed_ge_2"] is None  # empty bucket -> None, not NaN
+
+    assert result["corr_closed_calls_to_closed"] is None  # undefined with n=1, not NaN
+
+    serialized = json.dumps(result)
+    assert "NaN" not in serialized
