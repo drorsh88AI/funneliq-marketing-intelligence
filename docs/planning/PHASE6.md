@@ -533,11 +533,16 @@ D13 (הפרדת מדדי הכיול), D15 (ששת שדות ה-metadata), D18 (פ
 `planning_status: approved_for_execution`.**
 
 ✅ **המשתמש נתן הוראת ביצוע נפרדת ומפורשת 04.09.2026.** `feat/models`
-נפתח מ-`main` (אחרי commit `2baa365`, אישור התכנון). **checkpoint 1
-בוצע**: SHA-256 של הקובץ תואם `EXPECTED_SHA256` ב-`load_data.py`,
-header תואם `EXPECTED_COLUMNS`, `n_rows=3500`. עבר את שער האישור ברמת
-checkpoint (`ROADMAP.html`): סומן תחילה `awaiting_approval` אחרי אימות
-עצמי של קלוד, ואז `done` אחרי ביקורת Codex (אפס ממצא פתוח לגופו של
-עניין) ואישור סופי מפורש של המשתמש. `execution_status` עודכן ל-
-`in_progress`. ראה `ROADMAP.html` §checkpoint 1 לראיה המלאה. פאזה 6
-בביצוע.
+נפתח מ-`main` (אחרי commit `2baa365`, אישור התכנון). `execution_status`
+עודכן ל-`in_progress`. פאזה 6 בביצוע.
+
+**checkpoints 1–5 בוצעו, אומתו עצמאית, עברו ביקורת ואושרו — כולם
+`done`.** כל checkpoint עבר את אותו שער אישור ברמת checkpoint
+(`ROADMAP.html`): מסומן `awaiting_approval` אחרי אימות עצמי של קלוד,
+הופך ל-`done` רק אחרי ביקורת Codex ואישור סופי מפורש של המשתמש —
+ממצא שמתגלה מתוקן תחת אותו checkpoint ונשאר `awaiting_approval` לסבב
+נוסף, לא `done` מוקדם מדי. checkpoint 5 (חוקי ההכרעה) עבר שני סבבי
+תיקון לפני האישור: אכיפת 5 folds בדיוק + בדיקות שליליות, ואז דחיית
+`NaN`/`±inf` בכל קלט מספרי — 92/92 בדיקות `tests/test_train.py`,
+230/230 בכל `pytest`, אין רגרסיה. ראה `ROADMAP.html` §checkpoints 1–5
+לראיה המלאה של כל אחד.
