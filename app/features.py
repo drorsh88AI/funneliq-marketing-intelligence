@@ -3,11 +3,21 @@ budget-tier mapping (CLAUDE.md § app/features.py; PHASE5.md D2).
 
 docs/feature_matrix.md is the methodological companion -- business
 meaning, granularity, availability timing, and the reasoning behind every
-Feature/Target/Excluded status below, for all 19 raw source columns across
-P2/P3/P4/P6. tests/test_features.py checks the two never drift apart.
-Grounded directly in SPEC.md § החרגות דליפה, § אוכלוסיות אימון, and
-§ נקודות חיזוי -- nothing here is inferred from a measured target
-relationship (SPEC.md's D3 rule for this phase).
+Feature/Target/Derived/Excluded status below, for all 19 raw source
+columns across P2/P3/P4/P6. tests/test_features.py checks the two never
+drift apart. Grounded directly in SPEC.md § החרגות דליפה, § אוכלוסיות
+אימון, and § נקודות חיזוי -- nothing here is inferred from a measured
+target relationship (SPEC.md's D3 rule for this phase).
+
+Four statuses, not three (SPEC.md § מטריצת זמינות פיצ'רים names all four:
+Feature / Target / נגזרת / מוחרגת). P6's snapshot is explicit that only
+`ad_budget` is known directly at prediction time -- "שאר המשפך נגזר
+מפרופיל" (§ נקודות חיזוי): every other campaign-level funnel column is a
+real training feature, but at serving time its value is substituted from
+a median profile per budget tier (חבילה 6), not read from the column
+itself. That is exactly what "Derived" (נגזרת) names, and it applies to
+P6 only -- P2/P3/P4's snapshot (end of campaign cycle) has every funnel
+aggregate available directly, no substitution needed.
 
 Not connected to app/main.py and does not perform any modeling in phase 5
 -- imported by tests only. Phase 6 wires it into the actual training/
@@ -56,10 +66,36 @@ EXCLUDED = {
 # phase-6 Pipeline-build decision, not made or implemented here.
 COLLINEAR_TRIO = ("num_leads", "leads_answered", "leads_not_answered")
 
+# P6 only: every campaign-level "funnel" column except ad_budget itself
+# (SPEC.md § גרעיניות מעורבת defines "המשפך" as exactly this set:
+# num_leads, the five followup stages, closed, not_closed, calls_to_*,
+# CAC -- ad_budget is listed separately). At the P6 snapshot (budget
+# allocation moment) none of these is known for a hypothetical new
+# budget -- § נקודות חיזוי's "שאר המשפך נגזר מפרופיל" -- so each is
+# substituted from the median profile for that budget tier at serving
+# time (חבילה 6), computed from training data within each fold. Still a
+# real, observed training feature; only the SERVING-time value is
+# profile-derived, not the training signal itself.
+#
+# `purchased` is deliberately NOT in this set: it is customer-level, not
+# part of "המשפך" as SPEC.md defines the term, and stays a direct Feature
+# for P6 (it varies in the unfiltered population -- see EXCLUDED above).
+DERIVED_FROM_PROFILE = {
+    "P6": {
+        "num_leads", "leads_answered", "leads_not_answered",
+        "followup_1", "followup_2", "followup_3", "followup_4", "followup_5",
+        "not_closed", "closed", "calls_to_closed", "calls_to_not_closed",
+        "customer_acquisition_cost",
+    },
+}
+
 
 def _feature_list(task: str) -> list[str]:
     """Every raw column that is neither the task's target nor excluded --
-    in EXPECTED_COLUMNS order, the single existing source of truth for the
+    Feature-status and Derived-status columns together, since both are
+    real model inputs (Derived just means the value is substituted from a
+    profile at serving time, not that it's absent from the model). In
+    EXPECTED_COLUMNS order, the single existing source of truth for the
     raw 19-column contract (scripts.load_data), not redefined here."""
     drop = EXCLUDED[task] | {TARGET[task]}
     return [c for c in EXPECTED_COLUMNS if c not in drop]
@@ -69,14 +105,16 @@ FEATURES = {task: _feature_list(task) for task in TARGET}
 
 
 def column_status(column: str, task: str) -> str:
-    """One of "Target" / "Excluded" / "Feature" for a raw column in a given
-    task -- the single function docs/feature_matrix.md's parity test and
-    any future caller check against, instead of re-deriving the three sets
-    by hand."""
+    """One of "Target" / "Excluded" / "Derived" / "Feature" for a raw
+    column in a given task -- the single function docs/feature_matrix.md's
+    parity test and any future caller check against, instead of
+    re-deriving the four sets by hand."""
     if column == TARGET[task]:
         return "Target"
     if column in EXCLUDED[task]:
         return "Excluded"
+    if column in DERIVED_FROM_PROFILE.get(task, ()):
+        return "Derived"
     return "Feature"
 
 
