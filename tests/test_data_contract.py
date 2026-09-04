@@ -1,15 +1,14 @@
 """Tests for scripts/data_contract.py.
 
-Layer A (schema) only, for now -- checkpoints 2 fixed four violations that
-check_schema() silently let through (found by Codex review); these are the
-regression tests proving the fix. Layer B (invariants) and layer C (snapshot
-expectations), and the full valid+invalid fixture matrix across all three
-layers, are checkpoint 4's scope -- not added here.
+Regression tests only, added as each checkpoint's own review found a real
+gap -- checkpoint 2 (layer A, four cases) and checkpoint 3 (layer C, two
+cases below). The full valid+invalid fixture matrix across all three layers
+is checkpoint 4's scope -- not started here.
 
-Nothing here touches the real funnel_marketing_data.csv or Supabase -- a
-tiny two-row fixture CSV, loaded the same way load_data.py loads the real
-one, so dtypes match real parsing behaviour (not hand-set via astype()).
-Runs in CI with no CSV present, per PHASE5.md D4.
+Nothing here touches the real funnel_marketing_data.csv or Supabase -- tiny
+fixture CSVs, loaded the same way load_data.py loads the real one, so
+dtypes match real parsing behaviour (not hand-set via astype()). Runs in CI
+with no CSV present, per PHASE5.md D4.
 """
 from __future__ import annotations
 
@@ -82,3 +81,57 @@ def test_check_schema_flags_null_in_referred(tmp_path, monkeypatch):
     df.loc[0, "referred"] = None
     violations = dc.check_schema(df)
     assert any("referred" in v and "null" in v for v in violations)
+
+
+def test_check_snapshot_distinct_and_gap_alone_miss_a_value_swap(tmp_path, monkeypatch):
+    """distinct_ad_budgets and gap_1501_1999_count alone do not prove the
+    values themselves are right -- a swap that keeps both counts unchanged
+    passes silently through them."""
+    df = _load_fixture(tmp_path, monkeypatch)  # ad_budget: 2500, 15000
+    swapped = df.copy()
+    swapped.loc[0, "ad_budget"] = 900  # not 2500, still outside [1501,1999]
+
+    violations = dc.check_snapshot(
+        swapped, {"distinct_ad_budgets": 2, "gap_1501_1999_count": 0}
+    )
+    assert violations == [], (
+        "sanity check: distinct+gap alone really are insufficient to "
+        "detect the swap -- if this fails, the fixture stopped "
+        "reproducing the gap this test exists to guard"
+    )
+
+
+def test_check_snapshot_ad_budget_values_catches_the_same_swap(tmp_path, monkeypatch):
+    df = _load_fixture(tmp_path, monkeypatch)  # ad_budget: 2500, 15000
+    swapped = df.copy()
+    swapped.loc[0, "ad_budget"] = 900
+
+    violations = dc.check_snapshot(swapped, {"ad_budget_values": [2500, 15000]})
+    assert any("ad_budget_values" in v for v in violations)
+
+    # a list and a tuple expectation must behave identically
+    violations_tuple = dc.check_snapshot(swapped, {"ad_budget_values": (2500, 15000)})
+    assert any("ad_budget_values" in v for v in violations_tuple)
+
+    # and the untouched fixture still matches its own real values, either way
+    assert dc.check_snapshot(df, {"ad_budget_values": [2500, 15000]}) == []
+    assert dc.check_snapshot(df, {"ad_budget_values": (2500, 15000)}) == []
+
+
+DUPLICATE_WITH_NULL_CSV_TEXT = (
+    ",".join(ld.EXPECTED_COLUMNS) + "\n"
+    "2500,36,24,12,19,14,11,10,7,5,2,2,4,1250,,1,0,20777.0,No\n"
+    "2500,36,24,12,19,14,11,10,7,5,2,2,4,1250,,1,0,20777.0,No\n"
+)
+
+
+def test_check_snapshot_counts_a_duplicate_group_keyed_on_a_null(tmp_path, monkeypatch):
+    """pandas' groupby default (dropna=True) silently excludes a group
+    whose key contains a null -- two rows that are identical including a
+    shared NaN in ltv_months must still count as one duplicate group."""
+    p = tmp_path / "dup_with_null.csv"
+    p.write_text(DUPLICATE_WITH_NULL_CSV_TEXT)
+    monkeypatch.setattr(ld, "EXPECTED_SHA256", hashlib.sha256(p.read_bytes()).hexdigest())
+    df = ld.load_and_verify_csv(p)
+
+    assert dc.check_snapshot(df, {"duplicate_rows": 2, "duplicate_groups": 1}) == []

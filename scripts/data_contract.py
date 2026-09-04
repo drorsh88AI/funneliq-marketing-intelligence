@@ -203,17 +203,25 @@ def check_invariants(df: pd.DataFrame) -> list[str]:
     return violations
 
 
-def _measure_snapshot(df: pd.DataFrame) -> dict[str, int]:
+def _measure_snapshot(df: pd.DataFrame) -> dict[str, int | tuple[int, ...]]:
     """Compute every layer-C metric from PHASE0.md §ג.2, generically from
     any df that has passed layer A. Every value is an exact integer count
-    -- no percentage or float ever appears in this layer, so there is no
-    rounding/tolerance question to get wrong. Base rates (e.g. the 46.35%
-    upsell figure) are represented as the numerator/denominator counts
-    that produce them, not as a pre-divided float.
+    or a tuple of exact integers -- no percentage or float ever appears in
+    this layer, so there is no rounding/tolerance question to get wrong.
+    Base rates (e.g. the 46.35% upsell figure) are represented as the
+    numerator/denominator counts that produce them, not as a pre-divided
+    float.
     """
+    # dropna=False -- a duplicate group whose key includes a null (e.g. two
+    # rows sharing the same NaN in ltv_months/cumulative_profit) is still a
+    # real duplicate group. pandas' groupby default (dropna=True) silently
+    # excludes NaN-keyed groups from ngroups, undercounting them.
     dup_mask = df.duplicated(subset=EXPECTED_COLUMNS, keep=False)
     dup_rows = int(dup_mask.sum())
-    dup_groups = int(df[dup_mask].groupby(EXPECTED_COLUMNS).ngroups) if dup_rows else 0
+    dup_groups = (
+        int(df[dup_mask].groupby(EXPECTED_COLUMNS, dropna=False).ngroups)
+        if dup_rows else 0
+    )
 
     # The 1501-1999 gap in the 16 discrete ad_budget values (SPEC.md) --
     # inclusive of both ends, since 1500 and 2000 are themselves valid
@@ -232,6 +240,11 @@ def _measure_snapshot(df: pd.DataFrame) -> dict[str, int]:
         "duplicate_rows": dup_rows,
         "duplicate_groups": dup_groups,
         "distinct_ad_budgets": int(df["ad_budget"].nunique()),
+        # The exact sorted set of values, not just its size -- 16 distinct
+        # values and zero in the gap do not prove they are the RIGHT 16
+        # values; a swapped-in value of a different amount could pass both
+        # counts while being outside the documented discrete list.
+        "ad_budget_values": tuple(sorted(int(v) for v in df["ad_budget"].unique())),
         "gap_1501_1999_count": int(in_gap.sum()),
         "edge_closed_gt0_purchased0": int(
             ((df["closed"] > 0) & (df["purchased"] == 0)).sum()
@@ -248,16 +261,22 @@ def _measure_snapshot(df: pd.DataFrame) -> dict[str, int]:
     }
 
 
-def check_snapshot(df: pd.DataFrame, expected: dict[str, int]) -> list[str]:
+def check_snapshot(
+    df: pd.DataFrame, expected: dict[str, int | list[int] | tuple[int, ...]]
+) -> list[str]:
     """Layer C: snapshot expectations from PHASE0.md §ג.2 -- attributes of
     THIS source file, not a business rule (see module docstring for why
     that still makes it blocking here).
 
     `expected` may be a partial dict: only the keys present are checked, so
     a small fixture test can assert just the one or two metrics relevant to
-    it without supplying all fourteen. An unknown key is a test bug, not a
+    it without supplying all of them. An unknown key is a test bug, not a
     silent no-op, and raises immediately. See _measure_snapshot for the
     full set of measurable keys.
+
+    A list-valued expectation (e.g. ad_budget_values) is accepted as either
+    a list or a tuple -- both compare by value against the measured tuple,
+    never reduced to a count, a percentage, or a hash.
     """
     measured = _measure_snapshot(df)
     violations: list[str] = []
@@ -265,6 +284,10 @@ def check_snapshot(df: pd.DataFrame, expected: dict[str, int]) -> list[str]:
         if key not in measured:
             raise KeyError(f"check_snapshot: unknown expectation key {key!r}")
         got = measured[key]
-        if got != want:
+        if isinstance(got, tuple) or isinstance(want, (list, tuple)):
+            mismatch = tuple(got) != tuple(want)
+        else:
+            mismatch = got != want
+        if mismatch:
             violations.append(f"{key}: expected {want}, measured {got}")
     return violations
