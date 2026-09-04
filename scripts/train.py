@@ -6,11 +6,15 @@ single mechanical sources of truth for the CSV contract and per-task
 feature lists -- nothing here redefines them.
 
 Built incrementally, one PHASE6.md checkpoint at a time. This module
-currently holds checkpoint 3's split layer and checkpoint 4's shared CV
-folds + preprocessing Pipelines.
+currently holds checkpoint 3's split layer, checkpoint 4's shared CV
+folds + preprocessing Pipelines, and checkpoint 5's decision-rule pure
+functions (One-SE, the paired guardrail veto, Split Conformal's
+quantile, top-decile metrics, Lift@K) -- all built and tested before
+any model is trained.
 """
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -176,6 +180,135 @@ def encode_referred_target(series: pd.Series) -> pd.Series:
     """P4's target, Yes/No -> 1/0 (D6). P4 only -- referred is Excluded
     (never a feature) in every other task."""
     return series.map({"Yes": 1, "No": 0}).astype(int)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 5 -- decision-rule pure functions (SPEC.md § בחירת מודל, §
+# איכות עסקית; PHASE6.md D3/D7/D9/D11/D13/D16), built and tested BEFORE
+# any model is trained -- nothing here has ever seen a real fold's
+# scores, and no threshold here is chosen by looking at a result.
+# ---------------------------------------------------------------------------
+
+def one_se_stats(scores) -> tuple[float, float]:
+    """A candidate's mean and standard ERROR over its 5 CV fold scores
+    (SPEC.md's One-SE rule): SE = std(scores, ddof=1) / sqrt(5).
+    ⚠ Standard error, not standard deviation -- the /sqrt(5) is
+    mandatory, and ddof=1 (sample std) is mandatory too."""
+    scores = np.asarray(scores, dtype=float)
+    mean = float(scores.mean())
+    se = float(scores.std(ddof=1) / math.sqrt(len(scores)))
+    return mean, se
+
+
+def one_se_eligible(candidate_mean: float, best_mean: float, best_se: float,
+                     higher_is_better: bool) -> bool:
+    """Whether a candidate is within one standard error of the best
+    model b. The threshold uses SE_b -- the *best* model's own SE --
+    never the candidate's own SE (SPEC.md's One-SE rule is explicit
+    about this). Inclusive at the boundary (<=/>=)."""
+    if higher_is_better:
+        return candidate_mean >= best_mean - best_se
+    return candidate_mean <= best_mean + best_se
+
+
+def paired_delta_stats(deltas) -> dict:
+    """mean, standard error (ddof=1, /sqrt(n)), and the count of
+    positive folds for a set of paired per-fold differences -- the
+    shared building block behind P6's guardrail veto (D7), P3's
+    regular-vs-weighted pairing (D11), and the duplicate-sensitivity
+    report (D16, report-only -- these numbers without a veto verdict)."""
+    deltas = np.asarray(deltas, dtype=float)
+    n = len(deltas)
+    mean = float(deltas.mean())
+    se = float(deltas.std(ddof=1) / math.sqrt(n))
+    return {"mean": mean, "se": se, "n_positive": int((deltas > 0).sum()), "n_folds": n}
+
+
+def guardrail_vetoed(delta_rmse, delta_abs_bias) -> dict:
+    """P6's two-condition guardrail veto (SPEC.md, PHASE6.md D7):
+    vetoed if EITHER Δ_RMSE or Δ_absBias satisfies both (1) a
+    consistent direction -- Δ>0 in at least 4 of 5 folds -- and (2) a
+    magnitude beyond noise -- mean(Δ) > SE(Δ). Checked separately per
+    metric; a single metric failing both conditions is enough to veto.
+    A veto-only rule: it can disqualify a candidate, never select one."""
+    def _check(deltas):
+        stats = paired_delta_stats(deltas)
+        consistent_direction = stats["n_positive"] >= 4
+        beyond_noise = stats["mean"] > stats["se"]
+        return {"vetoed": consistent_direction and beyond_noise, **stats}
+
+    rmse = _check(delta_rmse)
+    abs_bias = _check(delta_abs_bias)
+    return {"vetoed": rmse["vetoed"] or abs_bias["vetoed"], "rmse": rmse, "abs_bias": abs_bias}
+
+
+def conformal_quantile(residuals, alpha: float = 0.05) -> float:
+    """Split Conformal's finite-sample-valid quantile (SPEC.md, D9):
+    the residual at sorted rank ceil((n+1)(1-alpha)) -- not
+    numpy's naive interpolated quantile, which has no finite-sample
+    coverage guarantee. Computed once on the calibration set's
+    residuals, stored, never recomputed at request time."""
+    residuals = np.sort(np.abs(np.asarray(residuals, dtype=float)))
+    n = len(residuals)
+    rank = min(math.ceil((n + 1) * (1 - alpha)), n)
+    return float(residuals[rank - 1])
+
+
+def conformal_interval(point_estimate: float, q: float) -> tuple[float, float]:
+    """P2's prediction interval (D9): [point - q, point + q], lower
+    bound clipped at 0 -- ltv_months is never negative. The clip is a
+    documented one-sided deviation from the interval's symmetry, not a
+    second, independent decision."""
+    return max(0.0, point_estimate - q), point_estimate + q
+
+
+def top_decile_mask(y_true) -> np.ndarray:
+    """The top decile by actual value -- exact-K, K=ceil(0.1*N), same
+    convention as scripts/analysis.py's m3_top_decile, stable tie-break
+    by original position. Used for P6's guardrail metrics (SPEC.md:
+    "מוגדר על cumulative_profit בפועל", never on a prediction)."""
+    y_true = np.asarray(y_true, dtype=float)
+    n = len(y_true)
+    k = math.ceil(0.1 * n)
+    order = np.argsort(-y_true, kind="stable")
+    mask = np.zeros(n, dtype=bool)
+    mask[order[:k]] = True
+    return mask
+
+
+def top_decile_metrics(y_true, y_pred) -> dict:
+    """RMSE_top10 and Bias_top10 (SPEC.md's guardrail metrics):
+    Bias_top10 = mean(pred - actual) -- the systematic error that
+    harms a summing simulator, reported alongside RMSE_top10, never
+    instead of it."""
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    mask = top_decile_mask(y_true)
+    yt, yp = y_true[mask], y_pred[mask]
+    return {
+        "rmse_top10": float(np.sqrt(np.mean((yp - yt) ** 2))),
+        "bias_top10": float(np.mean(yp - yt)),
+        "k": int(mask.sum()),
+    }
+
+
+def lift_at_k(y_true, y_score, k: float = 0.1) -> dict:
+    """Lift@K = precision@K / base_rate (SPEC.md § איכות עסקית).
+    base_rate is the positive rate of the SAME evaluation set
+    precision@K is computed on -- never the population reference
+    values (46.35% / 42.71%), which are report-only context, not the
+    denominator. Exact-K = ceil(k*N), ranked by predicted score DESC,
+    same tie-break convention as top_decile_mask."""
+    y_true = np.asarray(y_true, dtype=float)
+    y_score = np.asarray(y_score, dtype=float)
+    n = len(y_true)
+    K = math.ceil(k * n)
+    order = np.argsort(-y_score, kind="stable")
+    top_k_true = y_true[order[:K]]
+    precision_at_k = float(top_k_true.mean()) if K else None
+    base_rate = float(y_true.mean())
+    lift = (precision_at_k / base_rate) if base_rate else None
+    return {"precision_at_k": precision_at_k, "base_rate": base_rate, "lift": lift, "K": K}
 
 
 if __name__ == "__main__":

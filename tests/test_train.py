@@ -15,8 +15,10 @@ __main__ block) -- not here.
 from __future__ import annotations
 
 import hashlib
+import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -115,7 +117,6 @@ def test_split_sizes_and_no_overlap(df, task):
 
     # Exact two-stage 20%/20% split sizes -- ceil for the test set, per
     # sklearn's train_test_split(test_size=0.2) (PHASE6.md D2, S1).
-    import math
     expected_holdout = math.ceil(pop_n * 0.2)
     expected_dev = pop_n - expected_holdout
     assert n_holdout == expected_holdout
@@ -335,3 +336,125 @@ def test_encode_referred_target_maps_yes_no_to_one_zero(df):
     assert set(encoded.unique()) == {0, 1}
     assert (encoded[train_df["referred"] == "Yes"] == 1).all()
     assert (encoded[train_df["referred"] == "No"] == 0).all()
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 5 -- decision-rule pure functions, known-answer tests
+# (PHASE6.md D3/D7/D9/D11/D13/D16). Hand-verified numbers, not the
+# function re-deriving its own expectation.
+# ---------------------------------------------------------------------------
+
+def test_one_se_stats_known_answer():
+    mean, se = tr.one_se_stats([1, 2, 3, 4, 5])
+    assert mean == pytest.approx(3.0)
+    assert se == pytest.approx(1 / math.sqrt(2))  # std(ddof=1)=sqrt(2.5), /sqrt(5)=sqrt(0.5)
+
+
+def test_one_se_eligible_boundary_is_inclusive():
+    best_mean, best_se = 3.0, 1 / math.sqrt(2)  # ~0.70710678
+
+    # MAE/RMSE: lower is better. Exactly at the boundary -> eligible.
+    assert tr.one_se_eligible(best_mean + best_se, best_mean, best_se, higher_is_better=False)
+    assert not tr.one_se_eligible(best_mean + best_se + 0.001, best_mean, best_se, higher_is_better=False)
+
+    # ROC-AUC: higher is better. Exactly at the boundary -> eligible.
+    assert tr.one_se_eligible(0.9 - 0.02, 0.9, 0.02, higher_is_better=True)
+    assert not tr.one_se_eligible(0.9 - 0.02 - 0.001, 0.9, 0.02, higher_is_better=True)
+
+
+def test_one_se_eligible_uses_the_best_models_se_not_the_candidates():
+    """A candidate 0.03 below the best mean is eligible against a wide
+    best_se (0.05) but not against a narrow one (0.01) -- the
+    eligibility band is a property of the best model, never redefined
+    by whichever candidate is being checked."""
+    assert tr.one_se_eligible(0.87, 0.90, best_se=0.05, higher_is_better=True)
+    assert not tr.one_se_eligible(0.87, 0.90, best_se=0.01, higher_is_better=True)
+
+
+def test_paired_delta_stats_known_answer():
+    stats = tr.paired_delta_stats([1, 1, 1, 1, -1])
+    assert stats["mean"] == pytest.approx(0.6)
+    assert stats["se"] == pytest.approx(0.4)
+    assert stats["n_positive"] == 4
+    assert stats["n_folds"] == 5
+
+
+def test_guardrail_vetoed_when_one_metric_is_consistent_and_beyond_noise():
+    result = tr.guardrail_vetoed(
+        delta_rmse=[1, 1, 1, 1, -1],          # 4/5 positive, mean 0.6 > se 0.4 -> vetoes
+        delta_abs_bias=[0, 0, 0, 0, 0],        # flat -> neither condition holds
+    )
+    assert result["vetoed"] is True
+    assert result["rmse"]["vetoed"] is True
+    assert result["abs_bias"]["vetoed"] is False
+
+
+def test_guardrail_not_vetoed_when_direction_is_inconsistent_on_both_metrics():
+    result = tr.guardrail_vetoed(
+        delta_rmse=[1, -1, 1, -1, 1],          # 3/5 positive -- fails condition (1)
+        delta_abs_bias=[1, -1, 1, -1, 0],      # 2/5 positive -- fails condition (1)
+    )
+    assert result["vetoed"] is False
+    assert result["rmse"]["vetoed"] is False
+    assert result["abs_bias"]["vetoed"] is False
+
+
+def test_conformal_quantile_known_answer():
+    # n=39, residuals 1..39: rank = ceil(40*0.95) = 38 exactly -> the
+    # 38th-smallest value, i.e. 38.
+    q = tr.conformal_quantile(list(range(1, 40)), alpha=0.05)
+    assert q == pytest.approx(38.0)
+
+
+def test_conformal_quantile_clips_rank_to_n_for_small_samples():
+    # n=3: rank = ceil(4*0.95) = 4, clipped to 3 -> the largest
+    # residual. Also proves abs() is applied (negative input).
+    q = tr.conformal_quantile([-5, 3, -1], alpha=0.05)
+    assert q == pytest.approx(5.0)
+
+
+def test_conformal_interval_clips_lower_bound_at_zero():
+    assert tr.conformal_interval(100.0, 5.0) == pytest.approx((95.0, 105.0))
+    assert tr.conformal_interval(3.0, 5.0) == pytest.approx((0.0, 8.0))
+
+
+def test_top_decile_mask_known_answer():
+    y_true = np.arange(1, 26)  # 1..25, n=25 -> k=ceil(2.5)=3
+    mask = tr.top_decile_mask(y_true)
+    assert mask.sum() == 3
+    assert set(np.where(mask)[0]) == {22, 23, 24}  # values 23, 24, 25
+
+
+def test_top_decile_metrics_known_answer():
+    y_true = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], dtype=float)
+    y_pred = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 12], dtype=float)  # only index 9 is top decile
+    result = tr.top_decile_metrics(y_true, y_pred)
+    assert result["k"] == 1
+    assert result["rmse_top10"] == pytest.approx(2.0)   # |12-10|
+    assert result["bias_top10"] == pytest.approx(2.0)   # 12-10
+
+
+def test_lift_at_k_known_answer():
+    y_true = np.array([1, 0, 1, 0, 1, 0, 1, 0, 1, 0], dtype=float)  # base_rate = 0.5
+    y_score = np.array([10, 9, 1, 2, 3, 4, 5, 6, 7, 8], dtype=float)
+
+    top1 = tr.lift_at_k(y_true, y_score, k=0.1)  # K=1, top score is a positive
+    assert top1["K"] == 1
+    assert top1["precision_at_k"] == pytest.approx(1.0)
+    assert top1["base_rate"] == pytest.approx(0.5)
+    assert top1["lift"] == pytest.approx(2.0)
+
+    top2 = tr.lift_at_k(y_true, y_score, k=0.2)  # K=2, one positive one negative
+    assert top2["K"] == 2
+    assert top2["precision_at_k"] == pytest.approx(0.5)
+    assert top2["lift"] == pytest.approx(1.0)  # no ranking value at K=2 here
+
+
+def test_lift_at_k_base_rate_is_the_evaluation_sets_own_rate_not_a_constant():
+    """base_rate must be recomputed per set -- a population reference
+    (e.g. 46.35%) must never leak in as the denominator."""
+    y_true_a = np.array([1, 1, 0, 0], dtype=float)  # base_rate 0.5
+    y_true_b = np.array([1, 0, 0, 0], dtype=float)  # base_rate 0.25
+    y_score = np.array([4, 3, 2, 1], dtype=float)
+    assert tr.lift_at_k(y_true_a, y_score, k=0.25)["base_rate"] == pytest.approx(0.5)
+    assert tr.lift_at_k(y_true_b, y_score, k=0.25)["base_rate"] == pytest.approx(0.25)
