@@ -1,0 +1,564 @@
+{
+  "ad_budget_leads_curve": {
+    "500": {
+      "median_num_leads": 13.0,
+      "n": 109
+    },
+    "800": {
+      "median_num_leads": 17.0,
+      "n": 154
+    },
+    "1000": {
+      "median_num_leads": 20.0,
+      "n": 219
+    },
+    "1500": {
+      "median_num_leads": 25.0,
+      "n": 298
+    },
+    "2000": {
+      "median_num_leads": 30.0,
+      "n": 410
+    },
+    "2500": {
+      "median_num_leads": 35.0,
+      "n": 346
+    },
+    "3000": {
+      "median_num_leads": 38.0,
+      "n": 331
+    },
+    "4000": {
+      "median_num_leads": 45.5,
+      "n": 316
+    },
+    "5000": {
+      "median_num_leads": 53.0,
+      "n": 314
+    },
+    "6000": {
+      "median_num_leads": 59.0,
+      "n": 199
+    },
+    "7000": {
+      "median_num_leads": 64.0,
+      "n": 185
+    },
+    "8000": {
+      "median_num_leads": 70.0,
+      "n": 124
+    },
+    "10000": {
+      "median_num_leads": 80.0,
+      "n": 195
+    },
+    "12000": {
+      "median_num_leads": 88.0,
+      "n": 116
+    },
+    "15000": {
+      "median_num_leads": 102.0,
+      "n": 113
+    },
+    "20000": {
+      "median_num_leads": 122.0,
+      "n": 71
+    }
+  },
+  "budget_tiers": {
+    "High": {
+      "conversion_rate": 0.05433458164376223,
+      "n_records": 1003
+    },
+    "Low": {
+      "conversion_rate": 0.04524185463247629,
+      "n_records": 780
+    },
+    "Mid": {
+      "conversion_rate": 0.0821963106545448,
+      "n_records": 1717
+    },
+    "gap": {
+      "n_records": 0
+    }
+  },
+  "calls_to_closed": {
+    "corr_closed_calls_to_closed": -0.23766798628303804,
+    "frequency_by_calls_to_closed": {
+      "1": 86,
+      "2": 987,
+      "3": 571,
+      "4": 343,
+      "5": 654,
+      "6": 376,
+      "7": 127,
+      "8": 18,
+      "9": 1
+    },
+    "mean_calls_to_closed_closed_eq_1": 5.649590163934426,
+    "mean_calls_to_closed_closed_ge_2": 3.3480373831775703,
+    "n_calls_to_closed_ge_4": 1519,
+    "n_closed_eq_1": 488,
+    "n_closed_eq_1_calls_ge_4": 439,
+    "n_closed_ge_2": 2675,
+    "n_purchased1": 3163,
+    "rate_calls_to_closed_ge_4": 0.4802402782168827,
+    "rate_closed_eq_1_calls_ge_4": 0.8995901639344263
+  },
+  "correlations": {
+    "ad_budget": -0.2072847122418796,
+    "calls_to_closed": -0.5459231392269213,
+    "calls_to_not_closed": 0.03550275136111926,
+    "closed": 0.21189330916473142,
+    "customer_acquisition_cost": -0.24748425605672447,
+    "followup_1": -0.04584458848558435,
+    "followup_2": -0.044252784675957384,
+    "followup_3": -0.04321671467535026,
+    "followup_4": -0.041009424763462594,
+    "followup_5": -0.03924358283967696,
+    "leads_answered": -0.044642599423041794,
+    "leads_not_answered": -0.24540045430370103,
+    "ltv_months": 0.8458819546333729,
+    "not_closed": -0.15015511562546918,
+    "num_leads": -0.135894711922831,
+    "purchased": 0.369237613216318,
+    "upsell": 0.6517126071220721
+  },
+  "duplicate_sensitivity": {
+    "n_excess_removed": 10,
+    "package1_low_tier": {
+      "delta": -0.0005356085017204845,
+      "population": "budget_tier == Low",
+      "with_duplicates": {
+        "conversion_rate": 0.04524185463247629,
+        "n_records": 780
+      },
+      "without_excess_duplicates": {
+        "conversion_rate": 0.045777463134196776,
+        "n_records": 770
+      }
+    },
+    "package5_funnel_dropoff": {
+      "delta": {
+        "followup_1": 4.264254673336243e-05,
+        "followup_2": 7.780754990083238e-06,
+        "followup_3": 3.179212061765746e-05,
+        "followup_4": -3.2950616794980014e-05,
+        "followup_5": 3.9670378741307744e-05
+      },
+      "population": "all rows",
+      "with_duplicates": {
+        "followup_1": 0.21741128414603017,
+        "followup_2": 0.2567364781105239,
+        "followup_3": 0.18614817415730334,
+        "followup_4": 0.10371680652328663,
+        "followup_5": 0.29228140268117164
+      },
+      "without_excess_duplicates": {
+        "followup_1": 0.2173686415992968,
+        "followup_2": 0.25672869735553383,
+        "followup_3": 0.18611638203668568,
+        "followup_4": 0.10374975714008161,
+        "followup_5": 0.29224173230243033
+      }
+    }
+  },
+  "duplicates": {
+    "groups": [
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          33,
+          2418
+        ]
+      },
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          43,
+          1715
+        ]
+      },
+      {
+        "ad_budget": 500,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          99,
+          408
+        ]
+      },
+      {
+        "ad_budget": 500,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          238,
+          795
+        ]
+      },
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 3,
+        "purchased": 0,
+        "source_row_ids": [
+          425,
+          1039,
+          3123
+        ]
+      },
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          473,
+          2610
+        ]
+      },
+      {
+        "ad_budget": 1500,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          599,
+          3456
+        ]
+      },
+      {
+        "ad_budget": 1500,
+        "budget_tier": "Low",
+        "closed": 1,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          1411,
+          2743
+        ]
+      },
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          2012,
+          2940
+        ]
+      }
+    ],
+    "n_duplicate_rows": 19,
+    "n_groups": 9
+  },
+  "funnel_dropoff": {
+    "followup_1": 0.21741128414603017,
+    "followup_2": 0.2567364781105239,
+    "followup_3": 0.18614817415730334,
+    "followup_4": 0.10371680652328663,
+    "followup_5": 0.29228140268117164
+  },
+  "m1_zero_profit": {
+    "n_missing_profit": 29,
+    "n_negative_profit": 0,
+    "n_zero_profit": 335
+  },
+  "m2_zero_profit_consistency": {
+    "closed_gt0_rate": {
+      "known_nonzero_profit": 1.0,
+      "zero_profit": 0.4597014925373134
+    },
+    "mean_cac": {
+      "known_nonzero_profit": 1437.752232142857,
+      "zero_profit": 729.1731343283582
+    },
+    "mean_ltv_months": {
+      "known_nonzero_profit": 22.941007653061224,
+      "zero_profit": 13.16012084592145
+    },
+    "n_known_nonzero_profit": 3136,
+    "n_zero_profit": 335,
+    "purchased_rate": {
+      "known_nonzero_profit": 1.0,
+      "zero_profit": 0.0
+    },
+    "zero_rate_by_slice": {
+      "closed_eq_0": {
+        "n": 182,
+        "n_zero_profit": 181,
+        "zero_rate": 0.9945054945054945
+      },
+      "closed_gt_0": {
+        "n": 3318,
+        "n_zero_profit": 154,
+        "zero_rate": 0.046413502109704644
+      },
+      "purchased_0": {
+        "n": 337,
+        "n_zero_profit": 335,
+        "zero_rate": 0.9940652818991098
+      },
+      "purchased_1": {
+        "n": 3163,
+        "n_zero_profit": 0,
+        "zero_rate": 0.0
+      }
+    }
+  },
+  "m3_top_decile": {
+    "K": 348,
+    "K_fraction_of_N": 0.10025929127052723,
+    "boundary_value": 27018.0,
+    "exact_k": {
+      "n_records": 348,
+      "profit_share": 0.242055442359929
+    },
+    "inclusive_ties": {
+      "n_records": 349,
+      "profit_share": 0.24266921352850884
+    },
+    "n_at_boundary_value": 2,
+    "n_known": 3471,
+    "n_missing_profit": 29
+  },
+  "m4_profit_by_tier": {
+    "High": {
+      "mean_cumulative_profit": 5185.733400402414,
+      "n_missing_profit": 9,
+      "n_records": 1003,
+      "sum_cumulative_profit": 5154619.0
+    },
+    "Low": {
+      "mean_cumulative_profit": 2290.5548387096774,
+      "n_missing_profit": 5,
+      "n_records": 780,
+      "sum_cumulative_profit": 1775180.0
+    },
+    "Mid": {
+      "mean_cumulative_profit": 21791.929494712105,
+      "n_missing_profit": 15,
+      "n_records": 1717,
+      "sum_cumulative_profit": 37089864.0
+    },
+    "gap": {
+      "mean_cumulative_profit": null,
+      "n_missing_profit": 0,
+      "n_records": 0,
+      "sum_cumulative_profit": null
+    }
+  },
+  "m5_outliers": {
+    "columns": [
+      "ad_budget",
+      "num_leads",
+      "leads_answered",
+      "leads_not_answered",
+      "followup_1",
+      "followup_2",
+      "followup_3",
+      "followup_4",
+      "followup_5",
+      "not_closed",
+      "closed",
+      "calls_to_closed",
+      "calls_to_not_closed",
+      "customer_acquisition_cost",
+      "ltv_months",
+      "cumulative_profit"
+    ],
+    "iqr": {
+      "cells_flagged_per_column": {
+        "ad_budget": 184,
+        "calls_to_closed": 0,
+        "calls_to_not_closed": 0,
+        "closed": 14,
+        "cumulative_profit": 5,
+        "customer_acquisition_cost": 157,
+        "followup_1": 23,
+        "followup_2": 18,
+        "followup_3": 14,
+        "followup_4": 29,
+        "followup_5": 43,
+        "leads_answered": 20,
+        "leads_not_answered": 247,
+        "ltv_months": 0,
+        "not_closed": 91,
+        "num_leads": 104
+      },
+      "n_unique_records_flagged": 321
+    },
+    "missing_per_column": {
+      "ad_budget": 0,
+      "calls_to_closed": 0,
+      "calls_to_not_closed": 0,
+      "closed": 0,
+      "cumulative_profit": 29,
+      "customer_acquisition_cost": 0,
+      "followup_1": 0,
+      "followup_2": 0,
+      "followup_3": 0,
+      "followup_4": 0,
+      "followup_5": 0,
+      "leads_answered": 0,
+      "leads_not_answered": 0,
+      "ltv_months": 4,
+      "not_closed": 0,
+      "num_leads": 0
+    },
+    "n_records_flagged_by_both_methods": 89,
+    "p1_p99": {
+      "cells_flagged_per_column": {
+        "ad_budget": 0,
+        "calls_to_closed": 21,
+        "calls_to_not_closed": 16,
+        "closed": 14,
+        "cumulative_profit": 35,
+        "customer_acquisition_cost": 19,
+        "followup_1": 46,
+        "followup_2": 53,
+        "followup_3": 32,
+        "followup_4": 33,
+        "followup_5": 23,
+        "leads_answered": 65,
+        "leads_not_answered": 61,
+        "ltv_months": 25,
+        "not_closed": 20,
+        "num_leads": 35
+      },
+      "n_unique_records_flagged": 218
+    }
+  },
+  "m6_duplicate_profile": {
+    "groups": [
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          33,
+          2418
+        ]
+      },
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          43,
+          1715
+        ]
+      },
+      {
+        "ad_budget": 500,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          99,
+          408
+        ]
+      },
+      {
+        "ad_budget": 500,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          238,
+          795
+        ]
+      },
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 3,
+        "purchased": 0,
+        "source_row_ids": [
+          425,
+          1039,
+          3123
+        ]
+      },
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          473,
+          2610
+        ]
+      },
+      {
+        "ad_budget": 1500,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          599,
+          3456
+        ]
+      },
+      {
+        "ad_budget": 1500,
+        "budget_tier": "Low",
+        "closed": 1,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          1411,
+          2743
+        ]
+      },
+      {
+        "ad_budget": 800,
+        "budget_tier": "Low",
+        "closed": 0,
+        "group_size": 2,
+        "purchased": 0,
+        "source_row_ids": [
+          2012,
+          2940
+        ]
+      }
+    ],
+    "n_duplicate_rows": 19,
+    "n_groups": 9
+  },
+  "missing_values": {
+    "missing_any": 33,
+    "missing_cumulative_profit": 29,
+    "missing_ltv_months": 4,
+    "n_rows": 3500
+  },
+  "source_metadata": {
+    "source_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa"
+  }
+}
