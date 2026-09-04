@@ -267,7 +267,17 @@ def calls_to_closed(df: pd.DataFrame) -> dict:
     invented bins -- a value that never occurs in this population simply
     has no key (checkpoint 11 correction, 2026-09-04: the two per-
     closed-subgroup means below are complementary summary evidence, not
-    themselves "the distribution" -- that label belongs to this field)."""
+    themselves "the distribution" -- that label belongs to this field).
+
+    rate_calls_to_closed_ge_4 / rate_closed_eq_1_calls_ge_4 (checkpoint
+    12 correction, 2026-09-04): SPEC.md's P5 conclusion needs these two
+    ratios (n_calls_to_closed_ge_4/n_purchased1,
+    n_closed_eq_1_calls_ge_4/n_closed_eq_1) as percentages. Computing a
+    ratio is analysis, not display formatting -- it belongs here, in a
+    tested pure function, not in FINDINGS.md's rendering layer, which
+    may only format an already-computed value from results. None when
+    the denominator is 0, never a fabricated 0.0 (same principle as
+    every other None in this module)."""
     p1 = df[df["purchased"] == 1]
     n_p1 = len(p1)
 
@@ -291,6 +301,12 @@ def calls_to_closed(df: pd.DataFrame) -> dict:
         ),
         "corr_closed_calls_to_closed": _safe_corr(p1["closed"], p1["calls_to_closed"]),
         "frequency_by_calls_to_closed": frequency_by_calls_to_closed,
+        "rate_calls_to_closed_ge_4": (
+            int((p1["calls_to_closed"] >= 4).sum()) / n_p1 if n_p1 else None
+        ),
+        "rate_closed_eq_1_calls_ge_4": (
+            int((closed1["calls_to_closed"] >= 4).sum()) / len(closed1) if len(closed1) else None
+        ),
     }
 
 
@@ -851,15 +867,6 @@ def _comma(value: int) -> str:
     return f"{value:,}"
 
 
-def _pct(numerator: int, denominator: int, decimals: int) -> str:
-    """Percentage display of two counts that already both exist,
-    independently, as fields of the same results sub-dict (e.g.
-    calls_to_closed's n_calls_to_closed_ge_4 and n_purchased1) -- not a
-    new statistic: no relationship is introduced here between values
-    that weren't already stored together by a tested pure function."""
-    return f"{numerator / denominator * 100:.{decimals}f}"
-
-
 def _pct_from_fraction(fraction: float | None, decimals: int) -> str:
     """Percentage display of an already-computed fraction (e.g. a
     conversion_rate or funnel_dropoff stage, both already 0-1 floats in
@@ -932,10 +939,10 @@ def _findings_context(results: dict, svg_dir: Path) -> dict[str, str]:
 
         "p1_n": _comma(ctc["n_purchased1"]),
         "ge4_n": _comma(ctc["n_calls_to_closed_ge_4"]),
-        "ge4_pct": _pct(ctc["n_calls_to_closed_ge_4"], ctc["n_purchased1"], 0),
+        "ge4_pct": _pct_from_fraction(ctc["rate_calls_to_closed_ge_4"], 0),
         "closed_eq1_n": _comma(ctc["n_closed_eq_1"]),
         "closed_eq1_ge4_n": _comma(ctc["n_closed_eq_1_calls_ge_4"]),
-        "closed_eq1_ge4_pct": _pct(ctc["n_closed_eq_1_calls_ge_4"], ctc["n_closed_eq_1"], 2),
+        "closed_eq1_ge4_pct": _pct_from_fraction(ctc["rate_closed_eq_1_calls_ge_4"], 2),
 
         "zero_profit_n": _comma(m1["n_zero_profit"]),
         "missing_profit_n": _comma(m1["n_missing_profit"]),

@@ -480,6 +480,17 @@ load_and_verify_csv: OK -- SHA-256 matched, header matched, source_row_id added
 חסר) הוחלף בפלייסהולדר הקיים `$missing_profit`. שני התיקונים מתועדים גם
 ב-`ROADMAP.html` checkpoint 12.
 
+⚠ **תיקון נוסף, מביקורת Codex על commit da3e6ff:** `_findings_context()`
+חישבה יחסים בפועל דרך `_pct(numerator, denominator, decimals)` -- חלוקה
+היא חישוב אנליטי, לא formatting, גם אם קצרה וגם אם שני האגפים כבר קיימים
+יחד ב-`results`. הפר את שרשרת ההוכחה `metric function → results →
+formatting → FINDINGS`. תוקן: `calls_to_closed(df)` (checkpoint 8, עם
+תוספת checkpoint 11) קיבל שני שדות חדשים -- `rate_calls_to_closed_ge_4`
+(`n_calls_to_closed_ge_4/n_purchased1`) ו-`rate_closed_eq_1_calls_ge_4`
+(`n_closed_eq_1_calls_ge_4/n_closed_eq_1`), `None` כשהמכנה אפס. `_pct`
+הוסרה לגמרי מהקובץ (אין לה עוד קורא); ה-context קורא לשני השדות דרך
+`_pct_from_fraction` בלבד, כמו כל שבר אחר ב-`results`.
+
 ### ח.3 — ראיות עתידיות (ממולא בהמשך הביצוע)
 
 - פלט `git diff --exit-code` של checkpoint 13.

@@ -101,7 +101,9 @@
     "n_closed_eq_1": 488,
     "n_closed_eq_1_calls_ge_4": 439,
     "n_closed_ge_2": 2675,
-    "n_purchased1": 3163
+    "n_purchased1": 3163,
+    "rate_calls_to_closed_ge_4": 0.4802402782168827,
+    "rate_closed_eq_1_calls_ge_4": 0.8995901639344263
   },
   "correlations": {
     "ad_budget": -0.2072847122418796,

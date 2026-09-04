@@ -338,6 +338,12 @@ def test_calls_to_closed(calls_to_closed_df):
     assert result["frequency_by_calls_to_closed"] == {1: 1, 2: 1, 3: 1, 5: 1}
     assert sum(result["frequency_by_calls_to_closed"].values()) == result["n_purchased1"]
 
+    # rate_calls_to_closed_ge_4 = 1/4 = 0.25, rate_closed_eq_1_calls_ge_4 =
+    # 1/2 = 0.5 -- computed here (checkpoint 12 correction, 2026-09-04),
+    # not by dividing raw counts in FINDINGS.md's rendering layer
+    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(0.25)
+    assert result["rate_closed_eq_1_calls_ge_4"] == pytest.approx(0.5)
+
 
 def test_calls_to_closed_excludes_adversarial_purchased_0_row_from_every_metric(calls_to_closed_df):
     """P5 is adversarial, not incidental: closed=2 would join the
@@ -367,6 +373,11 @@ def test_calls_to_closed_excludes_adversarial_purchased_0_row_from_every_metric(
     # NOT {..., 999: 1} -- P5's extreme calls_to_closed=999 must not appear
     # as its own bucket in the distribution either
     assert result["frequency_by_calls_to_closed"] == {1: 1, 2: 1, 3: 1, 5: 1}
+
+    # same 0.25/0.5 as the clean 4-row population -- P5 must not shift
+    # either denominator or numerator
+    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(0.25)
+    assert result["rate_closed_eq_1_calls_ge_4"] == pytest.approx(0.5)
 
 
 # ---------------------------------------------------------------------------
@@ -401,11 +412,64 @@ def test_calls_to_closed_single_record_population_correlation_is_none_not_nan(si
     assert result["mean_calls_to_closed_closed_eq_1"] == pytest.approx(5.0)
     assert result["mean_calls_to_closed_closed_ge_2"] is None  # empty bucket -> None, not NaN
 
+    # both denominators (n_purchased1=1, n_closed_eq_1=1) are nonzero here,
+    # so both rates are defined: 1/1 = 1.0 either way
+    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(1.0)
+    assert result["rate_closed_eq_1_calls_ge_4"] == pytest.approx(1.0)
+
     assert result["corr_closed_calls_to_closed"] is None  # undefined with n=1, not NaN
     assert result["frequency_by_calls_to_closed"] == {5: 1}
 
     serialized = json.dumps(result)
     assert "NaN" not in serialized
+
+
+# ---------------------------------------------------------------------------
+# rate_calls_to_closed_ge_4 / rate_closed_eq_1_calls_ge_4 -- None when their
+# own denominator is 0, never a fabricated 0.0. Two distinct denominators,
+# tested separately: n_purchased1 (NO_PURCHASED1_CSV_TEXT has zero
+# purchased=1 rows at all) and n_closed_eq_1 (NO_CLOSED_EQ1_CSV_TEXT has
+# purchased=1 rows, but none with closed==1 exactly).
+# ---------------------------------------------------------------------------
+NO_PURCHASED1_CSV_TEXT = (
+    ",".join(ld.EXPECTED_COLUMNS) + "\n"
+    "500,10,8,2,6,5,4,3,2,1,1,5,3,100,10.0,0,0,500.0,No\n"
+)
+
+NO_CLOSED_EQ1_CSV_TEXT = (
+    ",".join(ld.EXPECTED_COLUMNS) + "\n"
+    "500,10,8,2,6,5,4,3,2,3,0,5,3,100,10.0,1,0,500.0,No\n"  # closed=0, calls_to_closed=5 (>=4)
+    "800,15,12,3,10,8,6,4,3,1,2,1,4,120,12.0,1,0,600.0,No\n"  # closed=2, calls_to_closed=1 (<4)
+)
+
+
+@pytest.fixture
+def no_purchased1_df(tmp_path, monkeypatch):
+    return _load(NO_PURCHASED1_CSV_TEXT, tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def no_closed_eq1_df(tmp_path, monkeypatch):
+    return _load(NO_CLOSED_EQ1_CSV_TEXT, tmp_path, monkeypatch)
+
+
+def test_calls_to_closed_rate_ge_4_is_none_when_no_purchased1_rows(no_purchased1_df):
+    result = an.calls_to_closed(no_purchased1_df)
+    assert result["n_purchased1"] == 0
+    assert result["rate_calls_to_closed_ge_4"] is None  # 0-denominator -> None, not 0.0
+    # n_closed_eq_1 is a subset of purchased=1, so it's also empty here
+    assert result["n_closed_eq_1"] == 0
+    assert result["rate_closed_eq_1_calls_ge_4"] is None
+
+
+def test_calls_to_closed_rate_closed_eq1_ge_4_is_none_when_no_closed_eq1_rows(no_closed_eq1_df):
+    result = an.calls_to_closed(no_closed_eq1_df)
+    assert result["n_purchased1"] == 2
+    assert result["n_calls_to_closed_ge_4"] == 1  # row 1 only (calls_to_closed=5)
+    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(0.5)  # defined: 1/2
+
+    assert result["n_closed_eq_1"] == 0  # neither row has closed==1 (0 and 2)
+    assert result["rate_closed_eq_1_calls_ge_4"] is None  # 0-denominator -> None, not 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -1200,6 +1264,29 @@ def test_findings_context_reflects_a_results_change_not_a_cached_value(tmp_path,
     assert m1_section_after != m1_section_before
 
 
+def test_findings_percentages_reflect_the_rate_fields_not_a_recomputation_from_counts(tmp_path, monkeypatch):
+    """Provenance guard for the checkpoint 12 correction (Codex finding on
+    commit da3e6ff): ge4_pct/closed_eq1_ge4_pct in FINDINGS.md must come
+    from results['calls_to_closed']['rate_calls_to_closed_ge_4'] /
+    ['rate_closed_eq_1_calls_ge_4'] directly -- _findings_context() may
+    only format an already-computed fraction (_pct_from_fraction), never
+    divide two counts itself. Mutates ONLY the two rate fields (the raw
+    counts n_calls_to_closed_ge_4/n_purchased1/n_closed_eq_1/
+    n_closed_eq_1_calls_ge_4 are left exactly as they are) and confirms
+    the rendered percentages change to match the new rates -- if the
+    context builder were still secretly dividing the counts itself, this
+    mutation would have no visible effect at all."""
+    results, svg_dir = _build_results_and_svgs(tmp_path, monkeypatch)
+
+    mutated = json.loads(json.dumps(results))  # deep copy via round-trip
+    mutated["calls_to_closed"]["rate_calls_to_closed_ge_4"] = 0.6789
+    mutated["calls_to_closed"]["rate_closed_eq_1_calls_ge_4"] = 0.1234
+    text = an.render_findings_md(mutated, svg_dir)
+
+    assert an._pct_from_fraction(0.6789, 0) + "%" in text   # "68%"
+    assert an._pct_from_fraction(0.1234, 2) + "%" in text   # "12.34%"
+
+
 def test_scan_template_for_digit_sequences(monkeypatch):
     """Exercises the real scan_template_for_digit_sequences() (not a
     reimplementation) against a small controlled template via
@@ -1220,20 +1307,25 @@ def test_p5_conclusion_matches_spec_md_verbatim():
     identical, word for word, to SPEC.md's own locked wording. Tested
     with a SYNTHETIC set of numbers engineered to equal SPEC's locked
     values exactly under the same rounding rules used in production
-    (an._pct/_pct_from_fraction/_comma) -- not the real CSV (this
-    project's committed tests never substitute real-CSV values for a
-    synthetic known-answer fixture). Compares against SPEC.md's own live
-    text, read from the file at test time, not retyped here -- so a
-    transcription slip in the template fails this test instead of
-    silently drifting from the locked source of truth."""
+    (an._pct_from_fraction/_comma) -- not the real CSV (this project's
+    committed tests never substitute real-CSV values for a synthetic
+    known-answer fixture). The percentages are pre-divided fractions fed
+    through _pct_from_fraction, matching checkpoint 12's corrected
+    contract: FINDINGS.md's context layer only formats an
+    already-computed fraction (calls_to_closed()'s own
+    rate_calls_to_closed_ge_4/rate_closed_eq_1_calls_ge_4 fields in
+    production), it never divides two counts itself. Compares against
+    SPEC.md's own live text, read from the file at test time, not
+    retyped here -- so a transcription slip in the template fails this
+    test instead of silently drifting from the locked source of truth."""
     ctx = {
         "dropoff_fourth_pct": an._pct_from_fraction(0.10371680652328663, 1),  # -> "10.4"
         "ge4_n": an._comma(1519),
         "p1_n": an._comma(3163),
-        "ge4_pct": an._pct(1519, 3163, 0),            # -> "48"
+        "ge4_pct": an._pct_from_fraction(1519 / 3163, 0),            # -> "48"
         "closed_eq1_ge4_n": an._comma(439),
         "closed_eq1_n": an._comma(488),
-        "closed_eq1_ge4_pct": an._pct(439, 488, 2),   # -> "89.96"
+        "closed_eq1_ge4_pct": an._pct_from_fraction(439 / 488, 2),   # -> "89.96"
     }
     rendered = Template(an._P5_CONCLUSION_TEMPLATE).substitute(ctx)
 
