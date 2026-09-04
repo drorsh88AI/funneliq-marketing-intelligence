@@ -536,13 +536,23 @@ D13 (הפרדת מדדי הכיול), D15 (ששת שדות ה-metadata), D18 (פ
 נפתח מ-`main` (אחרי commit `2baa365`, אישור התכנון). `execution_status`
 עודכן ל-`in_progress`. פאזה 6 בביצוע.
 
-**checkpoints 1–5 בוצעו, אומתו עצמאית, עברו ביקורת ואושרו — כולם
+**checkpoints 1–6 בוצעו, אומתו עצמאית, עברו ביקורת ואושרו — כולם
 `done`.** כל checkpoint עבר את אותו שער אישור ברמת checkpoint
 (`ROADMAP.html`): מסומן `awaiting_approval` אחרי אימות עצמי של קלוד,
 הופך ל-`done` רק אחרי ביקורת Codex ואישור סופי מפורש של המשתמש —
 ממצא שמתגלה מתוקן תחת אותו checkpoint ונשאר `awaiting_approval` לסבב
-נוסף, לא `done` מוקדם מדי. checkpoint 5 (חוקי ההכרעה) עבר שני סבבי
-תיקון לפני האישור: אכיפת 5 folds בדיוק + בדיקות שליליות, ואז דחיית
-`NaN`/`±inf` בכל קלט מספרי — 92/92 בדיקות `tests/test_train.py`,
-230/230 בכל `pytest`, אין רגרסיה. ראה `ROADMAP.html` §checkpoints 1–5
-לראיה המלאה של כל אחד.
+נוסף, לא `done` מוקדם מדי.
+
+checkpoint 5 (חוקי ההכרעה) עבר שני סבבי תיקון: אכיפת 5 folds בדיוק +
+בדיקות שליליות, ואז דחיית `NaN`/`±inf` בכל קלט מספרי — 92/92 בדיקות
+`tests/test_train.py`, 230/230 בכל `pytest`.
+
+checkpoint 6 (P2: חיפוש + Baselines) עבר שלושה סבבי תיקון: (1) הוספת
+RMSE ו-R² per-fold ל-P2 (D13 דורש את שלושת המדדים, לא MAE בלבד) —
+בלי CV נוסף, דרך `scoring` מרובה-מדדים באותו `RandomizedSearchCV`; (2)
+בדיקות ל-`read/write_metrics_json` (round-trip, דטרמיניזם, `allow_nan=False`,
+היעדר שדות נדיפים); (3) `std_<metric>` (ddof=1) נשמר בנפרד מ-`se_<metric>`
+— D13 דורש "ממוצע ± std", לא SE, שהם ערכים שונים במספר (`std=se·√5`).
+בכל סבב: אותם ערכי MAE ואותם `best_params` בדיוק, ודטרמיניזם מאומת
+בהרצה שנייה עצמאית מול ה-CSV האמיתי. 236/236 בכל `pytest`, אין
+רגרסיה. ראה `ROADMAP.html` §checkpoints 1–6 לראיה המלאה של כל אחד.
