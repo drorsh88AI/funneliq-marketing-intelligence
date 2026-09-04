@@ -452,18 +452,83 @@ def test_m2_zero_profit_consistency(m124_df):
     assert result["mean_cac"]["zero_profit"] == pytest.approx(250.0)
     assert result["mean_cac"]["known_nonzero_profit"] == pytest.approx(260.0)
 
+    # zero_rate_by_slice: reverse direction, P(profit=0 | slice), with n /
+    # n_zero_profit made explicit per slice -- not the same number as
+    # purchased_rate/closed_gt0_rate above under a different name.
+    #
+    # purchased=0 -> {B, D}, both zero -> n=2, n_zero=2, rate=1.0
+    slc = result["zero_rate_by_slice"]["purchased_0"]
+    assert slc == {"n": 2, "n_zero_profit": 2, "zero_rate": pytest.approx(1.0)}
+    # purchased=1 -> {A, C, E, F}, none zero (E is missing, not zero) -> rate=0.0
+    slc = result["zero_rate_by_slice"]["purchased_1"]
+    assert slc == {"n": 4, "n_zero_profit": 0, "zero_rate": pytest.approx(0.0)}
+    # closed==0 -> {B, E}, only B is zero (E is missing) -> n=2, n_zero=1, rate=0.5
+    slc = result["zero_rate_by_slice"]["closed_eq_0"]
+    assert slc == {"n": 2, "n_zero_profit": 1, "zero_rate": pytest.approx(0.5)}
+    # closed>0 -> {A, C, D, F}, only D is zero -> n=4, n_zero=1, rate=0.25
+    slc = result["zero_rate_by_slice"]["closed_gt_0"]
+    assert slc == {"n": 4, "n_zero_profit": 1, "zero_rate": pytest.approx(0.25)}
+
 
 def test_m2_output_has_no_legitimacy_verdict_field(m124_df):
     """The function's contract is consistency evidence, not a legitimacy
-    verdict -- its output must be exactly the six evidence keys, with no
+    verdict -- its output must be exactly the seven evidence keys, with no
     boolean/verdict field (e.g. "legitimate", "is_valid") anywhere."""
     result = an.m2_zero_profit_consistency(m124_df)
     assert set(result) == {
         "n_zero_profit", "n_known_nonzero_profit", "purchased_rate",
-        "closed_gt0_rate", "mean_ltv_months", "mean_cac",
+        "closed_gt0_rate", "zero_rate_by_slice", "mean_ltv_months", "mean_cac",
     }
     for forbidden in ("legitimate", "legitimacy", "is_valid", "verdict"):
         assert forbidden not in result
+
+
+# ---------------------------------------------------------------------------
+# M2 direction-divergence fixture: proves zero_rate_by_slice tests the
+# REVERSE conditional (P(zero|slice)) and not just purchased_rate re-keyed.
+# 5 rows, purchased in {0,1} x zero-profit in {True,False}:
+#
+#   row  purchased  closed  cumulative_profit
+#   1    1          1       100.0
+#   2    1          1       200.0
+#   3    1          1       300.0
+#   4    1          1       0.0    (zero)
+#   5    0          0       0.0    (zero)
+#
+# zero-profit rows = {4, 5} -> purchased_rate["zero_profit"] = P(purchased=1|zero)
+#   = 1/2 = 0.5 (row 4 purchased=1, row 5 purchased=0)
+# zero_rate_by_slice["purchased_1"]["zero_rate"] = P(zero|purchased=1)
+#   = 1/4 = 0.25 (only row 4, among rows 1-4)
+# 0.5 != 0.25 -- the two directions are genuinely different numbers.
+# ---------------------------------------------------------------------------
+M2_DIRECTION_CSV_TEXT = (
+    ",".join(ld.EXPECTED_COLUMNS) + "\n"
+    "500,10,8,2,6,5,4,3,2,1,1,3,4,200,10.0,1,0,100.0,No\n"   # row 1
+    "500,10,8,2,6,5,4,3,2,1,1,3,4,200,10.0,1,0,200.0,No\n"   # row 2
+    "500,10,8,2,6,5,4,3,2,1,1,3,4,200,10.0,1,0,300.0,No\n"   # row 3
+    "500,10,8,2,6,5,4,3,2,1,1,3,4,200,10.0,1,0,0.0,No\n"     # row 4 (zero)
+    "500,10,8,2,6,5,4,3,2,0,1,3,4,200,10.0,0,0,0.0,No\n"     # row 5 (zero)
+)
+
+
+@pytest.fixture
+def m2_direction_df(tmp_path, monkeypatch):
+    return _load(M2_DIRECTION_CSV_TEXT, tmp_path, monkeypatch)
+
+
+def test_m2_zero_rate_by_slice_direction_differs_from_purchased_rate(m2_direction_df):
+    result = an.m2_zero_profit_consistency(m2_direction_df)
+
+    # P(purchased=1 | zero) = 0.5 -- the existing, kept field
+    assert result["purchased_rate"]["zero_profit"] == pytest.approx(0.5)
+
+    # P(zero | purchased=1) = 0.25 -- the new, reverse-direction field
+    slc = result["zero_rate_by_slice"]["purchased_1"]
+    assert slc == {"n": 4, "n_zero_profit": 1, "zero_rate": pytest.approx(0.25)}
+
+    # The two conditional directions are genuinely different numbers, not
+    # the same value under two key names.
+    assert result["purchased_rate"]["zero_profit"] != slc["zero_rate"]
 
 
 def test_m4_profit_by_tier(m124_df):

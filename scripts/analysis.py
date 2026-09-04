@@ -259,8 +259,12 @@ def calls_to_closed(df: pd.DataFrame) -> dict:
 
 def m1_zero_profit(df: pd.DataFrame) -> dict:
     """M1 -- rows where cumulative_profit == 0, reported separately from
-    the 29 missing (a zero is a real observed value, not a stand-in for
-    a missing one)."""
+    the 29 missing. The file represents these explicitly as 0, not NaN,
+    which is why they are counted apart from the missing rows -- that is
+    a fact about the file's encoding, not a claim about what 0 means:
+    its business meaning is not decided here, and cannot be without a
+    data dictionary (SPEC.md § גרעיניות מעורבת's "מוסק בלבד" framing;
+    see m2_zero_profit_consistency for the evidence that IS reported)."""
     return {
         "n_zero_profit": int((df["cumulative_profit"] == 0).sum()),
         "n_missing_profit": int(df["cumulative_profit"].isna().sum()),
@@ -272,10 +276,25 @@ def m2_zero_profit_consistency(df: pd.DataFrame) -> dict:
     """M2 -- consistency evidence for the zero-profit rows, NOT a
     legitimacy claim: no data dictionary proves whether 0 is a genuine
     zero-profit outcome or a missing-value stand-in (SPEC.md § גרעיניות
-    מעורבת's "מוסק בלבד" framing). Cross-tabs against purchased, closed,
-    ltv_months, and CAC, comparing the zero-profit rows to the known
-    (non-null, non-zero) rows. Rows are never dropped by this or any
-    other function here."""
+    מעורבת's "מוסק בלבד" framing). Two complementary views -- SPEC.md
+    asks for both "cross-tab against purchased/closed/ltv/CAC" AND "the
+    zero rate within each slice", which are opposite conditional
+    directions, not the same number under two names:
+
+    - purchased_rate / closed_gt0_rate: P(purchased=1 | profit) and
+      P(closed>0 | profit), computed within the zero-profit group and
+      within the known-nonzero group -- characterizes each group.
+    - zero_rate_by_slice: the reverse direction, P(profit=0 | slice) for
+      purchased in {0,1} and closed in {==0, >0} -- what fraction of
+      EACH slice is zero-profit, with the slice's own n and n_zero
+      reported so the denominator is never implicit.
+    - mean_ltv_months / mean_cac: the existing zero-vs-known-nonzero
+      mean comparison, unbinned. SPEC.md/PHASE5.md define no bins for
+      these two continuous columns, so none are invented here -- this
+      summary comparison is what's reported for them, not a fabricated
+      cut.
+
+    Rows are never dropped by this or any other function here."""
     zero = df[df["cumulative_profit"] == 0]
     known_nonzero = df[df["cumulative_profit"].notna() & (df["cumulative_profit"] != 0)]
 
@@ -285,6 +304,12 @@ def m2_zero_profit_consistency(df: pd.DataFrame) -> dict:
     def _mean_ltv(frame: pd.DataFrame) -> float | None:
         vals = frame["ltv_months"].dropna()
         return float(vals.mean()) if len(vals) else None
+
+    def _zero_rate_slice(mask: pd.Series) -> dict:
+        sl = df[mask]
+        n = int(len(sl))
+        n_zero = int((sl["cumulative_profit"] == 0).sum())
+        return {"n": n, "n_zero_profit": n_zero, "zero_rate": (n_zero / n) if n else None}
 
     return {
         "n_zero_profit": int(len(zero)),
@@ -296,6 +321,12 @@ def m2_zero_profit_consistency(df: pd.DataFrame) -> dict:
         "closed_gt0_rate": {
             "zero_profit": _rate(zero, zero["closed"] > 0),
             "known_nonzero_profit": _rate(known_nonzero, known_nonzero["closed"] > 0),
+        },
+        "zero_rate_by_slice": {
+            "purchased_0": _zero_rate_slice(df["purchased"] == 0),
+            "purchased_1": _zero_rate_slice(df["purchased"] == 1),
+            "closed_eq_0": _zero_rate_slice(df["closed"] == 0),
+            "closed_gt_0": _zero_rate_slice(df["closed"] > 0),
         },
         "mean_ltv_months": {
             "zero_profit": _mean_ltv(zero),
