@@ -760,48 +760,71 @@ def test_lift_at_10_score_func_matches_lift_at_k(df):
     assert tr._lift_at_10_score_func(y_true, y_score) == pytest.approx(expected)
 
 
-def test_train_p3_manual_rules_thresholds_are_train_medians(df):
-    """Zero-fit rules -- no model.fit() anywhere in this path, so this
+def test_train_p3_brief_rule_thresholds_are_train_medians(df):
+    """Zero-fit rule -- no model.fit() anywhere in this path, so this
     runs the real function end to end on the synthetic fixture (not a
     training smoke test D21 would rule out)."""
     train_df = tr.build_task_train_frame(df, "P3")
-    rules = tr.train_p3_manual_rules(df)
+    rule = tr.train_p3_brief_rule(df)
 
-    assert set(rules) == {"brief_rule", "operational_rule"}
-    for name in rules:
-        assert "description" in rules[name]
-        assert "thresholds" in rules[name]
-        for metric in ("roc_auc", "accuracy", "precision", "recall", "f1"):
-            assert f"fold_scores_{metric}" in rules[name]
-            assert len(rules[name][f"fold_scores_{metric}"]) == 5
-            assert f"mean_{metric}" in rules[name]
-            assert f"std_{metric}" in rules[name]
+    assert "description" in rule
+    assert "thresholds" in rule
+    for metric in ("roc_auc", "accuracy", "precision", "recall", "f1"):
+        assert f"fold_scores_{metric}" in rule
+        assert len(rule[f"fold_scores_{metric}"]) == 5
+        assert f"mean_{metric}" in rule
+        assert f"std_{metric}" in rule
 
-    assert rules["brief_rule"]["thresholds"]["ltv_months_gt"] == pytest.approx(
-        train_df["ltv_months"].median()
-    )
-    assert rules["brief_rule"]["thresholds"]["customer_acquisition_cost_lt"] == pytest.approx(
+    assert rule["thresholds"]["ltv_months_gt"] == pytest.approx(train_df["ltv_months"].median())
+    assert rule["thresholds"]["customer_acquisition_cost_lt"] == pytest.approx(
         train_df["customer_acquisition_cost"].median()
     )
-    assert rules["operational_rule"]["thresholds"]["calls_to_closed_gt"] == pytest.approx(
-        train_df["calls_to_closed"].median()
-    )
 
 
-def test_train_p3_manual_rules_predictions_match_the_and_condition(df):
+def test_train_p3_brief_rule_predictions_match_the_and_condition(df):
     """Directly recomputes the brief rule's prediction from the raw
-    columns and thresholds, independent of train_p3_manual_rules'
-    own internals -- proves the AND condition is what's actually
-    scored, not just that some plausible-looking numbers came out."""
+    columns and thresholds, independent of train_p3_brief_rule's own
+    internals -- proves the AND condition is what's actually scored,
+    not just that some plausible-looking numbers came out."""
     train_df = tr.build_task_train_frame(df, "P3")
     y = train_df[tr.TARGET["P3"]].to_numpy()
     folds = tr.build_folds(df, "P3")
 
-    rules = tr.train_p3_manual_rules(df)
-    ltv_t = rules["brief_rule"]["thresholds"]["ltv_months_gt"]
-    cac_t = rules["brief_rule"]["thresholds"]["customer_acquisition_cost_lt"]
+    rule = tr.train_p3_brief_rule(df)
+    ltv_t = rule["thresholds"]["ltv_months_gt"]
+    cac_t = rule["thresholds"]["customer_acquisition_cost_lt"]
     pred = ((train_df["ltv_months"] > ltv_t) & (train_df["customer_acquisition_cost"] < cac_t)).to_numpy().astype(int)
 
     expected = tr._p3_rule_fold_metrics(y, pred, folds)
-    assert rules["brief_rule"]["fold_scores_accuracy"] == expected["fold_scores_accuracy"]
-    assert rules["brief_rule"]["mean_roc_auc"] == pytest.approx(expected["mean_roc_auc"])
+    assert rule["fold_scores_accuracy"] == expected["fold_scores_accuracy"]
+    assert rule["mean_roc_auc"] == pytest.approx(expected["mean_roc_auc"])
+
+
+def test_train_p3_operational_rule_rejects_a_non_p3_feature(df):
+    with pytest.raises(ValueError, match="FEATURES\\['P3'\\]"):
+        tr.train_p3_operational_rule(df, feature="ltv_months", direction="gt")
+
+
+def test_train_p3_operational_rule_rejects_a_bad_direction(df):
+    with pytest.raises(ValueError, match="direction"):
+        tr.train_p3_operational_rule(df, feature="closed", direction="up")
+
+
+def test_train_p3_operational_rule_uses_the_given_feature_and_direction(df):
+    """The chosen feature/direction actually drive the prediction --
+    checked against an independently recomputed AND condition, both
+    for 'gt' and 'lt', not just that the function runs."""
+    train_df = tr.build_task_train_frame(df, "P3")
+    y = train_df[tr.TARGET["P3"]].to_numpy()
+    folds = tr.build_folds(df, "P3")
+    cac_t = float(train_df["customer_acquisition_cost"].median())
+
+    for feature, direction, op in [("closed", "gt", "__gt__"), ("not_closed", "lt", "__lt__")]:
+        rule = tr.train_p3_operational_rule(df, feature=feature, direction=direction)
+        feature_t = rule["thresholds"][f"{feature}_{direction}"]
+        assert feature_t == pytest.approx(train_df[feature].median())
+
+        feature_cond = getattr(train_df[feature], op)(feature_t)
+        expected_pred = (feature_cond & (train_df["customer_acquisition_cost"] < cac_t)).to_numpy().astype(int)
+        expected = tr._p3_rule_fold_metrics(y, expected_pred, folds)
+        assert rule["fold_scores_accuracy"] == expected["fold_scores_accuracy"]

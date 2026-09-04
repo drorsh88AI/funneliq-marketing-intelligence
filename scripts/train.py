@@ -613,7 +613,12 @@ P3_SCORING = {
     "roc_auc": "roc_auc",
     "pr_auc": "average_precision",
     "accuracy": "accuracy",
-    "precision": "precision",
+    # zero_division=0, not sklearn's default zero_division='warn' -- a
+    # majority-class Dummy predicts zero positives every fold, and the
+    # bare "precision" string scorer warns on every one of them
+    # (verified empirically: recall/f1 do NOT warn in the same
+    # scenario, only precision does -- left as strings).
+    "precision": make_scorer(precision_score, zero_division=0),
     "recall": "recall",
     "f1": "f1",
     "brier": "neg_brier_score",
@@ -700,28 +705,44 @@ def train_p3_weighted_comparison(df: pd.DataFrame, p3_results: dict) -> dict:
     is invariant to it, Brier isn't). The regular arm's ROC-AUC scores
     are reused from p3_results (already computed, zero extra fits);
     only the weighted arm is fit fresh -- 5 fits x 3 boosters = 15,
-    matching D11's stated budget exactly."""
+    matching D11's stated budget exactly.
+
+    The class-weight ratio is recomputed separately inside each fold,
+    from that fold's own train-only labels -- cross_validate() can't do
+    this (one fixed scale_pos_weight baked into the estimator before
+    the fold loop starts would leak that fold's own validation labels
+    into its training hyperparameter), so folds are iterated by hand.
+    Still exactly 5 fits per booster: the ratio itself costs nothing
+    beyond a label count, not a fit."""
     task = "P3"
     train_df = build_task_train_frame(df, task)
-    y = train_df[TARGET[task]]
+    y = train_df[TARGET[task]].to_numpy()
     folds = build_folds(df, task)
     preprocessing_steps = build_preprocessing_steps(task, encode_budget_tier=False)
-    ratio = _p3_class_weight_ratio(y)
 
     comparison = {}
     for name, (estimator, _) in make_p3_boosters().items():
         best_params = {k.removeprefix("model__"): v for k, v in p3_results[name]["best_params"].items()}
-        weighted_estimator = clone(estimator).set_params(**best_params, scale_pos_weight=ratio)
-        weighted_pipeline = Pipeline(preprocessing_steps + [("model", weighted_estimator)])
-        weighted_scores = cross_validate(weighted_pipeline, train_df, y, cv=folds, scoring="roc_auc")["test_score"]
 
-        wt_mean, wt_se = one_se_stats([float(s) for s in weighted_scores])
+        fold_ratios = []
+        fold_scores = []
+        for train_idx, val_idx in folds:
+            ratio = _p3_class_weight_ratio(y[train_idx])  # train-only, no validation leakage
+            fold_ratios.append(ratio)
+
+            weighted_estimator = clone(estimator).set_params(**best_params, scale_pos_weight=ratio)
+            weighted_pipeline = Pipeline(preprocessing_steps + [("model", weighted_estimator)])
+            weighted_pipeline.fit(train_df.iloc[train_idx], y[train_idx])
+            proba = weighted_pipeline.predict_proba(train_df.iloc[val_idx])[:, 1]
+            fold_scores.append(float(roc_auc_score(y[val_idx], proba)))
+
+        wt_mean, wt_se = one_se_stats(fold_scores)
         reg_mean = p3_results[name]["mean_roc_auc"]
 
         comparison[name] = {
-            "class_weight_ratio": ratio,
+            "class_weight_ratios_per_fold": fold_ratios,  # kept for audit -- 5 values, one per fold
             "regular_mean_roc_auc": reg_mean,
-            "weighted_fold_scores_roc_auc": [float(s) for s in weighted_scores],
+            "weighted_fold_scores_roc_auc": fold_scores,
             "weighted_mean_roc_auc": wt_mean,
             "weighted_std_roc_auc": wt_se * math.sqrt(N_FOLDS),
             "weighted_se_roc_auc": wt_se,
@@ -747,24 +768,11 @@ def _p3_rule_fold_metrics(y: np.ndarray, pred: np.ndarray, folds) -> dict:
     return _metric_summary(fold_scores, role="rule", negated_scorers=set())
 
 
-def train_p3_manual_rules(df: pd.DataFrame) -> dict:
-    """D11's two hand-rules (SPEC.md § החרגות דליפה), zero fits,
-    thresholds locked from train medians -- never the Holdout, never
-    looked at after the fact.
-
-    (a) the brief's rule: ltv_months > median AND
-        customer_acquisition_cost < median. Shown explicitly as a
-        RETROSPECTIVE comparison -- ltv_months is Excluded from
-        FEATURES["P3"], not available at P3's snapshot.
-    (b) an operational alternative using ONLY FEATURES["P3"] columns --
-        the fair comparison to the model: calls_to_closed > median
-        (an engagement signal available at the snapshot, replacing the
-        unavailable ltv_months) AND customer_acquisition_cost < median
-        (the cost signal, still available for P3, kept from the
-        brief's rule). This specific feature pairing for rule (b) is
-        an implementation choice -- SPEC fixes the mechanism (a
-        rule using only P3-legal features, train-median thresholds)
-        but not which features; flagged here for review."""
+def train_p3_brief_rule(df: pd.DataFrame) -> dict:
+    """D11's rule (a) -- the brief's rule, zero fits, thresholds locked
+    from train medians. Shown explicitly as a RETROSPECTIVE comparison
+    -- ltv_months is Excluded from FEATURES["P3"], not available at
+    P3's snapshot."""
     task = "P3"
     train_df = build_task_train_frame(df, task)
     y = train_df[TARGET[task]].to_numpy()
@@ -772,28 +780,52 @@ def train_p3_manual_rules(df: pd.DataFrame) -> dict:
 
     ltv_threshold = float(train_df["ltv_months"].median())
     cac_threshold = float(train_df["customer_acquisition_cost"].median())
-    calls_threshold = float(train_df["calls_to_closed"].median())
-
     brief_pred = (
         (train_df["ltv_months"] > ltv_threshold) & (train_df["customer_acquisition_cost"] < cac_threshold)
     ).to_numpy().astype(int)
-    operational_pred = (
-        (train_df["calls_to_closed"] > calls_threshold) & (train_df["customer_acquisition_cost"] < cac_threshold)
-    ).to_numpy().astype(int)
 
     return {
-        "brief_rule": {
-            "description": "ltv_months > train median AND customer_acquisition_cost < train median "
-                            "-- retrospective; ltv_months unavailable at P3's snapshot",
-            "thresholds": {"ltv_months_gt": ltv_threshold, "customer_acquisition_cost_lt": cac_threshold},
-            **_p3_rule_fold_metrics(y, brief_pred, folds),
-        },
-        "operational_rule": {
-            "description": "calls_to_closed > train median AND customer_acquisition_cost < train median "
-                            "-- uses only FEATURES['P3'] columns",
-            "thresholds": {"calls_to_closed_gt": calls_threshold, "customer_acquisition_cost_lt": cac_threshold},
-            **_p3_rule_fold_metrics(y, operational_pred, folds),
-        },
+        "description": "ltv_months > train median AND customer_acquisition_cost < train median "
+                        "-- retrospective; ltv_months unavailable at P3's snapshot",
+        "thresholds": {"ltv_months_gt": ltv_threshold, "customer_acquisition_cost_lt": cac_threshold},
+        **_p3_rule_fold_metrics(y, brief_pred, folds),
+    }
+
+
+def train_p3_operational_rule(df: pd.DataFrame, feature: str, direction: str) -> dict:
+    """D11's rule (b) -- an operational alternative using only
+    FEATURES['P3'] columns, the fair comparison to the model. `feature`
+    (must be in FEATURES['P3']) and `direction` ('gt' or 'lt') are
+    chosen explicitly by the user before this runs -- not picked here.
+    (An earlier version locked calls_to_closed on its own, without
+    prior approval and on a mistaken "engagement" reading of a column
+    that actually counts calls needed to close, not engagement; this
+    was flagged as a real gap and reverted -- the feature choice
+    belongs to the user, made from a plain description of each
+    candidate's business rationale, before any run.) AND'd with
+    customer_acquisition_cost < train median, the cost signal kept
+    from the brief's rule."""
+    if feature not in FEATURES["P3"]:
+        raise ValueError(f"{feature!r} is not in FEATURES['P3'] -- rule (b) must use only P3-legal columns")
+    if direction not in ("gt", "lt"):
+        raise ValueError(f"direction must be 'gt' or 'lt', got {direction!r}")
+
+    task = "P3"
+    train_df = build_task_train_frame(df, task)
+    y = train_df[TARGET[task]].to_numpy()
+    folds = build_folds(df, task)
+
+    feature_threshold = float(train_df[feature].median())
+    cac_threshold = float(train_df["customer_acquisition_cost"].median())
+    feature_cond = train_df[feature] > feature_threshold if direction == "gt" else train_df[feature] < feature_threshold
+    operational_pred = (feature_cond & (train_df["customer_acquisition_cost"] < cac_threshold)).to_numpy().astype(int)
+
+    symbol = ">" if direction == "gt" else "<"
+    return {
+        "description": f"{feature} {symbol} train median AND customer_acquisition_cost < train median "
+                        f"-- uses only FEATURES['P3'] columns",
+        "thresholds": {f"{feature}_{direction}": feature_threshold, "customer_acquisition_cost_lt": cac_threshold},
+        **_p3_rule_fold_metrics(y, operational_pred, folds),
     }
 
 
@@ -879,17 +911,19 @@ if __name__ == "__main__":
     for name, r in sorted(p3_weighted.items()):
         print(f"P3/{name} weighted: regular={r['regular_mean_roc_auc']:.4f} "
               f"weighted={r['weighted_mean_roc_auc']:.4f}+-{r['weighted_std_roc_auc']:.4f} "
-              f"better={r['weighted_better']}")
+              f"better={r['weighted_better']} ratios_per_fold={r['class_weight_ratios_per_fold']}")
 
-    p3_rules = train_p3_manual_rules(df)
-    for name, r in sorted(p3_rules.items()):
-        print(f"P3/{name}: ROC-AUC={r['mean_roc_auc']:.4f} F1={r['mean_f1']:.4f} thresholds={r['thresholds']}")
+    p3_brief_rule = train_p3_brief_rule(df)
+    print(f"P3/brief_rule: ROC-AUC={p3_brief_rule['mean_roc_auc']:.4f} "
+          f"F1={p3_brief_rule['mean_f1']:.4f} thresholds={p3_brief_rule['thresholds']}")
+    # P3's operational rule (D11 rule b) waits on the user's feature
+    # choice -- not run here. See train_p3_operational_rule().
 
     metrics_path = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
     all_metrics = read_metrics_json(metrics_path)
     all_metrics["P2"] = p2_results
     all_metrics["P3"] = p3_results
     all_metrics["P3_weighted_comparison"] = p3_weighted
-    all_metrics["P3_manual_rules"] = p3_rules
+    all_metrics["P3_manual_rules"] = {"brief_rule": p3_brief_rule}
     write_metrics_json(all_metrics, metrics_path)
     print(f"wrote {metrics_path}")
