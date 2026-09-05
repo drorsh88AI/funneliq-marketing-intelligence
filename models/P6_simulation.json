@@ -1,0 +1,53 @@
+{
+  "100x500": {
+    "interval_method": "bootstrap_percentile",
+    "levels": {
+      "500": {
+        "n": 92
+      }
+    },
+    "lower": 404267.53867413726,
+    "n_bootstrap_used": 1000,
+    "point": 626861.153448799,
+    "upper": 715278.9053232085
+  },
+  "10x5000": {
+    "interval_method": "bootstrap_percentile",
+    "levels": {
+      "5000": {
+        "n": 249
+      }
+    },
+    "lower": 221525.58026441332,
+    "n_bootstrap_used": 1000,
+    "point": 239169.33716905638,
+    "upper": 251791.1928514032
+  },
+  "25x2000": {
+    "interval_method": "bootstrap_percentile",
+    "levels": {
+      "2000": {
+        "n": 322
+      }
+    },
+    "lower": 519701.0493656785,
+    "n_bootstrap_used": 1000,
+    "point": 531884.8764616682,
+    "upper": 546399.1305835987
+  },
+  "2x20000_1x10000": {
+    "interval_method": "bootstrap_percentile",
+    "levels": {
+      "10000": {
+        "n": 161
+      },
+      "20000": {
+        "n": 57
+      }
+    },
+    "lower": 1465.2012150863766,
+    "n_bootstrap_used": 1000,
+    "point": 6898.0852850490455,
+    "upper": 9632.295324548502
+  }
+}

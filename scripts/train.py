@@ -10,11 +10,12 @@ currently holds checkpoint 3's split layer, checkpoint 4's shared CV
 folds + preprocessing Pipelines, checkpoint 5's decision-rule pure
 functions (One-SE, the paired guardrail veto, Split Conformal's
 quantile, top-decile metrics, Lift@K) -- all built and tested before
-any model is trained -- and checkpoints 6-11's actual training (P2, P3,
+any model is trained -- and checkpoints 6-12's actual training (P2, P3,
 P4, P6 + P6's paired guardrail crossover), model selection (One-SE
 eligibility, RSS/prediction-time measurement, the winner tie-break),
-and calibration (P3/P4 sigmoid calibration, P2's Split Conformal
-quantile).
+calibration (P3/P4 sigmoid calibration, P2's Split Conformal
+quantile), and P6's Bootstrap simulation (exact-budget profiles, the
+four locked spending strategies, the lookup table).
 """
 from __future__ import annotations
 
@@ -23,10 +24,11 @@ import math
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.features import FEATURES, TARGET, budget_tier  # noqa: E402
+from app.features import DERIVED_FROM_PROFILE, FEATURES, TARGET, budget_tier  # noqa: E402
 from scripts.load_data import load_and_verify_csv  # noqa: E402
 
 import joblib
@@ -1177,16 +1179,24 @@ def select_winner(eligible: dict, primary_metric: str, rss_bytes: dict, predict_
     return min(eligible, key=lambda name: (eligible[name][std_key], rss_bytes[name], predict_seconds[name]))
 
 
-def build_fitted_candidate(task: str, name: str, results: dict, df: pd.DataFrame) -> Pipeline:
-    """Refits ONE eligible, deployable candidate on the task's FULL
-    train set (not a single CV fold) using its own winning
+def build_fitted_candidate(task: str, name: str, results: dict, df: pd.DataFrame,
+                            train_df: pd.DataFrame | None = None) -> Pipeline:
+    """Refits ONE eligible, deployable candidate using its own winning
     configuration -- the real object a clean subprocess loads to
     measure RSS and prediction time (D19). Mirrors each train_pX
     function's own Pipeline construction for that exact candidate;
     Boosting candidates get their searched best_params re-applied,
     Linear/Logistic Baselines are built exactly as their train_pX
-    counterpart does (same max_iter, same preprocessing)."""
-    train_df = build_task_train_frame(df, task)
+    counterpart does (same max_iter, same preprocessing).
+
+    train_df, when given, is fit on AS-IS instead of
+    build_task_train_frame(df, task) -- needed by P6's Bootstrap
+    (checkpoint 12), which refits the already-locked winner on a
+    resampled frame in every iteration, never on the original train
+    set. `df` is still required in that case (unused for this call),
+    since every other caller relies on it."""
+    if train_df is None:
+        train_df = build_task_train_frame(df, task)
     target = train_df[TARGET[task]]
     y = encode_referred_target(target) if task == "P4" else target
 
@@ -1425,6 +1435,130 @@ def train_p2_conformal(df: pd.DataFrame, p2_results: dict, winner: str) -> dict:
     return {"winner": winner, "alpha": alpha, "q": q}
 
 
+# ---------------------------------------------------------------------------
+# Checkpoint 12 -- P6 Bootstrap (B=1,000, D8), exact-budget profiles
+# (D8א), the four locked spending strategies, and the lookup table
+# (P6_simulation.json, D14). Winner's model + hyperparameters only,
+# already locked at checkpoint 10 -- no retuning anywhere here.
+# ---------------------------------------------------------------------------
+
+BOOTSTRAP_B = 1000
+# Locked before any run, never chosen after looking at a result (D2's
+# convention extended to the Bootstrap).
+BOOTSTRAP_SEED = 47
+
+# SPEC's four locked spending strategies -- (ad_budget level, count of
+# allocations at that level) pairs. Every strategy must sum to exactly
+# 50,000 (criterion 11) -- asserted by strategy_totals(), not just
+# claimed here.
+STRATEGY_ALLOCATIONS = {
+    "2x20000_1x10000": [(20000, 2), (10000, 1)],
+    "10x5000": [(5000, 10)],
+    "25x2000": [(2000, 25)],
+    "100x500": [(500, 100)],
+}
+STRATEGY_LEVELS = sorted({level for allocs in STRATEGY_ALLOCATIONS.values() for level, _ in allocs})
+
+
+def strategy_totals() -> dict[str, int]:
+    """SPEC criterion 11: every strategy sums to exactly 50,000 --
+    checked in code, not just asserted in prose."""
+    totals = {name: sum(level * count for level, count in allocs) for name, allocs in STRATEGY_ALLOCATIONS.items()}
+    for name, total in totals.items():
+        if total != 50_000:
+            raise ValueError(f"strategy {name!r} sums to {total}, not 50,000")
+    return totals
+
+
+def compute_budget_profiles(train_df: pd.DataFrame, levels: list[float]) -> dict[float, dict]:
+    """D8א: the median profile for an EXACT ad_budget level, computed
+    from train_df's own rows only -- a bootstrap resample's rows, or
+    the real train set for the point estimate -- never from a tier or
+    the full population. A level with zero matching rows in this
+    train_df is reported unavailable (profile=None) -- never
+    completed from a tier or the population (D8א's documented edge
+    case), and the caller must not pretend otherwise."""
+    feature_cols = list(DERIVED_FROM_PROFILE["P6"])
+    out = {}
+    for level in levels:
+        rows = train_df[train_df["ad_budget"] == level]
+        if len(rows) == 0:
+            out[level] = {"profile": None, "n": 0}
+        else:
+            out[level] = {"profile": {c: float(rows[c].median()) for c in feature_cols}, "n": int(len(rows))}
+    return out
+
+
+def simulate_strategies(pipeline, profiles: dict) -> dict[str, float | None]:
+    """Sums the pipeline's prediction across every allocation in each
+    of the four strategies: ad_budget = the allocation's own exact
+    level, every other feature at that level's median (D8א). All
+    allocations at the same level share an identical profile, so the
+    model is called once per distinct level, not once per allocation.
+    A strategy needing any unavailable level (compute_budget_profiles
+    reported it as such) returns None for that strategy -- never
+    silently dropped from the total or filled from elsewhere."""
+    predictions_by_level: dict[float, float] = {}
+    results: dict[str, float | None] = {}
+    for name, allocations in STRATEGY_ALLOCATIONS.items():
+        total = 0.0
+        for level, count in allocations:
+            level_profile = profiles.get(level)
+            if level_profile is None or level_profile["profile"] is None:
+                total = None
+                break
+            if level not in predictions_by_level:
+                row = {**level_profile["profile"], "ad_budget": level}
+                predictions_by_level[level] = float(pipeline.predict(pd.DataFrame([row]))[0])
+            total += predictions_by_level[level] * count
+        results[name] = total
+    return results
+
+
+def p6_bootstrap_simulation(df: pd.DataFrame, p6_results: dict, winner: str,
+                             b: int = BOOTSTRAP_B, seed: int = BOOTSTRAP_SEED) -> dict:
+    """D8's full Bootstrap protocol for P6's winning model (never the
+    Baselines -- they get no Bootstrap range, SPEC §מעמד ה-Baselines).
+    Point estimate + per-level n come from the REAL (non-resampled)
+    train set with the winner refit once; the 2.5/97.5 percentile
+    range comes from `b` resamples-with-replacement of the SAME size
+    as train, each one refitting the ALREADY-locked winner from
+    scratch and re-running preprocessing, the exact-budget profile,
+    and the 4-strategy simulation (D8 steps 1-3) -- no retuning, ever.
+    The Holdout never enters (D8)."""
+    train_df = build_task_train_frame(df, "P6")
+
+    point_pipeline = build_fitted_candidate("P6", winner, p6_results, df, train_df=train_df)
+    point_profiles = compute_budget_profiles(train_df, STRATEGY_LEVELS)
+    point_totals = simulate_strategies(point_pipeline, point_profiles)
+
+    rng = np.random.default_rng(seed)
+    n = len(train_df)
+    bootstrap_totals: dict[str, list[float]] = {name: [] for name in STRATEGY_ALLOCATIONS}
+    for _ in range(b):
+        resample = train_df.iloc[rng.integers(0, n, size=n)].reset_index(drop=True)
+        pipeline = build_fitted_candidate("P6", winner, p6_results, df, train_df=resample)
+        profiles = compute_budget_profiles(resample, STRATEGY_LEVELS)
+        for name, total in simulate_strategies(pipeline, profiles).items():
+            if total is not None:
+                bootstrap_totals[name].append(total)
+
+    result = {}
+    for name in STRATEGY_ALLOCATIONS:
+        values = bootstrap_totals[name]
+        lower = float(np.percentile(values, 2.5)) if values else None
+        upper = float(np.percentile(values, 97.5)) if values else None
+        result[name] = {
+            "point": point_totals[name],
+            "lower": lower,
+            "upper": upper,
+            "interval_method": "bootstrap_percentile",
+            "n_bootstrap_used": len(values),
+            "levels": {str(level): {"n": point_profiles[level]["n"]} for level, _ in STRATEGY_ALLOCATIONS[name]},
+        }
+    return result
+
+
 def read_metrics_json(path: Path) -> dict:
     """Whatever tasks have been written so far -- {} if the file
     doesn't exist yet (checkpoint 6 is the first task to write it)."""
@@ -1614,3 +1748,30 @@ if __name__ == "__main__":
         all_metrics[f"{task}_calibration"] = {k: v for k, v in cal.items() if k != "calibrator"}
     write_metrics_json(all_metrics, metrics_path)
     print(f"wrote {metrics_path}")
+
+    print("--- checkpoint 12: P6 Bootstrap (pilot B=20, then full B=1000) ---")
+    print(f"strategy sums: {strategy_totals()}")
+    p6_winner = selections["P6"]["winner"]
+
+    pilot_t0 = time.perf_counter()
+    p6_bootstrap_simulation(df, p6_results, p6_winner, b=20)
+    pilot_elapsed = time.perf_counter() - pilot_t0
+    estimated_full_seconds = pilot_elapsed / 20 * BOOTSTRAP_B
+    print(f"pilot B=20 took {pilot_elapsed:.2f}s -- estimated B={BOOTSTRAP_B} run: {estimated_full_seconds:.1f}s "
+          f"({estimated_full_seconds / 60:.1f} min)")
+    if estimated_full_seconds > 60 * 60:
+        raise RuntimeError(
+            f"D8: estimated full Bootstrap run ({estimated_full_seconds / 60:.1f} min) exceeds the 60-minute "
+            "budget -- stop and ask the user, do not silently lower B."
+        )
+
+    full_t0 = time.perf_counter()
+    p6_simulation = p6_bootstrap_simulation(df, p6_results, p6_winner, b=BOOTSTRAP_B)
+    print(f"full B={BOOTSTRAP_B} took {time.perf_counter() - full_t0:.2f}s")
+    for name, r in sorted(p6_simulation.items()):
+        print(f"{name}: point={r['point']:.2f} lower={r['lower']:.2f} upper={r['upper']:.2f} "
+              f"n_bootstrap_used={r['n_bootstrap_used']}/{BOOTSTRAP_B}")
+
+    simulation_path = Path(__file__).resolve().parent.parent / "models" / "P6_simulation.json"
+    write_metrics_json(p6_simulation, simulation_path)
+    print(f"wrote {simulation_path}")

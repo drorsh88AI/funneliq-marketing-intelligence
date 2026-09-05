@@ -1382,3 +1382,106 @@ def test_train_p2_conformal_computes_the_quantile_from_calibration_residuals(df,
     expected_residuals = cal_df[tr.TARGET["P2"]].to_numpy() - independent_pipeline.predict(cal_df)
     expected_q = tr.conformal_quantile(expected_residuals, alpha=0.05)
     assert result["q"] == pytest.approx(expected_q)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 12 -- P6 Bootstrap (D8), exact-budget profiles (D8א), the
+# four locked spending strategies, and the lookup table. strategy_totals/
+# compute_budget_profiles/simulate_strategies are pure (CI-safe, no fit
+# involved at all). p6_bootstrap_simulation calls build_fitted_candidate
+# (a real fit) B+1 times -- kept local-only (D21) except for an
+# orchestration test (written proactively, following checkpoints 9-11's
+# established pattern) that monkeypatches build_fitted_candidate AND
+# build_task_train_frame to a cheap deterministic stand-in.
+# ---------------------------------------------------------------------------
+
+def test_strategy_totals_all_equal_50000():
+    assert tr.strategy_totals() == {name: 50_000 for name in tr.STRATEGY_ALLOCATIONS}
+
+
+def test_compute_budget_profiles_computes_median_per_exact_level_and_flags_unavailable():
+    cols = list(tr.DERIVED_FROM_PROFILE["P6"])
+    rows = []
+    for num_leads in (1, 2, 3):  # level 500 -> median 2.0
+        rows.append({**{c: 0.0 for c in cols}, "ad_budget": 500, "num_leads": float(num_leads)})
+    for num_leads in (10, 20):  # level 2000 -> median 15.0
+        rows.append({**{c: 0.0 for c in cols}, "ad_budget": 2000, "num_leads": float(num_leads)})
+    train_df = pd.DataFrame(rows)
+
+    profiles = tr.compute_budget_profiles(train_df, [500, 2000, 5000])
+    assert profiles[500]["n"] == 3
+    assert profiles[500]["profile"]["num_leads"] == 2.0
+    assert "ad_budget" not in profiles[500]["profile"]  # never part of the profile itself
+    assert profiles[2000]["n"] == 2
+    assert profiles[2000]["profile"]["num_leads"] == 15.0
+    assert profiles[5000] == {"profile": None, "n": 0}  # zero rows -> unavailable, not completed from elsewhere
+
+
+class _FakePipelineByBudget:
+    """predict() depends only on ad_budget -- exercises
+    simulate_strategies' weighted-sum logic without any real model."""
+    def predict(self, X):
+        return np.array([X["ad_budget"].iloc[0] / 100.0])
+
+
+def test_simulate_strategies_sums_predictions_weighted_by_count():
+    profiles = {level: {"profile": {"num_leads": 10.0}, "n": 5} for level in tr.STRATEGY_LEVELS}
+    result = tr.simulate_strategies(_FakePipelineByBudget(), profiles)
+    for name, allocations in tr.STRATEGY_ALLOCATIONS.items():
+        expected = sum((level / 100.0) * count for level, count in allocations)
+        assert result[name] == pytest.approx(expected)
+
+
+def test_simulate_strategies_returns_none_only_for_strategies_needing_the_unavailable_level():
+    profiles = {level: {"profile": {"num_leads": 10.0}, "n": 5} for level in tr.STRATEGY_LEVELS}
+    profiles[500] = {"profile": None, "n": 0}
+    result = tr.simulate_strategies(_FakePipelineByBudget(), profiles)
+    assert result["100x500"] is None       # needs level 500
+    assert result["10x5000"] is not None   # doesn't need level 500
+    assert result["25x2000"] is not None
+    assert result["2x20000_1x10000"] is not None
+
+
+def test_p6_bootstrap_simulation_wires_point_and_bootstrap_calls_correctly(monkeypatch):
+    cols = list(tr.DERIVED_FROM_PROFILE["P6"])
+    rows = [
+        {**{c: 0.0 for c in cols}, "ad_budget": level}
+        for level in tr.STRATEGY_LEVELS
+        for _ in range(30)  # enough per level that a 5-iteration bootstrap essentially never misses one
+    ]
+    synthetic_train_df = pd.DataFrame(rows)
+
+    def fake_train_frame(given_df, task):
+        assert task == "P6"
+        return synthetic_train_df
+
+    monkeypatch.setattr(tr, "build_task_train_frame", fake_train_frame)
+
+    class _IdentityBudgetPipeline:
+        def predict(self, X):
+            return np.array([float(X["ad_budget"].iloc[0])])
+
+    calls = []
+
+    def fake_build(task, name, results, given_df, train_df=None):
+        assert task == "P6"
+        assert name == "stub"
+        calls.append(len(train_df) if train_df is not None else None)
+        return _IdentityBudgetPipeline()
+
+    monkeypatch.setattr(tr, "build_fitted_candidate", fake_build)
+
+    result = tr.p6_bootstrap_simulation(object(), {"stub": {"role": "candidate"}}, "stub", b=5)
+
+    # 1 point-estimate call (the real train_df) + 5 bootstrap calls (each a resample of the SAME size)
+    assert len(calls) == 6
+    assert all(c == len(synthetic_train_df) for c in calls)
+
+    for name, allocations in tr.STRATEGY_ALLOCATIONS.items():
+        r = result[name]
+        expected = sum(level * count for level, count in allocations)  # predict(ad_budget) = ad_budget
+        assert r["point"] == pytest.approx(expected)
+        assert r["interval_method"] == "bootstrap_percentile"
+        assert r["n_bootstrap_used"] == 5  # every level present in every resample
+        assert r["lower"] == pytest.approx(expected)
+        assert r["upper"] == pytest.approx(expected)
