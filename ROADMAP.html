@@ -130,19 +130,20 @@
     background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
     box-shadow:var(--shadow);
   }
-  details.phase-body summary{
+  details.phase-body > summary{
     list-style:none; cursor:pointer; padding:14px 16px;
     display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
   }
-  details.phase-body summary::-webkit-details-marker{display:none;}
+  details.phase-body > summary::-webkit-details-marker{display:none;}
   .phase-title{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
   .phase-title h3{margin:0; font-size:15.5px; font-weight:600;}
   .phase-branch{
     font-family:'Consolas','SFMono-Regular',monospace; font-size:11.5px; color:var(--text-dim);
     background:var(--gray-dim); padding:2px 8px; border-radius:5px; direction:ltr; display:inline-block;
   }
-  .chevron{color:var(--text-dim); font-size:12px; transition:transform .15s;}
-  details[open] .chevron{transform:rotate(180deg);}
+  .phase-chevron,.subtask-chevron{color:var(--text-dim); font-size:12px; transition:transform .15s;}
+  details.phase-body[open] > summary .phase-chevron{transform:rotate(180deg);}
+  details.subtask-details[open] > summary .subtask-chevron{transform:rotate(180deg);}
 
   .status-chip{
     display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600;
@@ -157,6 +158,20 @@
   .phase-deliverables ul{margin:12px 0 0; padding-inline-start:0; list-style:none; font-size:13.5px; color:var(--text-dim);}
   .phase-deliverables li{margin-bottom:5px;}
   .subtask-num{display:inline-block; min-width:34px; margin-inline-end:6px; color:var(--text); font-weight:600; direction:ltr;}
+  details.subtask-details{border:1px solid var(--border); border-radius:8px; background:var(--surface);}
+  details.subtask-details > summary{
+    list-style:none; cursor:pointer; padding:8px 10px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  details.subtask-details > summary::-webkit-details-marker{display:none;}
+  details.subtask-details > summary:hover{background:var(--gray-dim);}
+  .subtask-heading{display:flex; align-items:flex-start; min-width:0; flex:1;}
+  .subtask-label{color:var(--text-dim); line-height:1.45;}
+  details.subtask-details.summary-only:not([open]) .subtask-label{
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1; overflow:hidden;
+  }
+  .subtask-summary-status{display:flex; align-items:center; gap:7px; flex-shrink:0;}
+  .subtask-content{padding:0 10px 9px; border-top:1px dashed var(--border);}
   .item-meta{font-size:11px; color:var(--gray); margin-top:2px;}
   .phase-note{
     margin-top:10px; font-size:12.5px; background:var(--amber-dim); color:var(--amber);
@@ -953,7 +968,7 @@ function render(){
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <span class="plan-chip ${p.planning_status}" title="סטטוס תכנון">${pmeta.icon} תכנון: ${pmeta.label}</span>
             <span class="status-chip ${p.execution_status}" title="סטטוס ביצוע">${meta.icon} ביצוע: ${meta.label}</span>
-            <span class="chevron">▾</span>
+            <span class="phase-chevron">▾</span>
           </div>
         </summary>
         <div class="phase-deliverables">
@@ -962,7 +977,7 @@ function render(){
           <ul>${p.items.map((it,itemIndex)=>{
             const st = itemStatus(p, it);
             const chip = (typeof it === 'string') ? '' :
-              ` <span class="status-chip ${st}" style="font-size:11px; padding:1px 7px;">${STATUS_META[st].icon} ${STATUS_META[st].label}</span>`;
+              `<span class="status-chip ${st}" style="font-size:11px; padding:1px 7px;">${STATUS_META[st].icon} ${STATUS_META[st].label}</span>`;
             const itemMeta = (typeof it === 'string') ? '' :
               `${it.u ? `<div class="item-meta">עודכן: <span class="ltr">${esc(it.u)}</span></div>` : ''}` +
               `${it.e ? `<div class="item-meta">ראיה: ${esc(it.e)}</div>` : ''}`;
@@ -973,7 +988,11 @@ function render(){
                במערך הוא המספר היחיד שקיים. */
             const hasOwnNumber = itemText(it).startsWith('checkpoint ');
             const numTag = hasOwnNumber ? '' : `<span class="subtask-num">${p.num}.${itemIndex + 1}</span>`;
-            return `<li>${numTag}${esc(itemText(it))}${chip}${itemMeta}</li>`;
+            const summaryOnly = !itemMeta;
+            return `<li><details class="subtask-details${summaryOnly ? ' summary-only' : ''}"><summary>` +
+              `<span class="subtask-heading">${numTag}<span class="subtask-label">${esc(itemText(it))}</span></span>` +
+              `<span class="subtask-summary-status">${chip}<span class="subtask-chevron">▾</span></span>` +
+              `</summary>${itemMeta ? `<div class="subtask-content">${itemMeta}</div>` : ''}</details></li>`;
           }).join('')}</ul>
           ${execHtml}
           <div class="phase-accept">
