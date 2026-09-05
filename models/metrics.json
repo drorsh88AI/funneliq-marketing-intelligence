@@ -187,6 +187,101 @@
     "q": 5.139283230129092,
     "winner": "catboost"
   },
+  "P2_holdout": {
+    "conformal_coverage": 0.9289099526066351,
+    "conformal_q": 5.139283230129092,
+    "mae": 2.1058832604840343,
+    "n_holdout": 633,
+    "r2": 0.9481487653645014,
+    "rmse": 2.704823896175574,
+    "segments": {
+      "budget_tier": {
+        "High": {
+          "mae": 1.8510109962358037,
+          "n": 198
+        },
+        "Low": {
+          "mae": 1.3046037604740461,
+          "n": 129
+        },
+        "Mid": {
+          "mae": 2.6085949069625904,
+          "n": 306
+        }
+      },
+      "num_leads_bucket": {
+        "q1": {
+          "mae": 1.6365984023935651,
+          "n": 159
+        },
+        "q2": {
+          "mae": 2.365694549228744,
+          "n": 161
+        },
+        "q3": {
+          "mae": 2.6059573936452267,
+          "n": 157
+        },
+        "q4": {
+          "mae": 1.81277451716467,
+          "n": 156
+        }
+      },
+      "profit_decile": {
+        "decile_1": {
+          "mae": 1.176943892707661,
+          "n": 63
+        },
+        "decile_10": {
+          "mae": 2.344597023080778,
+          "n": 63
+        },
+        "decile_2": {
+          "mae": 1.8412325230556592,
+          "n": 63
+        },
+        "decile_3": {
+          "mae": 1.436285263415427,
+          "n": 62
+        },
+        "decile_4": {
+          "mae": 1.5087600263462901,
+          "n": 63
+        },
+        "decile_5": {
+          "mae": 2.1123650321321144,
+          "n": 63
+        },
+        "decile_6": {
+          "mae": 3.103978038874482,
+          "n": 62
+        },
+        "decile_7": {
+          "mae": 2.11089705806969,
+          "n": 63
+        },
+        "decile_8": {
+          "mae": 3.1594934521832587,
+          "n": 62
+        },
+        "decile_9": {
+          "mae": 2.2220363977371407,
+          "n": 63
+        }
+      },
+      "referred": {
+        "No": {
+          "mae": 1.9990738886651869,
+          "n": 383
+        },
+        "Yes": {
+          "mae": 2.269515218110509,
+          "n": 250
+        }
+      }
+    },
+    "winner": "catboost"
+  },
   "P2_selection": {
     "eligible": [
       "catboost",
@@ -681,6 +776,193 @@
   "P3_calibration": {
     "calibration_method": "sigmoid",
     "calibration_status": "calibrated",
+    "winner": "xgboost"
+  },
+  "P3_holdout": {
+    "accuracy": 0.7614533965244866,
+    "brier": 0.17327954674178658,
+    "calibration_curve": {
+      "bins": [
+        {
+          "actual_rate": null,
+          "bin": 0,
+          "mean_predicted": null,
+          "n": 0
+        },
+        {
+          "actual_rate": 0.06951871657754011,
+          "bin": 1,
+          "mean_predicted": 0.14244847045854164,
+          "n": 187
+        },
+        {
+          "actual_rate": 0.2619047619047619,
+          "bin": 2,
+          "mean_predicted": 0.2421267040722727,
+          "n": 42
+        },
+        {
+          "actual_rate": 0.47368421052631576,
+          "bin": 3,
+          "mean_predicted": 0.3454997753526126,
+          "n": 19
+        },
+        {
+          "actual_rate": 0.26666666666666666,
+          "bin": 4,
+          "mean_predicted": 0.4487028261512934,
+          "n": 15
+        },
+        {
+          "actual_rate": 0.6875,
+          "bin": 5,
+          "mean_predicted": 0.5660407778331629,
+          "n": 32
+        },
+        {
+          "actual_rate": 0.6942148760330579,
+          "bin": 6,
+          "mean_predicted": 0.6566583731753415,
+          "n": 121
+        },
+        {
+          "actual_rate": 0.6930232558139535,
+          "bin": 7,
+          "mean_predicted": 0.7395326387614175,
+          "n": 215
+        },
+        {
+          "actual_rate": 0.5,
+          "bin": 8,
+          "mean_predicted": 0.8018796900830778,
+          "n": 2
+        },
+        {
+          "actual_rate": null,
+          "bin": 9,
+          "mean_predicted": null,
+          "n": 0
+        }
+      ]
+    },
+    "f1": 0.7722473604826546,
+    "lift_at_10": {
+      "K": 64,
+      "base_rate": 0.4628751974723539,
+      "lift": 1.3502559726962458,
+      "precision_at_k": 0.625
+    },
+    "log_loss": 0.5220598790786236,
+    "n_holdout": 633,
+    "pr_auc": 0.6681307962541994,
+    "precision": 0.6918918918918919,
+    "recall": 0.8737201365187713,
+    "roc_auc": 0.7893545472796627,
+    "segments": {
+      "budget_tier": {
+        "High": {
+          "actual_rate": 0.2011173184357542,
+          "mean_predicted": 0.21667655148894124,
+          "n": 179
+        },
+        "Low": {
+          "actual_rate": 0.18181818181818182,
+          "mean_predicted": 0.24462048237937192,
+          "n": 99
+        },
+        "Mid": {
+          "actual_rate": 0.6732394366197183,
+          "mean_predicted": 0.6909068674856955,
+          "n": 355
+        }
+      },
+      "num_leads_bucket": {
+        "q1": {
+          "actual_rate": 0.3389830508474576,
+          "mean_predicted": 0.4411885407793996,
+          "n": 177
+        },
+        "q2": {
+          "actual_rate": 0.6923076923076923,
+          "mean_predicted": 0.6933961673458041,
+          "n": 143
+        },
+        "q3": {
+          "actual_rate": 0.6352201257861635,
+          "mean_predicted": 0.6104827418610836,
+          "n": 159
+        },
+        "q4": {
+          "actual_rate": 0.21428571428571427,
+          "mean_predicted": 0.22053044691678036,
+          "n": 154
+        }
+      },
+      "profit_decile": {
+        "decile_1": {
+          "actual_rate": 0.0,
+          "mean_predicted": 0.13235553168841452,
+          "n": 63
+        },
+        "decile_10": {
+          "actual_rate": 1.0,
+          "mean_predicted": 0.715487425859279,
+          "n": 63
+        },
+        "decile_2": {
+          "actual_rate": 0.015873015873015872,
+          "mean_predicted": 0.18227238871356707,
+          "n": 63
+        },
+        "decile_3": {
+          "actual_rate": 0.031746031746031744,
+          "mean_predicted": 0.1997826619617769,
+          "n": 63
+        },
+        "decile_4": {
+          "actual_rate": 0.4126984126984127,
+          "mean_predicted": 0.3320206789591614,
+          "n": 63
+        },
+        "decile_5": {
+          "actual_rate": 0.4603174603174603,
+          "mean_predicted": 0.5527459325702611,
+          "n": 63
+        },
+        "decile_6": {
+          "actual_rate": 0.2698412698412698,
+          "mean_predicted": 0.6813708636138271,
+          "n": 63
+        },
+        "decile_7": {
+          "actual_rate": 0.49206349206349204,
+          "mean_predicted": 0.6880372554565632,
+          "n": 63
+        },
+        "decile_8": {
+          "actual_rate": 0.9206349206349206,
+          "mean_predicted": 0.6921992093285076,
+          "n": 63
+        },
+        "decile_9": {
+          "actual_rate": 1.0,
+          "mean_predicted": 0.6840996146614757,
+          "n": 63
+        }
+      },
+      "referred": {
+        "No": {
+          "actual_rate": 0.20903954802259886,
+          "mean_predicted": 0.36799297968661093,
+          "n": 354
+        },
+        "Yes": {
+          "actual_rate": 0.7849462365591398,
+          "mean_predicted": 0.6380105864531899,
+          "n": 279
+        }
+      }
+    },
     "winner": "xgboost"
   },
   "P3_manual_rules": {
@@ -1178,6 +1460,181 @@
     "se_roc_auc": 0.00844736215467108,
     "std_roc_auc": 0.018888876008403627
   },
+  "P4_holdout": {
+    "accuracy": 0.7630331753554502,
+    "brier": 0.17215733096090458,
+    "calibration_curve": {
+      "bins": [
+        {
+          "actual_rate": 0.06976744186046512,
+          "bin": 0,
+          "mean_predicted": 0.07117937571590197,
+          "n": 86
+        },
+        {
+          "actual_rate": 0.11711711711711711,
+          "bin": 1,
+          "mean_predicted": 0.15522883835614953,
+          "n": 111
+        },
+        {
+          "actual_rate": 0.2,
+          "bin": 2,
+          "mean_predicted": 0.24410248718610658,
+          "n": 70
+        },
+        {
+          "actual_rate": 0.3103448275862069,
+          "bin": 3,
+          "mean_predicted": 0.3269913064701115,
+          "n": 29
+        },
+        {
+          "actual_rate": 0.42857142857142855,
+          "bin": 4,
+          "mean_predicted": 0.44617887574002646,
+          "n": 7
+        },
+        {
+          "actual_rate": 0.6610169491525424,
+          "bin": 5,
+          "mean_predicted": 0.5697706622731143,
+          "n": 59
+        },
+        {
+          "actual_rate": 0.6814159292035398,
+          "bin": 6,
+          "mean_predicted": 0.660392855463055,
+          "n": 113
+        },
+        {
+          "actual_rate": 0.6690647482014388,
+          "bin": 7,
+          "mean_predicted": 0.740511942930136,
+          "n": 139
+        },
+        {
+          "actual_rate": 0.8421052631578947,
+          "bin": 8,
+          "mean_predicted": 0.828504432961623,
+          "n": 19
+        },
+        {
+          "actual_rate": null,
+          "bin": 9,
+          "mean_predicted": null,
+          "n": 0
+        }
+      ]
+    },
+    "f1": 0.75,
+    "lift_at_10": {
+      "K": 64,
+      "base_rate": 0.4265402843601896,
+      "lift": 1.7217013888888888,
+      "precision_at_k": 0.734375
+    },
+    "log_loss": 0.5192442071794415,
+    "n_holdout": 633,
+    "pr_auc": 0.699260725770012,
+    "precision": 0.6818181818181818,
+    "recall": 0.8333333333333334,
+    "roc_auc": 0.7988878685848382,
+    "segments": {
+      "budget_tier": {
+        "High": {
+          "actual_rate": 0.1638418079096045,
+          "mean_predicted": 0.22320058419899547,
+          "n": 177
+        },
+        "Low": {
+          "actual_rate": 0.12195121951219512,
+          "mean_predicted": 0.09844171896657271,
+          "n": 123
+        },
+        "Mid": {
+          "actual_rate": 0.6786786786786787,
+          "mean_predicted": 0.685717035101589,
+          "n": 333
+        }
+      },
+      "num_leads_bucket": {
+        "q1": {
+          "actual_rate": 0.2994350282485876,
+          "mean_predicted": 0.27595093726988823,
+          "n": 177
+        },
+        "q2": {
+          "actual_rate": 0.64,
+          "mean_predicted": 0.6763375511136236,
+          "n": 150
+        },
+        "q3": {
+          "actual_rate": 0.6118421052631579,
+          "mean_predicted": 0.6219208890551979,
+          "n": 152
+        },
+        "q4": {
+          "actual_rate": 0.18181818181818182,
+          "mean_predicted": 0.22813431055023312,
+          "n": 154
+        }
+      },
+      "profit_decile": {
+        "decile_1": {
+          "actual_rate": 0.047619047619047616,
+          "mean_predicted": 0.08340053304251407,
+          "n": 63
+        },
+        "decile_10": {
+          "actual_rate": 0.8253968253968254,
+          "mean_predicted": 0.7244048086525635,
+          "n": 63
+        },
+        "decile_2": {
+          "actual_rate": 0.0967741935483871,
+          "mean_predicted": 0.1137748082344249,
+          "n": 62
+        },
+        "decile_3": {
+          "actual_rate": 0.06349206349206349,
+          "mean_predicted": 0.19677027157998028,
+          "n": 63
+        },
+        "decile_4": {
+          "actual_rate": 0.16129032258064516,
+          "mean_predicted": 0.229556524419776,
+          "n": 62
+        },
+        "decile_5": {
+          "actual_rate": 0.36507936507936506,
+          "mean_predicted": 0.35366301731462396,
+          "n": 63
+        },
+        "decile_6": {
+          "actual_rate": 0.43548387096774194,
+          "mean_predicted": 0.6531557923233483,
+          "n": 62
+        },
+        "decile_7": {
+          "actual_rate": 0.5,
+          "mean_predicted": 0.6636988127332347,
+          "n": 62
+        },
+        "decile_8": {
+          "actual_rate": 0.8253968253968254,
+          "mean_predicted": 0.6649216108670928,
+          "n": 63
+        },
+        "decile_9": {
+          "actual_rate": 0.9354838709677419,
+          "mean_predicted": 0.7286264514427117,
+          "n": 62
+        }
+      }
+    },
+    "winner": "logistic"
+  },
   "P4_population_sensitivity": {
     "fold_scores_roc_auc": [
       0.7877602653964811,
@@ -1198,6 +1655,17 @@
       "logistic"
     ],
     "winner": "logistic"
+  },
+  "P4_sensitivity_holdout_comparison": {
+    "n_holdout": 633,
+    "population_sensitivity": {
+      "population_size": 2867,
+      "roc_auc": 0.7905723905723905
+    },
+    "primary": {
+      "roc_auc": 0.7988878685848382,
+      "winner": "logistic"
+    }
   },
   "P6": {
     "dummy": {
@@ -1417,6 +1885,38 @@
       "std_mae": 262.27576833727807,
       "std_r2": 0.14683520456014093,
       "std_rmse": 2454.8449882942296
+    }
+  },
+  "P6_backtest": {
+    "10000": {
+      "actual_mean_per_customer": 5743.393939393939,
+      "n_holdout_at_level": 33,
+      "n_train_at_level": 161,
+      "predicted_per_customer": 4927.282396583519
+    },
+    "2000": {
+      "actual_mean_per_customer": 20650.882352941175,
+      "n_holdout_at_level": 85,
+      "n_train_at_level": 322,
+      "predicted_per_customer": 21275.39505846673
+    },
+    "20000": {
+      "actual_mean_per_customer": 4470.142857142857,
+      "n_holdout_at_level": 14,
+      "n_train_at_level": 57,
+      "predicted_per_customer": 985.4014442327634
+    },
+    "500": {
+      "actual_mean_per_customer": 918.6470588235294,
+      "n_holdout_at_level": 17,
+      "n_train_at_level": 92,
+      "predicted_per_customer": 6268.61153448799
+    },
+    "5000": {
+      "actual_mean_per_customer": 20643.349206349205,
+      "n_holdout_at_level": 63,
+      "n_train_at_level": 249,
+      "predicted_per_customer": 23916.933716905638
     }
   },
   "P6_duplicate_sensitivity": {
@@ -1725,6 +2225,104 @@
       }
     }
   },
+  "P6_holdout": {
+    "mae": 3678.8874964876377,
+    "n_holdout": 695,
+    "r2": 0.7961232864490171,
+    "rmse": 4590.9456900847545,
+    "segments": {
+      "budget_tier": {
+        "High": {
+          "mae": 3596.569974967012,
+          "n": 190
+        },
+        "Low": {
+          "mae": 3134.4129130375763,
+          "n": 166
+        },
+        "Mid": {
+          "mae": 3991.640033188607,
+          "n": 339
+        }
+      },
+      "num_leads_bucket": {
+        "q1": {
+          "mae": 3246.5135445899996,
+          "n": 180
+        },
+        "q2": {
+          "mae": 4021.8794378543366,
+          "n": 171
+        },
+        "q3": {
+          "mae": 4005.4694778072726,
+          "n": 171
+        },
+        "q4": {
+          "mae": 3466.9231644773,
+          "n": 173
+        }
+      },
+      "profit_decile": {
+        "decile_1": {
+          "mae": 5555.003571704801,
+          "n": 70
+        },
+        "decile_10": {
+          "mae": 5350.56212343113,
+          "n": 70
+        },
+        "decile_2": {
+          "mae": 2345.6272253625,
+          "n": 69
+        },
+        "decile_3": {
+          "mae": 3394.6601368935094,
+          "n": 70
+        },
+        "decile_4": {
+          "mae": 3102.3339371427537,
+          "n": 69
+        },
+        "decile_5": {
+          "mae": 3384.105519320839,
+          "n": 70
+        },
+        "decile_6": {
+          "mae": 4032.8140914684964,
+          "n": 69
+        },
+        "decile_7": {
+          "mae": 3842.2535344115804,
+          "n": 69
+        },
+        "decile_8": {
+          "mae": 2770.3789088192816,
+          "n": 70
+        },
+        "decile_9": {
+          "mae": 2981.2768905572575,
+          "n": 69
+        }
+      },
+      "referred": {
+        "No": {
+          "mae": 3687.773687466205,
+          "n": 429
+        },
+        "Yes": {
+          "mae": 3664.5560080297214,
+          "n": 266
+        }
+      }
+    },
+    "top_decile": {
+      "bias_top10": -5328.920341316801,
+      "k": 70,
+      "rmse_top10": 6169.942064598811
+    },
+    "winner": "linear"
+  },
   "P6_log1p_smearing": {
     "fold_scores_mae": [
       2349.3010998921427,
@@ -1755,6 +2353,16 @@
       "p6_5_winsorized"
     ],
     "winner": "linear"
+  },
+  "P6_strategy_ranking": {
+    "ranked": [
+      "100x500",
+      "25x2000",
+      "10x5000",
+      "2x20000_1x10000"
+    ],
+    "top_two_overlap": true,
+    "verdict": "'100x500' מועדפת לפי המודל (point הגבוה ביותר), אך טווחה חופף מהותית עם '25x2000' — אין הכרזה על אסטרטגיה מנצחת; מומלץ ניסוי מבוקר."
   },
   "global_feature_importance": {
     "P2": {
@@ -2366,6 +2974,378 @@
       "primary_metric": "rmse",
       "std_across_seeds": 208.8356514805173,
       "winner": "linear"
+    }
+  },
+  "oof_segments": {
+    "P2": {
+      "budget_tier": {
+        "High": {
+          "mae": 1.763923321385081,
+          "n": 592
+        },
+        "Low": {
+          "mae": 1.495352808519961,
+          "n": 352
+        },
+        "Mid": {
+          "mae": 2.444310283894847,
+          "n": 1080
+        }
+      },
+      "num_leads_bucket": {
+        "q1": {
+          "mae": 1.8256079154369784,
+          "n": 510
+        },
+        "q2": {
+          "mae": 2.471122367328194,
+          "n": 524
+        },
+        "q3": {
+          "mae": 2.2643662391620385,
+          "n": 485
+        },
+        "q4": {
+          "mae": 1.7550814220178368,
+          "n": 505
+        }
+      },
+      "profit_decile": {
+        "decile_1": {
+          "mae": 1.353404782227958,
+          "n": 201
+        },
+        "decile_10": {
+          "mae": 2.974487636473631,
+          "n": 201
+        },
+        "decile_2": {
+          "mae": 1.8223557273588957,
+          "n": 201
+        },
+        "decile_3": {
+          "mae": 1.1988377060567514,
+          "n": 200
+        },
+        "decile_4": {
+          "mae": 1.716634115876861,
+          "n": 201
+        },
+        "decile_5": {
+          "mae": 2.396974562278416,
+          "n": 201
+        },
+        "decile_6": {
+          "mae": 2.954395519921759,
+          "n": 200
+        },
+        "decile_7": {
+          "mae": 1.9906873067012485,
+          "n": 201
+        },
+        "decile_8": {
+          "mae": 2.598977325719022,
+          "n": 200
+        },
+        "decile_9": {
+          "mae": 1.8580947924325484,
+          "n": 201
+        }
+      },
+      "referred": {
+        "No": {
+          "mae": 1.8059446337468308,
+          "n": 1116
+        },
+        "Yes": {
+          "mae": 2.4174313768766145,
+          "n": 908
+        }
+      }
+    },
+    "P3": {
+      "budget_tier": {
+        "High": {
+          "actual_rate": 0.21428571428571427,
+          "mean_predicted": 0.21707553566772153,
+          "n": 616
+        },
+        "Low": {
+          "actual_rate": 0.2222222222222222,
+          "mean_predicted": 0.21538938243415148,
+          "n": 378
+        },
+        "Mid": {
+          "actual_rate": 0.7009708737864078,
+          "mean_predicted": 0.6986587713572007,
+          "n": 1030
+        }
+      },
+      "num_leads_bucket": {
+        "q1": {
+          "actual_rate": 0.3524904214559387,
+          "mean_predicted": 0.3516578226603596,
+          "n": 522
+        },
+        "q2": {
+          "actual_rate": 0.7068273092369478,
+          "mean_predicted": 0.6988382847254057,
+          "n": 498
+        },
+        "q3": {
+          "actual_rate": 0.5822050290135397,
+          "mean_predicted": 0.5807780664183588,
+          "n": 517
+        },
+        "q4": {
+          "actual_rate": 0.20739219712525667,
+          "mean_predicted": 0.21130419192831865,
+          "n": 487
+        }
+      },
+      "profit_decile": {
+        "decile_1": {
+          "actual_rate": 0.0,
+          "mean_predicted": 0.10989127837733101,
+          "n": 201
+        },
+        "decile_10": {
+          "actual_rate": 0.9950248756218906,
+          "mean_predicted": 0.7076073161405118,
+          "n": 201
+        },
+        "decile_2": {
+          "actual_rate": 0.075,
+          "mean_predicted": 0.17838224987499415,
+          "n": 200
+        },
+        "decile_3": {
+          "actual_rate": 0.0945273631840796,
+          "mean_predicted": 0.18426348693872713,
+          "n": 201
+        },
+        "decile_4": {
+          "actual_rate": 0.175,
+          "mean_predicted": 0.2583767575211823,
+          "n": 200
+        },
+        "decile_5": {
+          "actual_rate": 0.6865671641791045,
+          "mean_predicted": 0.3923223871478246,
+          "n": 201
+        },
+        "decile_6": {
+          "actual_rate": 0.235,
+          "mean_predicted": 0.6723635279759764,
+          "n": 200
+        },
+        "decile_7": {
+          "actual_rate": 0.495,
+          "mean_predicted": 0.7023432828485966,
+          "n": 200
+        },
+        "decile_8": {
+          "actual_rate": 0.8756218905472637,
+          "mean_predicted": 0.7079721379339399,
+          "n": 201
+        },
+        "decile_9": {
+          "actual_rate": 1.0,
+          "mean_predicted": 0.7026727194339037,
+          "n": 200
+        }
+      },
+      "referred": {
+        "No": {
+          "actual_rate": 0.2454780361757106,
+          "mean_predicted": 0.3429842578466985,
+          "n": 1161
+        },
+        "Yes": {
+          "actual_rate": 0.7566628041714948,
+          "mean_predicted": 0.6217259880293459,
+          "n": 863
+        }
+      }
+    },
+    "P4": {
+      "budget_tier": {
+        "High": {
+          "actual_rate": 0.20993589743589744,
+          "mean_predicted": 0.20871196974503844,
+          "n": 624
+        },
+        "Low": {
+          "actual_rate": 0.09302325581395349,
+          "mean_predicted": 0.0941314608796629,
+          "n": 344
+        },
+        "Mid": {
+          "actual_rate": 0.6647727272727273,
+          "mean_predicted": 0.6643570680953385,
+          "n": 1056
+        }
+      },
+      "num_leads_bucket": {
+        "q1": {
+          "actual_rate": 0.29061371841155237,
+          "mean_predicted": 0.30292474144429404,
+          "n": 554
+        },
+        "q2": {
+          "actual_rate": 0.6794871794871795,
+          "mean_predicted": 0.6654121928383256,
+          "n": 468
+        },
+        "q3": {
+          "actual_rate": 0.5484496124031008,
+          "mean_predicted": 0.5440349719922435,
+          "n": 516
+        },
+        "q4": {
+          "actual_rate": 0.21193415637860083,
+          "mean_predicted": 0.214451228427392,
+          "n": 486
+        }
+      },
+      "profit_decile": {
+        "decile_1": {
+          "actual_rate": 0.05970149253731343,
+          "mean_predicted": 0.08137165086383394,
+          "n": 201
+        },
+        "decile_10": {
+          "actual_rate": 0.7910447761194029,
+          "mean_predicted": 0.7090066508035482,
+          "n": 201
+        },
+        "decile_2": {
+          "actual_rate": 0.10945273631840796,
+          "mean_predicted": 0.12412564980638013,
+          "n": 201
+        },
+        "decile_3": {
+          "actual_rate": 0.11940298507462686,
+          "mean_predicted": 0.1805649305898779,
+          "n": 201
+        },
+        "decile_4": {
+          "actual_rate": 0.23383084577114427,
+          "mean_predicted": 0.22709212187903435,
+          "n": 201
+        },
+        "decile_5": {
+          "actual_rate": 0.3582089552238806,
+          "mean_predicted": 0.3176094931670901,
+          "n": 201
+        },
+        "decile_6": {
+          "actual_rate": 0.395,
+          "mean_predicted": 0.6355735141403513,
+          "n": 200
+        },
+        "decile_7": {
+          "actual_rate": 0.6069651741293532,
+          "mean_predicted": 0.640818841451047,
+          "n": 201
+        },
+        "decile_8": {
+          "actual_rate": 0.7661691542288557,
+          "mean_predicted": 0.6604084728771521,
+          "n": 201
+        },
+        "decile_9": {
+          "actual_rate": 0.8308457711442786,
+          "mean_predicted": 0.6973261822950126,
+          "n": 201
+        }
+      }
+    },
+    "P6": {
+      "budget_tier": {
+        "High": {
+          "mae": 3299.520720301663,
+          "n": 804
+        },
+        "Low": {
+          "mae": 3352.208078553996,
+          "n": 609
+        },
+        "Mid": {
+          "mae": 4190.598397647326,
+          "n": 1363
+        }
+      },
+      "num_leads_bucket": {
+        "q1": {
+          "mae": 3453.305600434803,
+          "n": 739
+        },
+        "q2": {
+          "mae": 4345.518717548741,
+          "n": 683
+        },
+        "q3": {
+          "mae": 4026.900499357774,
+          "n": 666
+        },
+        "q4": {
+          "mae": 3203.774912174186,
+          "n": 688
+        }
+      },
+      "profit_decile": {
+        "decile_1": {
+          "mae": 5319.875186098593,
+          "n": 278
+        },
+        "decile_10": {
+          "mae": 7986.68452865747,
+          "n": 278
+        },
+        "decile_2": {
+          "mae": 2310.3887614947016,
+          "n": 278
+        },
+        "decile_3": {
+          "mae": 2898.0907047570295,
+          "n": 277
+        },
+        "decile_4": {
+          "mae": 3236.6693500249726,
+          "n": 278
+        },
+        "decile_5": {
+          "mae": 2794.4823688334754,
+          "n": 277
+        },
+        "decile_6": {
+          "mae": 3869.8672877989143,
+          "n": 278
+        },
+        "decile_7": {
+          "mae": 3099.682607751266,
+          "n": 277
+        },
+        "decile_8": {
+          "mae": 2730.0933757159723,
+          "n": 278
+        },
+        "decile_9": {
+          "mae": 3229.405599500948,
+          "n": 277
+        }
+      },
+      "referred": {
+        "No": {
+          "mae": 3478.8778429789504,
+          "n": 1702
+        },
+        "Yes": {
+          "mae": 4176.0194657402735,
+          "n": 1074
+        }
+      }
     }
   },
   "shap": {

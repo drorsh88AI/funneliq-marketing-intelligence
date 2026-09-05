@@ -10,16 +10,18 @@ currently holds checkpoint 3's split layer, checkpoint 4's shared CV
 folds + preprocessing Pipelines, checkpoint 5's decision-rule pure
 functions (One-SE, the paired guardrail veto, Split Conformal's
 quantile, top-decile metrics, Lift@K) -- all built and tested before
-any model is trained -- and checkpoints 6-13's actual training (P2, P3,
+any model is trained -- and checkpoints 6-14's actual training (P2, P3,
 P4, P6 + P6's paired guardrail crossover), model selection (One-SE
 eligibility, RSS/prediction-time measurement, the winner tie-break),
 calibration (P3/P4 sigmoid calibration, P2's Split Conformal
 quantile), P6's Bootstrap simulation (exact-budget profiles, the four
-locked spending strategies, the lookup table), and checkpoint 13's
+locked spending strategies, the lookup table), checkpoint 13's
 explainability + research work (global feature importance, native
 SHAP summaries + local explanations, learning curves, multi-seed
 stability, the three D17 research experiments, P6's duplicate-
-sensitivity leg deferred from phase 5).
+sensitivity leg deferred from phase 5), and checkpoint 14 -- the
+single, irreversible Holdout opening (final metrics for all four
+tasks, segmentation, D18's P4 sensitivity comparison, P6's Backtest).
 """
 from __future__ import annotations
 
@@ -51,7 +53,17 @@ from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier, DummyRegressor
 from sklearn.frozen import FrozenEstimator
 from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, make_scorer, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    brier_score_loss,
+    f1_score,
+    log_loss,
+    make_scorer,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from sklearn.model_selection import (
     KFold,
     RandomizedSearchCV,
@@ -2013,6 +2025,307 @@ def p6_duplicate_sensitivity(df: pd.DataFrame, p6_results: dict, winner: str) ->
     return {"winner": winner, "delta_rmse_per_fold": delta_rmse, **paired_delta_stats(delta_rmse)}
 
 
+# ---------------------------------------------------------------------------
+# Checkpoint 14 -- the single Holdout opening (D13, D18, SPEC's
+# segmentation + Backtest). ⚠ IRREVERSIBLE: nothing computed here may
+# ever influence a model, feature, or hyperparameter choice -- any
+# finding that would change something burns this Holdout and requires
+# a new one. Every function below only READS the already-locked
+# winner/calibrator/hyperparameters from earlier checkpoints.
+# ---------------------------------------------------------------------------
+
+# referred is Excluded (never a feature) for P2/P3/P6 too -- segmenting
+# by it post-hoc is legitimate report-only slicing (SPEC's allowed
+# segments). Skipped for P4 only, where referred IS the target
+# (segmenting a classifier's Holdout performance by its own target is
+# circular).
+SEGMENT_TASKS_WITH_REFERRED = ("P2", "P3", "P6")
+
+
+def _profit_decile_labels(cumulative_profit: pd.Series) -> pd.Series:
+    """Deciles computed from THIS split's own cumulative_profit values
+    -- same convention as checkpoint 5's top_decile_mask (never a
+    cross-split threshold, never fed to a model)."""
+    ranks = cumulative_profit.rank(method="first", pct=True)
+    return pd.cut(ranks, bins=10, labels=[f"decile_{i + 1}" for i in range(10)])
+
+
+def _num_leads_bucket_labels(num_leads: pd.Series) -> pd.Series:
+    """Quartiles of num_leads, computed from this split's own values."""
+    return pd.qcut(num_leads, q=4, labels=["q1", "q2", "q3", "q4"], duplicates="drop")
+
+
+def segment_performance(task: str, segment_df: pd.DataFrame, y_true: np.ndarray, y_pred: np.ndarray,
+                         is_classifier: bool) -> dict:
+    """SPEC's §איכות עסקית segmentation report: budget_tier, profit
+    deciles, num_leads size, referred (skipped for P4). Report-only --
+    never touches a modeling decision, computed after prediction."""
+    segments = {
+        "budget_tier": segment_df["ad_budget"].map(budget_tier).fillna("gap"),
+        "profit_decile": _profit_decile_labels(segment_df["cumulative_profit"]),
+        "num_leads_bucket": _num_leads_bucket_labels(segment_df["num_leads"]),
+    }
+    if task in SEGMENT_TASKS_WITH_REFERRED:
+        segments["referred"] = segment_df["referred"]
+
+    out: dict = {}
+    for dim_name, labels in segments.items():
+        out[dim_name] = {}
+        labels = pd.Series(labels).reset_index(drop=True)
+        for level in sorted(labels.dropna().unique(), key=str):
+            mask = (labels == level).to_numpy()
+            n = int(mask.sum())
+            if n == 0:
+                continue
+            if is_classifier:
+                out[dim_name][str(level)] = {
+                    "n": n,
+                    "mean_predicted": float(np.mean(y_pred[mask])),
+                    "actual_rate": float(np.mean(y_true[mask])),
+                }
+            else:
+                out[dim_name][str(level)] = {"n": n, "mae": float(np.mean(np.abs(y_true[mask] - y_pred[mask])))}
+    return out
+
+
+def oof_predictions(task: str, df: pd.DataFrame, results: dict, winner: str) -> np.ndarray:
+    """Out-of-fold predictions for the winner on its own train set,
+    using the ALREADY-locked hyperparameters (no new tuning) -- needed
+    for OOF segmentation (SPEC requires both OOF and Holdout). 5 fits,
+    the same shared folds already built (checkpoint 4)."""
+    train_df = build_task_train_frame(df, task)
+    target = train_df[TARGET[task]]
+    y = encode_referred_target(target) if task == "P4" else target
+    folds = build_folds(df, task)
+    is_classifier = PRIMARY_METRIC[task] == "roc_auc"
+
+    preds = np.full(len(train_df), np.nan)
+    for train_idx, val_idx in folds:
+        pipeline = build_fitted_candidate(task, winner, results, df,
+                                           train_df=train_df.iloc[train_idx].reset_index(drop=True))
+        preds[val_idx] = _predict_for_primary_metric(task, pipeline, train_df.iloc[val_idx])
+    return preds
+
+
+def _holdout_frame(df: pd.DataFrame, task: str) -> pd.DataFrame:
+    """The task's Holdout rows (from split_task), 0..n-1-indexed --
+    mirrors build_task_train_frame/build_task_calibration_frame for
+    the third split. Called only from this checkpoint's own functions."""
+    parts = split_task(df, task)
+    pop = task_population(df, task)
+    return pop[pop["source_row_id"].isin(parts["holdout"])].reset_index(drop=True)
+
+
+def holdout_evaluate_p2(df: pd.DataFrame, p2_results: dict, winner: str, q: float) -> dict:
+    """D13's P2 Holdout row (MAE/RMSE/R², once) + the Conformal
+    interval's empirical coverage (a direct, nearly-free sanity check
+    on D9's mechanism -- not itself a D13-mandated metric) + segments."""
+    task = "P2"
+    holdout_df = _holdout_frame(df, task)
+    y_true = holdout_df[TARGET[task]].to_numpy(dtype=float)
+
+    pipeline = build_fitted_candidate(task, winner, p2_results, df)
+    y_pred = pipeline.predict(holdout_df)
+
+    mae = float(np.mean(np.abs(y_true - y_pred)))
+    rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+    r2 = 1.0 - float(np.sum((y_true - y_pred) ** 2)) / float(np.sum((y_true - y_true.mean()) ** 2))
+
+    lower = np.maximum(0.0, y_pred - q)
+    upper = y_pred + q
+    coverage = float(np.mean((y_true >= lower) & (y_true <= upper)))
+
+    segments = segment_performance(task, holdout_df, y_true, y_pred, is_classifier=False)
+    return {
+        "winner": winner, "n_holdout": len(holdout_df), "mae": mae, "rmse": rmse, "r2": r2,
+        "conformal_q": q, "conformal_coverage": coverage, "segments": segments,
+    }
+
+
+def calibration_curve_data(y_true: np.ndarray, y_proba: np.ndarray, n_bins: int = 10) -> dict:
+    """Reliability-diagram data: n_bins equal-width bins on predicted
+    probability, mean predicted vs empirical positive rate per bin."""
+    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    bin_idx = np.clip(np.digitize(y_proba, bin_edges[1:-1]), 0, n_bins - 1)
+    bins = []
+    for b in range(n_bins):
+        mask = bin_idx == b
+        n = int(mask.sum())
+        bins.append({
+            "bin": b, "n": n,
+            "mean_predicted": float(np.mean(y_proba[mask])) if n else None,
+            "actual_rate": float(np.mean(y_true[mask])) if n else None,
+        })
+    return {"bins": bins}
+
+
+def _svg_calibration_curve(task: str, curve: dict, out_path: Path) -> None:
+    bins = [b for b in curve["bins"] if b["n"] > 0]
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.plot([0, 1], [0, 1], linestyle="--", color="gray", label="perfectly calibrated")
+    ax.plot([b["mean_predicted"] for b in bins], [b["actual_rate"] for b in bins],
+            marker="o", color="#2b6cb0", label=task)
+    ax.set_xlabel("mean predicted probability")
+    ax.set_ylabel("actual positive rate")
+    ax.set_title(f"{task} calibration curve (Holdout, calibrated system)")
+    ax.legend()
+    fig.tight_layout()
+    _write_svg_with_description(
+        fig, out_path, title_en=f"{task} calibration curve",
+        description_he=(
+            f"עקומת כיול עבור {task} על ה-Holdout, אחרי הכיול: ציר X ההסתברות "
+            "החזויה הממוצעת בכל bin, ציר Y שיעור החיוביים בפועל; קו מקווקו = כיול מושלם."
+        ),
+    )
+    plt.close(fig)
+
+
+def holdout_evaluate_p3_p4(task: str, df: pd.DataFrame, results: dict, winner: str) -> dict:
+    """D13's P3/P4 Holdout row: the CALIBRATED system's full metric set
+    (ROC-AUC/PR-AUC/Accuracy/Precision/Recall/F1/Brier/log loss/
+    Lift@10%) + calibration curve, once. Fits the winner on train and
+    the sigmoid calibrator on calibration (calibrate_task_winner,
+    checkpoint 11) -- never refit here, only evaluated."""
+    holdout_df = _holdout_frame(df, task)
+    target = holdout_df[TARGET[task]]
+    y_true = encode_referred_target(target).to_numpy() if task == "P4" else target.to_numpy()
+
+    cal_result = calibrate_task_winner(task, df, results, winner)
+    calibrator = cal_result["calibrator"]
+    if calibrator is None:
+        raise RuntimeError(
+            f"{task}: sigmoid calibration failed (status={cal_result['calibration_status']}) -- "
+            "cannot evaluate the calibrated system on the Holdout"
+        )
+    y_proba = calibrator.predict_proba(holdout_df)[:, 1]
+    y_pred_hard = (y_proba >= 0.5).astype(int)
+
+    lift10 = lift_at_k(y_true, y_proba, k=0.1)
+    curve = calibration_curve_data(y_true, y_proba)
+    segments = segment_performance(task, holdout_df, y_true, y_proba, is_classifier=True)
+
+    return {
+        "winner": winner, "n_holdout": len(holdout_df),
+        "roc_auc": float(roc_auc_score(y_true, y_proba)),
+        "pr_auc": float(average_precision_score(y_true, y_proba)),
+        "accuracy": float(accuracy_score(y_true, y_pred_hard)),
+        "precision": float(precision_score(y_true, y_pred_hard, zero_division=0)),
+        "recall": float(recall_score(y_true, y_pred_hard, zero_division=0)),
+        "f1": float(f1_score(y_true, y_pred_hard, zero_division=0)),
+        "brier": float(brier_score_loss(y_true, y_proba)),
+        "log_loss": float(log_loss(y_true, y_proba, labels=[0, 1])),
+        "lift_at_10": lift10,
+        "calibration_curve": curve,
+        "segments": segments,
+    }
+
+
+def holdout_evaluate_p6(df: pd.DataFrame, p6_results: dict, winner: str) -> dict:
+    """D13's P6 Holdout row: MAE/RMSE/R² + top-decile metrics, once,
+    on the winner fitted on train (never refit here)."""
+    task = "P6"
+    holdout_df = _holdout_frame(df, task)
+    y_true = holdout_df[TARGET[task]].to_numpy(dtype=float)
+
+    pipeline = build_fitted_candidate(task, winner, p6_results, df)
+    y_pred = pipeline.predict(holdout_df)
+
+    mae = float(np.mean(np.abs(y_true - y_pred)))
+    rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+    r2 = 1.0 - float(np.sum((y_true - y_pred) ** 2)) / float(np.sum((y_true - y_true.mean()) ** 2))
+    top_decile = top_decile_metrics(y_true, y_pred)
+    segments = segment_performance(task, holdout_df, y_true, y_pred, is_classifier=False)
+
+    return {
+        "winner": winner, "n_holdout": len(holdout_df), "mae": mae, "rmse": rmse, "r2": r2,
+        "top_decile": top_decile, "segments": segments,
+    }
+
+
+def p4_sensitivity_holdout_comparison(df: pd.DataFrame, p4_results: dict, winner: str) -> dict:
+    """D18/S6/criterion 16: evaluates BOTH P4's primary model and the
+    population-sensitivity model on the SAME 633 Holdout rows, within
+    this single opening -- neither has a Holdout of its own. The
+    sensitivity model is fit ONCE here on the full 2,867-row
+    population (checkpoint 13 only ran its own internal 5-fold CV for
+    stability reporting); same locked hyperparameters
+    (LogisticRegression(max_iter=50000), S8/D18), no new tuning.
+    ⛔ Does not authorize deploying the population-wide model --
+    report-only comparison (SPEC's own caveat)."""
+    p4_parts = split_task(df, "P4")
+    holdout_ids = p4_parts["holdout"]
+    holdout_df = _holdout_frame(df, "P4")
+    y_true = encode_referred_target(holdout_df[TARGET["P4"]]).to_numpy()
+
+    primary_pipeline = build_fitted_candidate("P4", winner, p4_results, df)
+    primary_proba = primary_pipeline.predict_proba(holdout_df)[:, 1]
+
+    sens_pop = p4_sensitivity_population(df, holdout_ids).reset_index(drop=True)
+    if set(sens_pop["source_row_id"]) & set(holdout_ids):
+        raise RuntimeError("D18 violation: the sensitivity population overlaps the P4 Holdout")
+    sens_y = encode_referred_target(sens_pop[TARGET["P4"]])
+    sens_pipeline = Pipeline(build_preprocessing_steps("P4", encode_budget_tier=True) +
+                              [("model", LogisticRegression(max_iter=50000))])
+    sens_pipeline.fit(sens_pop, sens_y)
+    sens_proba = sens_pipeline.predict_proba(holdout_df)[:, 1]
+
+    return {
+        "n_holdout": len(holdout_df),
+        "primary": {"winner": winner, "roc_auc": float(roc_auc_score(y_true, primary_proba))},
+        "population_sensitivity": {
+            "population_size": len(sens_pop),
+            "roc_auc": float(roc_auc_score(y_true, sens_proba)),
+        },
+    }
+
+
+def p6_backtest(df: pd.DataFrame, p6_results: dict, winner: str) -> dict:
+    """SPEC's Backtest (§3 איכות עסקית): observational only. Reuses
+    checkpoint 12's own point-estimate mechanism (profile computed
+    from TRAIN only, model fit on TRAIN only -- never touching
+    Holdout) to predict a typical customer's profit at each exact
+    strategy level, and compares it to the ACTUAL mean
+    cumulative_profit of Holdout rows at that same level. Never a
+    causal claim; never changes the model (criterion 13)."""
+    train_df = build_task_train_frame(df, "P6")
+    point_pipeline = build_fitted_candidate("P6", winner, p6_results, df, train_df=train_df)
+    point_profiles = compute_budget_profiles(train_df, STRATEGY_LEVELS)
+    holdout_df = _holdout_frame(df, "P6")
+
+    out = {}
+    for level in STRATEGY_LEVELS:
+        profile = point_profiles[level]
+        predicted = None
+        if profile["profile"] is not None:
+            row = {**profile["profile"], "ad_budget": level}
+            predicted = float(point_pipeline.predict(pd.DataFrame([row]))[0])
+        actual_rows = holdout_df[holdout_df["ad_budget"] == level]
+        out[str(level)] = {
+            "predicted_per_customer": predicted,
+            "actual_mean_per_customer": float(actual_rows[TARGET["P6"]].mean()) if len(actual_rows) else None,
+            "n_holdout_at_level": int(len(actual_rows)),
+            "n_train_at_level": profile["n"],
+        }
+    return out
+
+
+def strategy_ranking_verdict(p6_simulation: dict) -> dict:
+    """Criterion 14: never declares a winning strategy when the
+    leading two ranges overlap substantially -- checked here by actual
+    interval overlap, not by eyeballing the numbers."""
+    ranked = sorted(p6_simulation.items(), key=lambda kv: kv[1]["point"], reverse=True)
+    top_name, top = ranked[0]
+    second_name, second = ranked[1]
+    overlap = not (top["lower"] > second["upper"] or second["lower"] > top["upper"])
+    verdict = (
+        f"'{top_name}' מועדפת לפי המודל (point הגבוה ביותר), אך טווחה חופף מהותית עם "
+        f"'{second_name}' — אין הכרזה על אסטרטגיה מנצחת; מומלץ ניסוי מבוקר."
+        if overlap else
+        f"'{top_name}' מובילה בבירור, טווחה אינו חופף עם שאר האסטרטגיות."
+    )
+    return {"ranked": [name for name, _ in ranked], "top_two_overlap": overlap, "verdict": verdict}
+
+
 def read_metrics_json(path: Path) -> dict:
     """Whatever tasks have been written so far -- {} if the file
     doesn't exist yet (checkpoint 6 is the first task to write it)."""
@@ -2279,3 +2592,52 @@ if __name__ == "__main__":
     all_metrics["super_customer_profile"] = super_customer
     write_metrics_json(all_metrics, metrics_path)
     print(f"wrote {metrics_path} (checkpoint 13 additions)")
+
+    print("--- checkpoint 14: THE SINGLE HOLDOUT OPENING (irreversible) ---")
+    p2_holdout = holdout_evaluate_p2(df, p2_results, task_winners["P2"], p2_conformal["q"])
+    p3_holdout = holdout_evaluate_p3_p4("P3", df, p3_results, task_winners["P3"])
+    p4_holdout = holdout_evaluate_p3_p4("P4", df, p4_results, task_winners["P4"])
+    p6_holdout = holdout_evaluate_p6(df, p6_results, task_winners["P6"])
+    print(f"P2 Holdout: MAE={p2_holdout['mae']:.4f} RMSE={p2_holdout['rmse']:.4f} R2={p2_holdout['r2']:.4f} "
+          f"conformal_coverage={p2_holdout['conformal_coverage']:.4f}")
+    print(f"P3 Holdout: ROC-AUC={p3_holdout['roc_auc']:.4f} Brier={p3_holdout['brier']:.4f} "
+          f"Lift@10%={p3_holdout['lift_at_10']['lift']}")
+    print(f"P4 Holdout: ROC-AUC={p4_holdout['roc_auc']:.4f} Brier={p4_holdout['brier']:.4f} "
+          f"Lift@10%={p4_holdout['lift_at_10']['lift']}")
+    print(f"P6 Holdout: MAE={p6_holdout['mae']:.4f} RMSE={p6_holdout['rmse']:.4f} R2={p6_holdout['r2']:.4f} "
+          f"top_decile={p6_holdout['top_decile']}")
+
+    _svg_calibration_curve("P3", p3_holdout["calibration_curve"], docs_dir / "calibration_curve_P3.svg")
+    _svg_calibration_curve("P4", p4_holdout["calibration_curve"], docs_dir / "calibration_curve_P4.svg")
+
+    oof_segments = {}
+    for task, rm in task_results.items():
+        oof_preds = oof_predictions(task, df, rm, task_winners[task])
+        oof_train_df = build_task_train_frame(df, task)
+        oof_target = oof_train_df[TARGET[task]]
+        y_oof = encode_referred_target(oof_target).to_numpy() if task == "P4" else oof_target.to_numpy()
+        oof_segments[task] = segment_performance(task, oof_train_df, y_oof, oof_preds,
+                                                  is_classifier=(PRIMARY_METRIC[task] == "roc_auc"))
+    print("OOF segmentation computed for all 4 tasks")
+
+    p4_sensitivity_comparison = p4_sensitivity_holdout_comparison(df, p4_results, task_winners["P4"])
+    print(f"P4 sensitivity comparison: primary ROC-AUC={p4_sensitivity_comparison['primary']['roc_auc']:.4f} "
+          f"population(n={p4_sensitivity_comparison['population_sensitivity']['population_size']}) "
+          f"ROC-AUC={p4_sensitivity_comparison['population_sensitivity']['roc_auc']:.4f}")
+
+    backtest = p6_backtest(df, p6_results, task_winners["P6"])
+    p6_simulation = read_metrics_json(simulation_path)
+    ranking_verdict = strategy_ranking_verdict(p6_simulation)
+    print(f"P6 Backtest: {backtest}")
+    print(f"P6 strategy verdict: {ranking_verdict['verdict']}")
+
+    all_metrics["P2_holdout"] = p2_holdout
+    all_metrics["P3_holdout"] = p3_holdout
+    all_metrics["P4_holdout"] = p4_holdout
+    all_metrics["P6_holdout"] = p6_holdout
+    all_metrics["oof_segments"] = oof_segments
+    all_metrics["P4_sensitivity_holdout_comparison"] = p4_sensitivity_comparison
+    all_metrics["P6_backtest"] = backtest
+    all_metrics["P6_strategy_ranking"] = ranking_verdict
+    write_metrics_json(all_metrics, metrics_path)
+    print(f"wrote {metrics_path} (checkpoint 14 additions -- THE HOLDOUT IS NOW OPEN, per SPEC this cannot be reopened)")

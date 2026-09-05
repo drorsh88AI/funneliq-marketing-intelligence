@@ -1649,3 +1649,165 @@ def test_p6_duplicate_sensitivity_delta_is_with_minus_without(df):
     assert result["winner"] == "linear"
     assert len(result["delta_rmse_per_fold"]) == tr.N_FOLDS
     assert result["n_folds"] == tr.N_FOLDS
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 14 -- the single Holdout opening (D13, D18, segmentation,
+# Backtest). ⚠ IRREVERSIBLE in production, so pure/mechanical pieces
+# get thorough CI coverage here, plus orchestration tests (monkeypatch,
+# no real fit) for the highest-risk wiring -- especially D18's
+# non-overlap invariant -- BEFORE the real CSV's Holdout is ever
+# touched. holdout_evaluate_p2/p3_p4/p6, p6_backtest, and
+# oof_predictions call build_fitted_candidate/calibrate_task_winner (a
+# real fit) and stay local-only per D21 for their own real-CSV runs.
+# ---------------------------------------------------------------------------
+
+def test_profit_decile_labels_splits_into_ten_roughly_equal_groups():
+    profit = pd.Series(range(100))  # 0..99, no ties
+    labels = tr._profit_decile_labels(profit)
+    counts = labels.value_counts()
+    assert len(counts) == 10
+    assert all(c == 10 for c in counts)
+
+
+def test_num_leads_bucket_labels_splits_into_quartiles():
+    leads = pd.Series(range(100))
+    labels = tr._num_leads_bucket_labels(leads)
+    assert set(labels.dropna().unique()) == {"q1", "q2", "q3", "q4"}
+
+
+def test_segment_performance_regression_reports_mae_per_segment():
+    segment_df = pd.DataFrame({
+        "ad_budget": [500, 500, 10000, 10000],
+        "cumulative_profit": [100.0, 200.0, 5000.0, 6000.0],
+        "num_leads": [1, 2, 100, 200],
+        "referred": ["Yes", "No", "Yes", "No"],
+    })
+    y_true = np.array([10.0, 20.0, 30.0, 40.0])
+    y_pred = np.array([12.0, 18.0, 33.0, 36.0])  # errors: 2,2,3,4
+
+    result = tr.segment_performance("P2", segment_df, y_true, y_pred, is_classifier=False)
+    assert result["budget_tier"]["Low"]["n"] == 2
+    assert result["budget_tier"]["Low"]["mae"] == pytest.approx(2.0)
+    assert result["budget_tier"]["High"]["n"] == 2
+    assert result["budget_tier"]["High"]["mae"] == pytest.approx(3.5)
+    assert "referred" in result  # P2 gets referred segmentation
+    assert result["referred"]["Yes"]["n"] == 2
+
+
+def test_segment_performance_classifier_reports_predicted_vs_actual_rate():
+    segment_df = pd.DataFrame({
+        "ad_budget": [500, 500],
+        "cumulative_profit": [100.0, 200.0],
+        "num_leads": [1, 2],
+    })
+    y_true = np.array([0, 1])
+    y_pred = np.array([0.2, 0.8])
+    result = tr.segment_performance("P4", segment_df, y_true, y_pred, is_classifier=True)
+    assert "referred" not in result  # P4 excludes referred segmentation -- it's the target
+    assert result["budget_tier"]["Low"]["n"] == 2
+    assert result["budget_tier"]["Low"]["mean_predicted"] == pytest.approx(0.5)
+    assert result["budget_tier"]["Low"]["actual_rate"] == pytest.approx(0.5)
+
+
+def test_calibration_curve_data_bins_correctly():
+    y_true = np.array([0, 0, 1, 1])
+    y_proba = np.array([0.05, 0.15, 0.85, 0.95])
+    curve = tr.calibration_curve_data(y_true, y_proba, n_bins=10)
+    assert len(curve["bins"]) == 10
+    # each value lands in its own distinct 0.1-wide bin: 0.05->0, 0.15->1, 0.85->8, 0.95->9
+    populated = {b["bin"]: b for b in curve["bins"] if b["n"] > 0}
+    assert set(populated) == {0, 1, 8, 9}
+    assert populated[0]["mean_predicted"] == pytest.approx(0.05)
+    assert populated[0]["actual_rate"] == pytest.approx(0.0)
+    assert populated[9]["mean_predicted"] == pytest.approx(0.95)
+    assert populated[9]["actual_rate"] == pytest.approx(1.0)
+    assert sum(b["n"] for b in curve["bins"]) == 4
+
+
+def test_strategy_ranking_verdict_no_winner_when_top_two_overlap():
+    sim = {
+        "a": {"point": 700, "lower": 400, "upper": 800},
+        "b": {"point": 500, "lower": 450, "upper": 550},  # fully inside a's range
+        "c": {"point": 100, "lower": 50, "upper": 150},
+    }
+    result = tr.strategy_ranking_verdict(sim)
+    assert result["ranked"] == ["a", "b", "c"]
+    assert result["top_two_overlap"] is True
+    assert "אין הכרזה" in result["verdict"]
+
+
+def test_strategy_ranking_verdict_declares_a_leader_when_ranges_dont_overlap():
+    sim = {
+        "a": {"point": 700, "lower": 600, "upper": 800},
+        "b": {"point": 200, "lower": 100, "upper": 300},
+    }
+    result = tr.strategy_ranking_verdict(sim)
+    assert result["top_two_overlap"] is False
+    assert "מובילה בבירור" in result["verdict"]
+
+
+def test_oof_predictions_fills_every_row_exactly_once(df, monkeypatch):
+    calls = []
+
+    class _ConstPipeline:
+        def predict(self, X):
+            return np.full(len(X), 1.0)
+
+    def fake_build(task, name, results, given_df, train_df=None):
+        calls.append(len(train_df))
+        return _ConstPipeline()
+
+    monkeypatch.setattr(tr, "build_fitted_candidate", fake_build)
+    preds = tr.oof_predictions("P2", df, {"stub": {"role": "candidate"}}, "stub")
+
+    train_df = tr.build_task_train_frame(df, "P2")
+    assert len(preds) == len(train_df)
+    assert not np.isnan(preds).any()  # every row got exactly one OOF prediction
+    assert len(calls) == tr.N_FOLDS
+
+
+def test_p4_sensitivity_holdout_comparison_never_overlaps_and_uses_same_holdout(df, monkeypatch):
+    calls = []
+
+    def fake_build(task, name, results, given_df, train_df=None):
+        calls.append((task, name))
+        rng = np.random.default_rng(0)
+        steps = tr.build_preprocessing_steps(task, encode_budget_tier=(task == "P4"))
+        pipeline = tr.Pipeline(steps + [("model", tr.LogisticRegression(max_iter=1000))])
+        t_df = tr.build_task_train_frame(given_df, task)
+        y = tr.encode_referred_target(t_df[tr.TARGET[task]])
+        pipeline.fit(t_df, y)
+        return pipeline
+
+    monkeypatch.setattr(tr, "build_fitted_candidate", fake_build)
+
+    result = tr.p4_sensitivity_holdout_comparison(df, {"stub": {"role": "candidate"}}, "stub")
+    assert calls == [("P4", "stub")]  # only the PRIMARY model goes through build_fitted_candidate
+    assert result["n_holdout"] > 0
+    assert 0.0 <= result["primary"]["roc_auc"] <= 1.0
+    assert 0.0 <= result["population_sensitivity"]["roc_auc"] <= 1.0
+    # the sensitivity population must be strictly larger than P4's own train (2,024 on the real CSV)
+    assert result["population_sensitivity"]["population_size"] > len(tr.build_task_train_frame(df, "P4"))
+
+
+def test_p4_sensitivity_holdout_comparison_raises_if_populations_ever_overlap(df, monkeypatch):
+    """Directly exercises the D18 non-negotiable invariant's guard --
+    forces an overlap and confirms it is caught, not silently ignored."""
+    def fake_build(task, name, results, given_df, train_df=None):
+        t_df = tr.build_task_train_frame(given_df, task)
+        y = tr.encode_referred_target(t_df[tr.TARGET[task]])
+        steps = tr.build_preprocessing_steps(task, encode_budget_tier=True)
+        pipeline = tr.Pipeline(steps + [("model", tr.LogisticRegression(max_iter=1000))])
+        pipeline.fit(t_df, y)
+        return pipeline
+
+    def fake_sensitivity_population(given_df, holdout_ids):
+        # deliberately IGNORE holdout_ids -- returns the full population, guaranteeing overlap
+        return given_df[given_df[tr.TARGET["P4"]].notna()]
+
+    monkeypatch.setattr(tr, "build_fitted_candidate", fake_build)
+    monkeypatch.setattr(tr, "p4_sensitivity_population", fake_sensitivity_population)
+
+    with pytest.raises(RuntimeError, match="D18 violation"):
+        tr.p4_sensitivity_holdout_comparison(df, {"stub": {"role": "candidate"}}, "stub")
