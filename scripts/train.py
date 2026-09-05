@@ -10,12 +10,16 @@ currently holds checkpoint 3's split layer, checkpoint 4's shared CV
 folds + preprocessing Pipelines, checkpoint 5's decision-rule pure
 functions (One-SE, the paired guardrail veto, Split Conformal's
 quantile, top-decile metrics, Lift@K) -- all built and tested before
-any model is trained -- and checkpoints 6-12's actual training (P2, P3,
+any model is trained -- and checkpoints 6-13's actual training (P2, P3,
 P4, P6 + P6's paired guardrail crossover), model selection (One-SE
 eligibility, RSS/prediction-time measurement, the winner tie-break),
 calibration (P3/P4 sigmoid calibration, P2's Split Conformal
-quantile), and P6's Bootstrap simulation (exact-budget profiles, the
-four locked spending strategies, the lookup table).
+quantile), P6's Bootstrap simulation (exact-budget profiles, the four
+locked spending strategies, the lookup table), and checkpoint 13's
+explainability + research work (global feature importance, native
+SHAP summaries + local explanations, learning curves, multi-seed
+stability, the three D17 research experiments, P6's duplicate-
+sensitivity leg deferred from phase 5).
 """
 from __future__ import annotations
 
@@ -29,12 +33,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.features import DERIVED_FROM_PROFILE, FEATURES, TARGET, budget_tier  # noqa: E402
-from scripts.load_data import load_and_verify_csv  # noqa: E402
+from scripts.load_data import EXPECTED_COLUMNS, load_and_verify_csv  # noqa: E402
+# Imported before matplotlib.pyplot below -- scripts.analysis's own
+# module-level matplotlib.use("Agg") + fixed svg.hashsalt (PHASE5.md D9)
+# must run first, so checkpoint 13's SVGs are headless and deterministic
+# too, without a second (redundant) backend/hashsalt setup here.
+from scripts.analysis import _write_svg_with_description, super_customer_profile  # noqa: E402
+
+import matplotlib.pyplot as plt  # noqa: E402
 
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin, clone
+from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin, clone
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier, DummyRegressor
@@ -50,8 +61,9 @@ from sklearn.model_selection import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder
-from catboost import CatBoostClassifier, CatBoostRegressor
+from catboost import CatBoostClassifier, CatBoostRegressor, Pool
 from lightgbm import LGBMClassifier, LGBMRegressor
+import xgboost as xgb
 from xgboost import XGBClassifier, XGBRegressor
 
 # ---------------------------------------------------------------------------
@@ -1559,6 +1571,441 @@ def p6_bootstrap_simulation(df: pd.DataFrame, p6_results: dict, winner: str,
     return result
 
 
+# ---------------------------------------------------------------------------
+# Checkpoint 13 -- explainability + research (D12, D16, D17). Every
+# fit here refits the ALREADY-locked winner (or, for D17's inherited
+# variants, an already-locked winner/reference's hyperparameters) --
+# no new search, no retuning, ever. All local to this checkpoint;
+# none of this touches the Holdout.
+# ---------------------------------------------------------------------------
+
+def _score_primary(task: str, y_true, y_pred) -> float:
+    """The task's primary metric (D13), computed from raw values --
+    used by learning curves and multi-seed stability, which need a
+    single scalar per fold outside of RandomizedSearchCV's own
+    scoring= machinery."""
+    metric = PRIMARY_METRIC[task]
+    y_true, y_pred = np.asarray(y_true, dtype=float), np.asarray(y_pred, dtype=float)
+    if metric == "mae":
+        return float(np.mean(np.abs(y_true - y_pred)))
+    if metric == "rmse":
+        return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+    if metric == "roc_auc":
+        return float(roc_auc_score(y_true, y_pred))
+    raise ValueError(f"unknown primary metric {metric!r}")
+
+
+def _predict_for_primary_metric(task: str, pipeline, X: pd.DataFrame) -> np.ndarray:
+    """predict_proba's positive-class column for ROC-AUC tasks (P3/P4),
+    plain predict() otherwise (P2/P6) -- the same dispatch _score_primary
+    expects."""
+    if PRIMARY_METRIC[task] == "roc_auc":
+        return pipeline.predict_proba(X)[:, 1]
+    return pipeline.predict(X)
+
+
+# --- D12: global feature importance, SHAP summary + local explanations ----
+
+# Every model the brief requires a global importance for (SPEC §הסבר
+# מודל): all three boosters for P2/P3, CatBoost for P4, all four P6
+# candidates (including the guardrail-vetoed ones -- this is
+# descriptive reporting on every trained candidate, not a selection
+# step, so vetoed variants are not excluded here the way they are from
+# One-SE).
+GLOBAL_FI_MODELS = {
+    "P2": ["xgboost", "lightgbm", "catboost"],
+    "P3": ["xgboost", "lightgbm", "catboost"],
+    "P4": ["catboost"],
+    "P6": ["p6_1_reference", "p6_2_tweedie", "p6_3_huber", "p6_5_winsorized"],
+}
+
+
+def _native_feature_importance(pipeline: Pipeline) -> dict[str, float]:
+    """D12: native, per-library global feature importance -- no SHAP,
+    no new dependency. Feature names come straight off the fitted
+    ColumnTransformer (get_feature_names_out()), never assumed, so a
+    one-hot-expanded budget_tier (P4's Baseline path) is still
+    labeled correctly. ⚠ Collinearity caveat (SPEC's required note):
+    num_leads/leads_answered are kept together (D4) -- their
+    importances can trade off against each other and should not be
+    read as independent effects."""
+    model = pipeline.named_steps["model"]
+    feature_names = list(pipeline.named_steps["select"].get_feature_names_out())
+    if hasattr(model, "feature_importances_"):  # xgboost, lightgbm, catboost
+        values = [float(v) for v in model.feature_importances_]
+    elif hasattr(model, "coef_"):  # Linear/Logistic
+        values = [float(abs(v)) for v in np.asarray(model.coef_).ravel()]
+    else:
+        raise TypeError(f"no native feature importance available for {type(model).__name__}")
+    return dict(zip(feature_names, values))
+
+
+def global_feature_importance(df: pd.DataFrame, results_by_task: dict) -> dict:
+    """D12's first bullet: 0 NEW search fits -- each of the 8 required
+    models is a single deterministic refit with its own already-locked
+    winning hyperparameters (build_fitted_candidate, checkpoint 10),
+    same convention as the 11 refits already logged in the tuning
+    budget (§ה), not counted against the search budget."""
+    return {
+        task: {name: _native_feature_importance(build_fitted_candidate(task, name, results_by_task[task], df))
+               for name in names}
+        for task, names in GLOBAL_FI_MODELS.items()
+    }
+
+
+def _svg_feature_importance(task: str, models_fi: dict[str, dict[str, float]], out_path: Path) -> None:
+    """D12/D14's feature_importance_{task}.svg -- ALL brief-required
+    models for this task, side by side (not just the winner, that's
+    SHAP's job). Each model's raw importances are normalized to sum to
+    1 before plotting -- different libraries report importance on
+    incomparable native scales (split counts vs gain vs
+    PredictionValuesChange), so only relative within-model ranking is
+    comparable across models; stated in the caption, not left
+    implicit. Collinearity caveat (SPEC's required note) stated too."""
+    model_names = list(models_fi)
+    all_features = sorted({f for fi in models_fi.values() for f in fi})
+    normalized = {name: {f: fi.get(f, 0.0) / (sum(fi.values()) or 1.0) for f in all_features}
+                  for name, fi in models_fi.items()}
+
+    fig, ax = plt.subplots(figsize=(9, max(3, 0.35 * len(all_features))))
+    y = np.arange(len(all_features))
+    bar_h = 0.8 / len(model_names)
+    colors = plt.get_cmap("tab10").colors
+    for i, name in enumerate(model_names):
+        ax.barh(y + i * bar_h, [normalized[name][f] for f in all_features], height=bar_h,
+                label=name, color=colors[i % len(colors)])
+    ax.set_yticks(y + bar_h * (len(model_names) - 1) / 2)
+    ax.set_yticklabels(all_features)
+    ax.set_xlabel("normalized importance (sums to 1 within each model)")
+    ax.set_title(f"{task} feature importance -- all brief-required models")
+    ax.legend()
+    fig.tight_layout()
+    _write_svg_with_description(
+        fig, out_path, title_en=f"{task} feature importance (all models)",
+        description_he=(
+            f"השוואת חשיבות פיצ'רים בין כל מודלי הבריף עבור {task}: כל מודל מנורמל "
+            "לסכום 1, כדי לאפשר השוואת דירוג יחסי בין ספריות שונות. הערת קולינאריות: "
+            "num_leads ו-leads_answered נשמרים יחד בפייפליין (D4) -- חשיבותם עשויה "
+            "להתחלף ביניהם ואין לפרש אותן כהשפעות בלתי-תלויות."
+        ),
+    )
+    plt.close(fig)
+
+
+def _native_shap_values(model, X: pd.DataFrame) -> np.ndarray:
+    """D12's SHAP summary: native per library, zero new dependencies.
+    Returns (n_samples, n_features) -- the trailing bias/base-value
+    column every library appends is dropped. Verified empirically
+    before writing this: all three give an additive decomposition
+    whose row sum (contributions + bias) equals the model's own
+    prediction. Linear/Logistic have no native tree-SHAP; a mean-
+    centered linear model has a closed-form exact SHAP value instead
+    (contribution_i = coef_i * (x_i - mean(x_i)), additive by
+    construction) -- not an approximation, not a new dependency."""
+    if isinstance(model, (XGBClassifier, XGBRegressor)):
+        contribs = model.get_booster().predict(xgb.DMatrix(X), pred_contribs=True)
+    elif isinstance(model, (LGBMClassifier, LGBMRegressor)):
+        contribs = np.asarray(model.predict(X, pred_contrib=True))
+    elif isinstance(model, (CatBoostClassifier, CatBoostRegressor)):
+        contribs = model.get_feature_importance(data=Pool(X), type="ShapValues")
+    elif hasattr(model, "coef_"):
+        coef = np.asarray(model.coef_).ravel()
+        return (X.to_numpy(dtype=float) - X.to_numpy(dtype=float).mean(axis=0)) * coef
+    else:
+        raise TypeError(f"no native SHAP available for {type(model).__name__}")
+    return np.asarray(contribs)[:, :-1]
+
+
+def shap_summary_and_local(task: str, df: pd.DataFrame, results: dict, winner: str, n_local: int = 2) -> dict:
+    """D12: SHAP summary (mean |contribution| per feature, over the
+    dev population) + n_local local explanations for the task's
+    winning model, fit on train (build_fitted_candidate). Local rows
+    are the first n_local dev rows by construction (deterministic, not
+    cherry-picked), identified by source_row_id -- dev only (train,
+    plus calibration for P2/P3/P4), never the Holdout."""
+    pipeline = build_fitted_candidate(task, winner, results, df)
+    dev_df = build_task_train_frame(df, task)
+    if task != "P6":
+        dev_df = pd.concat([dev_df, build_task_calibration_frame(df, task)], ignore_index=True)
+
+    feature_names = list(pipeline.named_steps["select"].get_feature_names_out())
+    X_transformed = pd.DataFrame(pipeline[:-1].transform(dev_df), columns=feature_names)
+    contribs = _native_shap_values(pipeline.named_steps["model"], X_transformed)
+
+    mean_abs_shap = {name: float(np.mean(np.abs(contribs[:, i]))) for i, name in enumerate(feature_names)}
+    local_explanations = [
+        {
+            "source_row_id": int(dev_df.iloc[i]["source_row_id"]),
+            "contributions": {name: float(contribs[i, j]) for j, name in enumerate(feature_names)},
+        }
+        for i in range(min(n_local, len(dev_df)))
+    ]
+    return {"winner": winner, "mean_abs_shap": mean_abs_shap, "local_explanations": local_explanations}
+
+
+def _svg_shap_summary(task: str, mean_abs_shap: dict, out_path: Path) -> None:
+    items = sorted(mean_abs_shap.items(), key=lambda kv: kv[1])
+    fig, ax = plt.subplots(figsize=(8, max(3, 0.3 * len(items))))
+    ax.barh([k for k, _ in items], [v for _, v in items], color="#2b6cb0")
+    ax.set_xlabel("mean |SHAP contribution|")
+    ax.set_title(f"{task} SHAP feature importance (winning model)")
+    fig.tight_layout()
+    _write_svg_with_description(
+        fig, out_path, title_en=f"{task} SHAP summary",
+        description_he=f"תרשים חשיבות SHAP למודל הזוכה של {task}: ממוצע |תרומת SHAP| לכל פיצ'ר, מהקטן לגדול.",
+    )
+    plt.close(fig)
+
+
+def _svg_shap_local(task: str, source_row_id: int, contributions: dict, out_path: Path) -> None:
+    items = sorted(contributions.items(), key=lambda kv: kv[1])
+    colors = ["#c53030" if v < 0 else "#2b6cb0" for _, v in items]
+    fig, ax = plt.subplots(figsize=(8, max(3, 0.3 * len(items))))
+    ax.barh([k for k, _ in items], [v for _, v in items], color=colors)
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.set_xlabel("SHAP contribution")
+    ax.set_title(f"{task} local explanation, source_row_id={source_row_id}")
+    fig.tight_layout()
+    _write_svg_with_description(
+        fig, out_path, title_en=f"{task} local explanation row {source_row_id}",
+        description_he=f"הסבר מקומי (SHAP) לרשומה source_row_id={source_row_id} במשימת {task}: תרומת כל פיצ'ר לתחזית (כחול=חיובי, אדום=שלילי).",
+    )
+    plt.close(fig)
+
+
+# --- learning curves + multi-seed stability (SPEC's resource budget) ------
+
+# Winner-only (this project's choice among SPEC's two allowed scopes --
+# "רשימת מועמדים מצומצמת או המודל הזוכה" -- avoiding a second open
+# question about which reduced candidate list to use).
+LEARNING_CURVE_FRACTIONS = (0.2, 0.4, 0.6, 0.8, 1.0)
+
+
+def learning_curve_for_winner(task: str, df: pd.DataFrame, results: dict, winner: str) -> dict:
+    """5 train-set-size fractions x 5 shared folds = 25 fits, the
+    winner's own already-locked hyperparameters, never retuned at any
+    size. Fraction taken as a deterministic PREFIX of each fold's
+    training rows -- introduces no extra randomness beyond the fold
+    split itself."""
+    train_df = build_task_train_frame(df, task)
+    target = train_df[TARGET[task]]
+    y = encode_referred_target(target) if task == "P4" else target
+    folds = build_folds(df, task)
+
+    curve = {}
+    for frac in LEARNING_CURVE_FRACTIONS:
+        fold_scores = []
+        n_train = None
+        for train_idx, val_idx in folds:
+            n_train = max(2, int(len(train_idx) * frac))
+            sub_idx = train_idx[:n_train]
+            pipeline = build_fitted_candidate(task, winner, results, df,
+                                               train_df=train_df.iloc[sub_idx].reset_index(drop=True))
+            pred = _predict_for_primary_metric(task, pipeline, train_df.iloc[val_idx])
+            fold_scores.append(_score_primary(task, y.iloc[val_idx], pred))
+        mean, se = one_se_stats(fold_scores)
+        curve[frac] = {"n_train": n_train, "fold_scores": fold_scores, "mean": mean, "std": se * math.sqrt(N_FOLDS)}
+    return {"winner": winner, "primary_metric": PRIMARY_METRIC[task], "curve": curve}
+
+
+# Documented in advance (SPEC's resource budget: "רשימת seeds קבועה
+# ומתועדת מראש"), distinct from the primary SEEDS (D2) used for the
+# train/calibration/holdout split itself.
+ADDITIONAL_SEEDS = (201, 202, 203)
+
+
+def multi_seed_stability(task: str, df: pd.DataFrame, results: dict, winner: str) -> dict:
+    """3 seeds x 5 folds x 4 tasks = 60 fits (§ה): does the winner's
+    already-locked hyperparameters' CV score stay stable under a
+    DIFFERENT fold random_state -- not a re-tuning, the winner's
+    hyperparameters never change."""
+    train_df = build_task_train_frame(df, task)
+    target = train_df[TARGET[task]]
+    y = encode_referred_target(target) if task == "P4" else target
+    stratified = task in STRATIFIED_TASKS
+
+    per_seed = {}
+    for seed in ADDITIONAL_SEEDS:
+        splitter = (StratifiedKFold if stratified else KFold)(n_splits=N_FOLDS, shuffle=True, random_state=seed)
+        seed_folds = list(splitter.split(train_df, y)) if stratified else list(splitter.split(train_df))
+        fold_scores = []
+        for train_idx, val_idx in seed_folds:
+            pipeline = build_fitted_candidate(task, winner, results, df,
+                                               train_df=train_df.iloc[train_idx].reset_index(drop=True))
+            pred = _predict_for_primary_metric(task, pipeline, train_df.iloc[val_idx])
+            fold_scores.append(_score_primary(task, y.iloc[val_idx], pred))
+        mean, se = one_se_stats(fold_scores)
+        per_seed[seed] = {"fold_scores": fold_scores, "mean": mean, "std": se * math.sqrt(N_FOLDS)}
+
+    means = [v["mean"] for v in per_seed.values()]
+    return {
+        "winner": winner, "primary_metric": PRIMARY_METRIC[task], "per_seed": per_seed,
+        "mean_across_seeds": float(np.mean(means)), "std_across_seeds": float(np.std(means, ddof=1)),
+    }
+
+
+# --- D17: the three research experiments -----------------------------------
+
+class LogSmearingRegressor(BaseEstimator, RegressorMixin):
+    """D17/SPEC's P6-4 research variant: log1p + Duan smearing.
+    TransformedTargetRegressor is NOT sufficient (SPEC): it applies a
+    fixed inverse_func and never learns/stores a smearing factor.
+    smearing_ is computed from whatever rows .fit() is given -- inside
+    a fold, that is TRAINING rows only, never validation or Holdout.
+    ⚠ Documented bias (SPEC): smearing_ is estimated in-sample, so a
+    flexible base estimator shrinks its own residuals and S comes out
+    too small -- predictions are biased DOWNWARD, the direction that
+    hurts a summing simulator. An out-of-fold fix needs nesting, which
+    SPEC rejects -- log1p stays research-only, never a deployment
+    candidate."""
+    def __init__(self, base_estimator=None):
+        self.base_estimator = base_estimator
+
+    def fit(self, X, y):
+        self.estimator_ = clone(self.base_estimator)
+        y_arr = np.asarray(y, dtype=float)
+        self.estimator_.fit(X, np.log1p(y_arr))
+        residuals = np.log1p(y_arr) - self.estimator_.predict(X)
+        self.smearing_ = float(np.mean(np.exp(residuals)))
+        return self
+
+    def predict(self, X):
+        return np.exp(self.estimator_.predict(X)) * self.smearing_ - 1
+
+
+def train_p6_log1p_smearing(df: pd.DataFrame, p6_results: dict) -> dict:
+    """D17's P6-4: inherits p6_1_reference's winning hyperparameters
+    (no search), P6's own 5 shared folds (one fit each -- 5 total).
+    research_only: never a deployment candidate, never enters One-SE
+    or the guardrail veto."""
+    task = "P6"
+    train_df = build_task_train_frame(df, task)
+    y = train_df[TARGET[task]].to_numpy()
+    folds = build_folds(df, task)
+    steps = build_preprocessing_steps(task, encode_budget_tier=False)
+    winning_params = {k.removeprefix("model__"): v for k, v in p6_results["p6_1_reference"]["best_params"].items()}
+    base_estimator = XGBRegressor(objective="reg:squarederror", random_state=SEARCH_RANDOM_STATE,
+                                   n_jobs=SEARCH_N_JOBS, verbosity=0, **winning_params)
+
+    fold_scores = {"rmse": [], "mae": []}
+    for train_idx, val_idx in folds:
+        pipeline = Pipeline(steps + [("model", LogSmearingRegressor(base_estimator=base_estimator))])
+        pipeline.fit(train_df.iloc[train_idx], y[train_idx])
+        pred = pipeline.predict(train_df.iloc[val_idx])
+        fold_scores["rmse"].append(float(np.sqrt(np.mean((pred - y[val_idx]) ** 2))))
+        fold_scores["mae"].append(float(np.mean(np.abs(pred - y[val_idx]))))
+    return _metric_summary(fold_scores, role="research_only", negated_scorers=set())
+
+
+# D17's "early funnel data" experiment: only signals available very
+# early in the funnel, before most follow-ups have happened.
+EARLY_FUNNEL_FEATURES = ["ad_budget", "num_leads", "leads_answered", "followup_1"]
+
+
+def train_p4_early_funnel(df: pd.DataFrame) -> dict:
+    """D17: hyperparameters "inherited" -- from P4's actual WINNER
+    (checkpoint 10: LogisticRegression(max_iter=50000)), not CatBoost.
+    SPEC's D17/D18 phrasing is "מהזוכה של P4" (from P4's winner) in
+    both the population-sensitivity row (D18, explicit) and this one
+    (parallel phrasing, same table) -- neither names CatBoost, and at
+    planning time P4's eventual winner wasn't yet known. Consistent
+    with D18's explicit wording and with checkpoint 14's planned
+    comparison being apples-to-apples against P4's actual deployed
+    model. Shares P4's own split/folds (same population, same seed).
+    No search. research_only: never a deployment candidate."""
+    task = "P4"
+    train_df = build_task_train_frame(df, task)
+    y = encode_referred_target(train_df[TARGET[task]])
+    folds = build_folds(df, task)
+    steps = [("select", ColumnTransformer([("numeric", "passthrough", EARLY_FUNNEL_FEATURES)]))]
+
+    fold_scores = {"roc_auc": []}
+    for train_idx, val_idx in folds:
+        pipeline = Pipeline(steps + [("model", LogisticRegression(max_iter=50000))])
+        pipeline.fit(train_df.iloc[train_idx], y.iloc[train_idx])
+        proba = pipeline.predict_proba(train_df.iloc[val_idx])[:, 1]
+        fold_scores["roc_auc"].append(float(roc_auc_score(y.iloc[val_idx], proba)))
+    return _metric_summary(fold_scores, role="research_only", negated_scorers=set())
+
+
+def train_p4_population_sensitivity(df: pd.DataFrame) -> dict:
+    """D18/S6: trains on 3,500 minus P4's 633 Holdout rows (= 2,867),
+    own internal folds (seed 46), hyperparameters inherited from P4's
+    actual winner (LogisticRegression(max_iter=50000), same reasoning
+    as train_p4_early_funnel) -- no new tuning, so they stay
+    Holdout-clean too. ⛔ Does NOT touch the P4 Holdout here --
+    checkpoint 13 only trains this model and reports its OWN internal
+    CV stability; the real comparison against P4's primary model on
+    the shared 633-row Holdout happens in checkpoint 14's single
+    Holdout opening (D18), not here."""
+    p4_parts = split_task(df, "P4")
+    sens_pop = p4_sensitivity_population(df, p4_parts["holdout"]).reset_index(drop=True)
+    y = encode_referred_target(sens_pop[TARGET["P4"]])
+    seed = SEEDS["P4_sensitivity"]
+    folds = list(StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=seed).split(sens_pop, y))
+    steps = build_preprocessing_steps("P4", encode_budget_tier=True)
+
+    fold_scores = {"roc_auc": []}
+    for train_idx, val_idx in folds:
+        pipeline = Pipeline(steps + [("model", LogisticRegression(max_iter=50000))])
+        pipeline.fit(sens_pop.iloc[train_idx], y.iloc[train_idx])
+        proba = pipeline.predict_proba(sens_pop.iloc[val_idx])[:, 1]
+        fold_scores["roc_auc"].append(float(roc_auc_score(y.iloc[val_idx], proba)))
+    summary = _metric_summary(fold_scores, role="research_only", negated_scorers=set())
+    summary["population_size"] = len(sens_pop)
+    return summary
+
+
+# --- D16: P6 duplicate-sensitivity (deferred from phase 5) -----------------
+
+def p6_duplicate_sensitivity(df: pd.DataFrame, p6_results: dict, winner: str) -> dict:
+    """D16: paired duplicate-sensitivity for P6's winning model,
+    deferred from phase 5 (PHASE5.md D7). Folds are built ONCE on the
+    full P6 train set and never change; only the "without" arm's
+    TRAINING portion of each fold has the 10 excess duplicate rows
+    removed -- validation portions stay IDENTICAL in both arms, so any
+    Δ reflects a different model, never different evaluation rows.
+    Δ_RMSE = with_duplicates - without_duplicates (positive means the
+    duplicates make the model WORSE). Report-only (not a veto), even
+    when Δ is negligible -- SPEC requires it stated either way.
+    +5 fits (the "with duplicates" arm is p6_results' own data, but
+    here evaluated on identical folds -- refit fresh for a true
+    apples-to-apples pair, not reused from the search)."""
+    train_df = build_task_train_frame(df, "P6")
+    folds = build_folds(df, "P6")
+    y = train_df[TARGET["P6"]].to_numpy()
+    steps = build_preprocessing_steps("P6", encode_budget_tier=False)
+
+    excess_ids = set(df.loc[df.duplicated(subset=EXPECTED_COLUMNS, keep="first"), "source_row_id"])
+    excess_in_train = train_df["source_row_id"].isin(excess_ids).to_numpy()
+
+    boosters = make_p6_boosters()
+    if winner in boosters:
+        estimator, _, winsorize = boosters[winner]
+        winning_params = {k.removeprefix("model__"): v for k, v in p6_results[winner]["best_params"].items()}
+        estimator = clone(estimator).set_params(**winning_params)
+        steps = build_preprocessing_steps("P6", encode_budget_tier=False, winsorize=winsorize)
+    else:
+        estimator = LinearRegression()
+
+    delta_rmse = []
+    for train_idx, val_idx in folds:
+        without_idx = train_idx[~excess_in_train[train_idx]]
+        val_df, y_val = train_df.iloc[val_idx], y[val_idx]
+
+        with_pipeline = Pipeline(steps + [("model", clone(estimator))])
+        with_pipeline.fit(train_df.iloc[train_idx], y[train_idx])
+        rmse_with = float(np.sqrt(np.mean((with_pipeline.predict(val_df) - y_val) ** 2)))
+
+        without_pipeline = Pipeline(steps + [("model", clone(estimator))])
+        without_pipeline.fit(train_df.iloc[without_idx], y[without_idx])
+        rmse_without = float(np.sqrt(np.mean((without_pipeline.predict(val_df) - y_val) ** 2)))
+
+        delta_rmse.append(rmse_with - rmse_without)
+
+    return {"winner": winner, "delta_rmse_per_fold": delta_rmse, **paired_delta_stats(delta_rmse)}
+
+
 def read_metrics_json(path: Path) -> dict:
     """Whatever tasks have been written so far -- {} if the file
     doesn't exist yet (checkpoint 6 is the first task to write it)."""
@@ -1775,3 +2222,53 @@ if __name__ == "__main__":
     simulation_path = Path(__file__).resolve().parent.parent / "models" / "P6_simulation.json"
     write_metrics_json(p6_simulation, simulation_path)
     print(f"wrote {simulation_path}")
+
+    print("--- checkpoint 13: explainability + research (D12, D16, D17) ---")
+    task_results = {"P2": p2_results, "P3": p3_results, "P4": p4_results, "P6": p6_results}
+    task_winners = {task: selections[task]["winner"] for task in task_results}
+
+    global_fi = global_feature_importance(df, task_results)
+    docs_dir = Path(__file__).resolve().parent.parent / "docs"
+    shap_results, learning_curves, seed_stability = {}, {}, {}
+    for task, winner in task_winners.items():
+        results_map = task_results[task]
+        shap_results[task] = shap_summary_and_local(task, df, results_map, winner)
+        _svg_feature_importance(task, global_fi[task], docs_dir / f"feature_importance_{task}.svg")
+        _svg_shap_summary(task, shap_results[task]["mean_abs_shap"], docs_dir / f"shap_summary_{task}.svg")
+        for le in shap_results[task]["local_explanations"]:
+            _svg_shap_local(task, le["source_row_id"], le["contributions"],
+                             docs_dir / f"shap_local_{task}_{le['source_row_id']}.svg")
+        learning_curves[task] = learning_curve_for_winner(task, df, results_map, winner)
+        seed_stability[task] = multi_seed_stability(task, df, results_map, winner)
+        print(f"{task}/{winner}: learning_curve(1.0)={learning_curves[task]['curve'][1.0]['mean']:.4f} "
+              f"seed_stability mean={seed_stability[task]['mean_across_seeds']:.4f} "
+              f"std={seed_stability[task]['std_across_seeds']:.6f}")
+
+    p6_log1p = train_p6_log1p_smearing(df, p6_results)
+    p4_early_funnel = train_p4_early_funnel(df)
+    p4_pop_sensitivity = train_p4_population_sensitivity(df)
+    p6_dup_sensitivity = p6_duplicate_sensitivity(df, p6_results, task_winners["P6"])
+    print(f"P6 log1p smearing: RMSE={p6_log1p['mean_rmse']:.2f} MAE={p6_log1p['mean_mae']:.2f}")
+    print(f"P4 early funnel: ROC-AUC={p4_early_funnel['mean_roc_auc']:.4f}")
+    print(f"P4 population sensitivity: ROC-AUC={p4_pop_sensitivity['mean_roc_auc']:.4f} "
+          f"n={p4_pop_sensitivity['population_size']}")
+    print(f"P6 duplicate sensitivity: mean_delta_rmse={p6_dup_sensitivity['mean']:.4f} "
+          f"se={p6_dup_sensitivity['se']:.4f}")
+
+    super_customer = super_customer_profile(df)
+    print(f"super_customer_profile: n_super={super_customer['n_super']} "
+          f"pct_of_purchased={super_customer['pct_of_purchased']:.4f} "
+          f"pct_of_total_profit={super_customer['pct_of_total_profit']:.4f} "
+          f"cac_savings_pct={super_customer['cac_savings_pct']:.4f}")
+
+    all_metrics["global_feature_importance"] = global_fi
+    all_metrics["shap"] = shap_results
+    all_metrics["learning_curves"] = learning_curves
+    all_metrics["multi_seed_stability"] = seed_stability
+    all_metrics["P6_log1p_smearing"] = p6_log1p
+    all_metrics["P4_early_funnel"] = p4_early_funnel
+    all_metrics["P4_population_sensitivity"] = p4_pop_sensitivity
+    all_metrics["P6_duplicate_sensitivity"] = p6_dup_sensitivity
+    all_metrics["super_customer_profile"] = super_customer
+    write_metrics_json(all_metrics, metrics_path)
+    print(f"wrote {metrics_path} (checkpoint 13 additions)")

@@ -1165,6 +1165,33 @@
     "calibration_status": "calibrated",
     "winner": "logistic"
   },
+  "P4_early_funnel": {
+    "fold_scores_roc_auc": [
+      0.692894159856488,
+      0.6941025513254933,
+      0.7168252940003985,
+      0.7245864062188558,
+      0.6784650801991843
+    ],
+    "mean_roc_auc": 0.701374698320084,
+    "role": "research_only",
+    "se_roc_auc": 0.00844736215467108,
+    "std_roc_auc": 0.018888876008403627
+  },
+  "P4_population_sensitivity": {
+    "fold_scores_roc_auc": [
+      0.7877602653964811,
+      0.79671868747499,
+      0.7683629007158419,
+      0.7913257909180343,
+      0.7803552011598406
+    ],
+    "mean_roc_auc": 0.7849045691330375,
+    "population_size": 2867,
+    "role": "research_only",
+    "se_roc_auc": 0.004915709641236034,
+    "std_roc_auc": 0.010991860915454876
+  },
   "P4_selection": {
     "eligible": [
       "catboost",
@@ -1391,6 +1418,20 @@
       "std_r2": 0.14683520456014093,
       "std_rmse": 2454.8449882942296
     }
+  },
+  "P6_duplicate_sensitivity": {
+    "delta_rmse_per_fold": [
+      -2.49086750083643,
+      2.114300279179588,
+      -1.9003655477208667,
+      -2.7894772371719228,
+      1.005119277870108
+    ],
+    "mean": -0.8122581457359047,
+    "n_folds": 5,
+    "n_positive": 2,
+    "se": 0.9944522948613778,
+    "winner": "linear"
   },
   "P6_guardrail": {
     "p6_1_reference": {
@@ -1684,6 +1725,29 @@
       }
     }
   },
+  "P6_log1p_smearing": {
+    "fold_scores_mae": [
+      2349.3010998921427,
+      2760.8021204630536,
+      2197.153084789955,
+      2235.50140654783,
+      2103.819234835994
+    ],
+    "fold_scores_rmse": [
+      6154.718274920776,
+      9042.02694829616,
+      3142.167037732735,
+      5236.474240661994,
+      3059.420455880297
+    ],
+    "mean_mae": 2329.315389305795,
+    "mean_rmse": 5326.961391498392,
+    "role": "research_only",
+    "se_mae": 114.82523276025515,
+    "se_rmse": 1104.7658063312515,
+    "std_mae": 256.7570259841663,
+    "std_rmse": 2470.331442174046
+  },
   "P6_selection": {
     "eligible": [
       "linear",
@@ -1691,5 +1755,864 @@
       "p6_5_winsorized"
     ],
     "winner": "linear"
+  },
+  "global_feature_importance": {
+    "P2": {
+      "catboost": {
+        "numeric__ad_budget": 0.5475932932300374,
+        "numeric__calls_to_closed": 96.04030384295318,
+        "numeric__calls_to_not_closed": 0.08112906113840544,
+        "numeric__closed": 0.07387124975411938,
+        "numeric__customer_acquisition_cost": 0.47459833081525454,
+        "numeric__followup_1": 0.46132673780851685,
+        "numeric__followup_2": 0.5328484973594585,
+        "numeric__followup_3": 0.16971013420560313,
+        "numeric__followup_4": 0.37426368028196877,
+        "numeric__followup_5": 0.38470460382209615,
+        "numeric__leads_answered": 0.36836468744835316,
+        "numeric__not_closed": 0.1824120704705124,
+        "numeric__num_leads": 0.3088738107124621
+      },
+      "lightgbm": {
+        "numeric__ad_budget": 93.0,
+        "numeric__calls_to_closed": 317.0,
+        "numeric__calls_to_not_closed": 34.0,
+        "numeric__closed": 27.0,
+        "numeric__customer_acquisition_cost": 114.0,
+        "numeric__followup_1": 81.0,
+        "numeric__followup_2": 49.0,
+        "numeric__followup_3": 70.0,
+        "numeric__followup_4": 51.0,
+        "numeric__followup_5": 64.0,
+        "numeric__leads_answered": 129.0,
+        "numeric__not_closed": 31.0,
+        "numeric__num_leads": 200.0
+      },
+      "xgboost": {
+        "numeric__ad_budget": 0.0024747010320425034,
+        "numeric__calls_to_closed": 0.9675718545913696,
+        "numeric__calls_to_not_closed": 0.0014630636433139443,
+        "numeric__closed": 0.0009810166666284204,
+        "numeric__customer_acquisition_cost": 0.0019039055332541466,
+        "numeric__followup_1": 0.0014475523494184017,
+        "numeric__followup_2": 0.006506628822535276,
+        "numeric__followup_3": 0.0024407734163105488,
+        "numeric__followup_4": 0.0021684658713638783,
+        "numeric__followup_5": 0.004490946419537067,
+        "numeric__leads_answered": 0.004337528720498085,
+        "numeric__not_closed": 0.0017355266027152538,
+        "numeric__num_leads": 0.002477979753166437
+      }
+    },
+    "P3": {
+      "catboost": {
+        "numeric__ad_budget": 2.1934476426828233,
+        "numeric__calls_to_closed": 65.6092390508514,
+        "numeric__calls_to_not_closed": 2.240541077990807,
+        "numeric__closed": 0.9051479259435652,
+        "numeric__customer_acquisition_cost": 20.527184791622645,
+        "numeric__followup_1": 1.0059981483126468,
+        "numeric__followup_2": 1.6916626716386347,
+        "numeric__followup_3": 0.7573587458608764,
+        "numeric__followup_4": 1.2861498615678935,
+        "numeric__followup_5": 0.5812256162163864,
+        "numeric__leads_answered": 1.0565813259887444,
+        "numeric__not_closed": 0.7968972258829378,
+        "numeric__num_leads": 1.348565915440639
+      },
+      "lightgbm": {
+        "numeric__ad_budget": 24.0,
+        "numeric__calls_to_closed": 168.0,
+        "numeric__calls_to_not_closed": 109.0,
+        "numeric__closed": 21.0,
+        "numeric__customer_acquisition_cost": 171.0,
+        "numeric__followup_1": 102.0,
+        "numeric__followup_2": 103.0,
+        "numeric__followup_3": 78.0,
+        "numeric__followup_4": 75.0,
+        "numeric__followup_5": 41.0,
+        "numeric__leads_answered": 143.0,
+        "numeric__not_closed": 51.0,
+        "numeric__num_leads": 129.0
+      },
+      "xgboost": {
+        "numeric__ad_budget": 0.03960445150732994,
+        "numeric__calls_to_closed": 0.5277385115623474,
+        "numeric__calls_to_not_closed": 0.028069017454981804,
+        "numeric__closed": 0.03573963791131973,
+        "numeric__customer_acquisition_cost": 0.1107061430811882,
+        "numeric__followup_1": 0.03378870710730553,
+        "numeric__followup_2": 0.033636052161455154,
+        "numeric__followup_3": 0.030495459213852882,
+        "numeric__followup_4": 0.024703489616513252,
+        "numeric__followup_5": 0.04419326409697533,
+        "numeric__leads_answered": 0.03322572261095047,
+        "numeric__not_closed": 0.03020654432475567,
+        "numeric__num_leads": 0.027893077582120895
+      }
+    },
+    "P4": {
+      "catboost": {
+        "budget_tier__budget_tier": 9.264756301368006,
+        "numeric__ad_budget": 0.9943718108554536,
+        "numeric__calls_to_closed": 75.83045513025009,
+        "numeric__calls_to_not_closed": 1.7508436488062957,
+        "numeric__closed": 0.8271165877890789,
+        "numeric__customer_acquisition_cost": 3.06039555304715,
+        "numeric__followup_1": 0.8112991527148283,
+        "numeric__followup_2": 0.8491201062356749,
+        "numeric__followup_3": 0.8587399773727246,
+        "numeric__followup_4": 1.09452027550576,
+        "numeric__followup_5": 0.878943338209225,
+        "numeric__leads_answered": 1.3310153256271975,
+        "numeric__not_closed": 1.20190103472262,
+        "numeric__num_leads": 1.2465217574958787
+      }
+    },
+    "P6": {
+      "p6_1_reference": {
+        "numeric__ad_budget": 0.013005579821765423,
+        "numeric__calls_to_closed": 0.35275137424468994,
+        "numeric__calls_to_not_closed": 0.10471559315919876,
+        "numeric__closed": 0.006230563391000032,
+        "numeric__customer_acquisition_cost": 0.009035018272697926,
+        "numeric__followup_1": 0.03885587677359581,
+        "numeric__followup_2": 0.03284148499369621,
+        "numeric__followup_3": 0.01692238450050354,
+        "numeric__followup_4": 0.005812390241771936,
+        "numeric__followup_5": 0.008866497315466404,
+        "numeric__leads_answered": 0.021121343597769737,
+        "numeric__not_closed": 0.006138438358902931,
+        "numeric__num_leads": 0.035267990082502365,
+        "numeric__purchased": 0.3484354615211487
+      },
+      "p6_2_tweedie": {
+        "numeric__ad_budget": 0.012877830304205418,
+        "numeric__calls_to_closed": 0.3636150360107422,
+        "numeric__calls_to_not_closed": 0.0071953097358345985,
+        "numeric__closed": 0.0011302621569484472,
+        "numeric__customer_acquisition_cost": 0.008742202073335648,
+        "numeric__followup_1": 0.0014761204365640879,
+        "numeric__followup_2": 0.030667167156934738,
+        "numeric__followup_3": 0.0027710297144949436,
+        "numeric__followup_4": 0.0028680567629635334,
+        "numeric__followup_5": 0.000668694730848074,
+        "numeric__leads_answered": 0.020002659410238266,
+        "numeric__not_closed": 0.0017193841049447656,
+        "numeric__num_leads": 0.0037653648760169744,
+        "numeric__purchased": 0.5425008535385132
+      },
+      "p6_3_huber": {
+        "numeric__ad_budget": 0.0,
+        "numeric__calls_to_closed": 0.0,
+        "numeric__calls_to_not_closed": 0.0,
+        "numeric__closed": 0.0,
+        "numeric__customer_acquisition_cost": 0.0,
+        "numeric__followup_1": 0.0,
+        "numeric__followup_2": 0.0,
+        "numeric__followup_3": 0.0,
+        "numeric__followup_4": 0.0,
+        "numeric__followup_5": 0.0,
+        "numeric__leads_answered": 0.0,
+        "numeric__not_closed": 0.0,
+        "numeric__num_leads": 0.0,
+        "numeric__purchased": 0.0
+      },
+      "p6_5_winsorized": {
+        "numeric__ad_budget": 0.013032510876655579,
+        "numeric__calls_to_closed": 0.35192522406578064,
+        "numeric__calls_to_not_closed": 0.10455355048179626,
+        "numeric__closed": 0.005961020942777395,
+        "numeric__customer_acquisition_cost": 0.008991396985948086,
+        "numeric__followup_1": 0.04025210812687874,
+        "numeric__followup_2": 0.033363938331604004,
+        "numeric__followup_3": 0.016906170174479485,
+        "numeric__followup_4": 0.005848351866006851,
+        "numeric__followup_5": 0.008902705274522305,
+        "numeric__leads_answered": 0.02106608636677265,
+        "numeric__not_closed": 0.006036217324435711,
+        "numeric__num_leads": 0.03550229221582413,
+        "numeric__purchased": 0.3476583659648895
+      }
+    }
+  },
+  "learning_curves": {
+    "P2": {
+      "curve": {
+        "0.2": {
+          "fold_scores": [
+            2.1936127781245363,
+            2.212345326307658,
+            2.174924820544605,
+            2.076886134985188,
+            2.0598025001664895
+          ],
+          "mean": 2.143514312025695,
+          "n_train": 324,
+          "std": 0.07014479007461853
+        },
+        "0.4": {
+          "fold_scores": [
+            2.170114805996414,
+            2.1894987866263897,
+            2.136678742696818,
+            2.040845381856555,
+            2.0608848030432356
+          ],
+          "mean": 2.119604504043882,
+          "n_train": 648,
+          "std": 0.06591478130882415
+        },
+        "0.6": {
+          "fold_scores": [
+            2.154415515055866,
+            2.1660985569913036,
+            2.139282815320519,
+            2.007210040513127,
+            2.04725497989716
+          ],
+          "mean": 2.1028523815555946,
+          "n_train": 972,
+          "std": 0.07110650536196542
+        },
+        "0.8": {
+          "fold_scores": [
+            2.1558110310226564,
+            2.1782798000321972,
+            2.1290100746119434,
+            1.9812033812658139,
+            2.0180856255185575
+          ],
+          "mean": 2.0924779824902333,
+          "n_train": 1296,
+          "std": 0.08749840046846377
+        },
+        "1.0": {
+          "fold_scores": [
+            2.142788585871713,
+            2.171079017318349,
+            2.125127171993033,
+            1.9582222538247298,
+            2.0039331799932176
+          ],
+          "mean": 2.0802300418002084,
+          "n_train": 1620,
+          "std": 0.093394287214018
+        }
+      },
+      "primary_metric": "mae",
+      "winner": "catboost"
+    },
+    "P3": {
+      "curve": {
+        "0.2": {
+          "fold_scores": [
+            0.8348378550753079,
+            0.7363589567604667,
+            0.7522183547406609,
+            0.7364570055887832,
+            0.7805884817270017
+          ],
+          "mean": 0.7680921307784441,
+          "n_train": 324,
+          "std": 0.04144545434562434
+        },
+        "0.4": {
+          "fold_scores": [
+            0.8322253838983468,
+            0.7426708500833414,
+            0.7821722717913522,
+            0.7566918325326013,
+            0.7655807190911555
+          ],
+          "mean": 0.7758682114793594,
+          "n_train": 648,
+          "std": 0.034610341201314225
+        },
+        "0.6": {
+          "fold_scores": [
+            0.8300789873914536,
+            0.774524463182665,
+            0.7825767232081577,
+            0.7592043337582116,
+            0.7800216860937923
+          ],
+          "mean": 0.7852812387268561,
+          "n_train": 972,
+          "std": 0.026634229744630863
+        },
+        "0.8": {
+          "fold_scores": [
+            0.8309130157484178,
+            0.7765344641631532,
+            0.7836675164231788,
+            0.7548534170016669,
+            0.795620887651248
+          ],
+          "mean": 0.7883178601975329,
+          "n_train": 1296,
+          "std": 0.0280536297300628
+        },
+        "1.0": {
+          "fold_scores": [
+            0.8355982926948928,
+            0.7914256299637219,
+            0.7944283753309148,
+            0.7492768898911658,
+            0.7971241282436727
+          ],
+          "mean": 0.7935706632248736,
+          "n_train": 1620,
+          "std": 0.030603202227852067
+        }
+      },
+      "primary_metric": "roc_auc",
+      "winner": "xgboost"
+    },
+    "P4": {
+      "curve": {
+        "0.2": {
+          "fold_scores": [
+            0.7692221447079928,
+            0.7726604544548535,
+            0.793240482359976,
+            0.7953956547737692,
+            0.7596026324350024
+          ],
+          "mean": 0.7780242737463187,
+          "n_train": 324,
+          "std": 0.015643711076474436
+        },
+        "0.4": {
+          "fold_scores": [
+            0.7720624875423558,
+            0.7728846920470401,
+            0.7995440502292206,
+            0.7944737891170022,
+            0.7657333033055577
+          ],
+          "mean": 0.7809396644482351,
+          "n_train": 648,
+          "std": 0.015035092036975391
+        },
+        "0.6": {
+          "fold_scores": [
+            0.7757001195933825,
+            0.7779424955152482,
+            0.7932653976479968,
+            0.7913095475383695,
+            0.7756174461376775
+          ],
+          "mean": 0.7827670012865349,
+          "n_train": 972,
+          "std": 0.008768184450840344
+        },
+        "0.8": {
+          "fold_scores": [
+            0.7755755431532788,
+            0.7828757225433526,
+            0.8009143910703609,
+            0.7881453059597369,
+            0.7714135575407253
+          ],
+          "mean": 0.7837849040534909,
+          "n_train": 1296,
+          "std": 0.011551004958361172
+        },
+        "1.0": {
+          "fold_scores": [
+            0.7800602949970101,
+            0.7851928443292805,
+            0.802907614112019,
+            0.787945983655571,
+            0.7672597152365939
+          ],
+          "mean": 0.7846732904660948,
+          "n_train": 1620,
+          "std": 0.012922686884166076
+        }
+      },
+      "primary_metric": "roc_auc",
+      "winner": "logistic"
+    },
+    "P6": {
+      "curve": {
+        "0.2": {
+          "fold_scores": [
+            7180.5439644428525,
+            9610.111243242956,
+            4556.475456126744,
+            6491.694999719609,
+            4555.032029333998
+          ],
+          "mean": 6478.771538573232,
+          "n_train": 444,
+          "std": 2103.208015603612
+        },
+        "0.4": {
+          "fold_scores": [
+            7040.04248911534,
+            9596.535507756294,
+            4465.432308520412,
+            6426.105824326776,
+            4498.213414772788
+          ],
+          "mean": 6405.265908898322,
+          "n_train": 888,
+          "std": 2120.57662405581
+        },
+        "0.6": {
+          "fold_scores": [
+            7038.598663331997,
+            9599.06278783308,
+            4405.972159265248,
+            6406.1488004826315,
+            4435.588239542249
+          ],
+          "mean": 6377.074130091041,
+          "n_train": 1332,
+          "std": 2149.0859334697248
+        },
+        "0.8": {
+          "fold_scores": [
+            7032.033346132809,
+            9583.925031956758,
+            4418.914670472842,
+            6389.364986737015,
+            4419.554662274853
+          ],
+          "mean": 6368.758539514854,
+          "n_train": 1776,
+          "std": 2143.533329433587
+        },
+        "1.0": {
+          "fold_scores": [
+            7031.517697704172,
+            9581.73521246172,
+            4378.969375991325,
+            6412.810851546576,
+            4380.183873870259
+          ],
+          "mean": 6357.04340231481,
+          "n_train": 2221,
+          "std": 2160.8686507271186
+        }
+      },
+      "primary_metric": "rmse",
+      "winner": "linear"
+    }
+  },
+  "multi_seed_stability": {
+    "P2": {
+      "mean_across_seeds": 2.0872349888649775,
+      "per_seed": {
+        "201": {
+          "fold_scores": [
+            2.160124056498179,
+            1.9656709421619787,
+            2.0129924460418387,
+            2.252991307205513,
+            2.0617496603245327
+          ],
+          "mean": 2.0907056824464085,
+          "std": 0.11583071620584329
+        },
+        "202": {
+          "fold_scores": [
+            2.0336005317054644,
+            2.0620855381891,
+            2.15702863672463,
+            2.038729210428603,
+            2.1059149995213797
+          ],
+          "mean": 2.0794717833138354,
+          "std": 0.05191512227508168
+        },
+        "203": {
+          "fold_scores": [
+            2.1708134154123075,
+            2.032997080661718,
+            2.04946606454511,
+            2.093260011092198,
+            2.1111009324621115
+          ],
+          "mean": 2.091527500834689,
+          "std": 0.054468687280496336
+        }
+      },
+      "primary_metric": "mae",
+      "std_across_seeds": 0.006735678636024213,
+      "winner": "catboost"
+    },
+    "P3": {
+      "mean_across_seeds": 0.7907568311354988,
+      "per_seed": {
+        "201": {
+          "fold_scores": [
+            0.8018201442378452,
+            0.8048460633395431,
+            0.7593881753113051,
+            0.7897833120894207,
+            0.8016954582419479
+          ],
+          "mean": 0.7915066306440124,
+          "std": 0.018859256579389166
+        },
+        "202": {
+          "fold_scores": [
+            0.7926458323112398,
+            0.7853588587116384,
+            0.795653985684871,
+            0.8018555740758898,
+            0.7754010695187166
+          ],
+          "mean": 0.7901830640604711,
+          "std": 0.010173790110100781
+        },
+        "203": {
+          "fold_scores": [
+            0.8153363096698228,
+            0.8223845475046574,
+            0.7744386704578882,
+            0.7379277380135308,
+            0.8028167278641662
+          ],
+          "mean": 0.790580798702013,
+          "std": 0.03466606708207266
+        }
+      },
+      "primary_metric": "roc_auc",
+      "std_across_seeds": 0.0006791153720068335,
+      "winner": "xgboost"
+    },
+    "P4": {
+      "mean_across_seeds": 0.7837055166833918,
+      "per_seed": {
+        "201": {
+          "fold_scores": [
+            0.7860773370540164,
+            0.7643387482559298,
+            0.7771327486545744,
+            0.8041409208690452,
+            0.7714135575407252
+          ],
+          "mean": 0.7806206624748582,
+          "std": 0.015370547380546998
+        },
+        "202": {
+          "fold_scores": [
+            0.8027456647398843,
+            0.7894284432928044,
+            0.7659582419772772,
+            0.7631054414989037,
+            0.8124765408002402
+          ],
+          "mean": 0.7867428664618219,
+          "std": 0.021887509819759985
+        },
+        "203": {
+          "fold_scores": [
+            0.7336804863464221,
+            0.8073051624476779,
+            0.7785529200717561,
+            0.7954330277058002,
+            0.8037935089958212
+          ],
+          "mean": 0.7837530211134955,
+          "std": 0.030112484366236286
+        }
+      },
+      "primary_metric": "roc_auc",
+      "std_across_seeds": 0.0030613784342446524,
+      "winner": "logistic"
+    },
+    "P6": {
+      "mean_across_seeds": 6320.186516462413,
+      "per_seed": {
+        "201": {
+          "fold_scores": [
+            6200.101773207099,
+            4273.1854444802075,
+            9160.33824829829,
+            7939.38492950148,
+            4130.44581382764
+          ],
+          "mean": 6340.691241862944,
+          "std": 2218.431947392923
+        },
+        "202": {
+          "fold_scores": [
+            4602.457601416876,
+            4467.956450429931,
+            4454.071402430445,
+            11324.419308780405,
+            5660.369488716441
+          ],
+          "mean": 6101.85485035482,
+          "std": 2962.3932567100383
+        },
+        "203": {
+          "fold_scores": [
+            4469.11852904537,
+            8343.498375624507,
+            7318.442297109602,
+            6670.278274745488,
+            5788.72980932241
+          ],
+          "mean": 6518.013457169475,
+          "std": 1476.997897383061
+        }
+      },
+      "primary_metric": "rmse",
+      "std_across_seeds": 208.8356514805173,
+      "winner": "linear"
+    }
+  },
+  "shap": {
+    "P2": {
+      "local_explanations": [
+        {
+          "contributions": {
+            "numeric__ad_budget": -1.0321661958454507,
+            "numeric__calls_to_closed": -7.569534415935541,
+            "numeric__calls_to_not_closed": -0.005364081287383572,
+            "numeric__closed": 0.06070414954403271,
+            "numeric__customer_acquisition_cost": -0.683473111967273,
+            "numeric__followup_1": -0.41326646618364343,
+            "numeric__followup_2": -0.19667905982021003,
+            "numeric__followup_3": -0.12785627549580356,
+            "numeric__followup_4": -0.33986231098859804,
+            "numeric__followup_5": -0.32434083131686026,
+            "numeric__leads_answered": -0.22278392581486306,
+            "numeric__not_closed": -0.3124755071824622,
+            "numeric__num_leads": -0.1814957123888467
+          },
+          "source_row_id": 2
+        },
+        {
+          "contributions": {
+            "numeric__ad_budget": -0.1894191850449964,
+            "numeric__calls_to_closed": -10.568522108779499,
+            "numeric__calls_to_not_closed": -0.0015250316405784822,
+            "numeric__closed": 0.06574015086829987,
+            "numeric__customer_acquisition_cost": -0.3857291391265453,
+            "numeric__followup_1": -0.0739094521576778,
+            "numeric__followup_2": -0.16200527549625468,
+            "numeric__followup_3": -0.11145641080690236,
+            "numeric__followup_4": 0.07873521360803314,
+            "numeric__followup_5": -0.0455968395790123,
+            "numeric__leads_answered": -0.10249435544395413,
+            "numeric__not_closed": -0.06479376477614034,
+            "numeric__num_leads": -0.11233572744974565
+          },
+          "source_row_id": 3
+        }
+      ],
+      "mean_abs_shap": {
+        "numeric__ad_budget": 0.4626138984467924,
+        "numeric__calls_to_closed": 9.556294971016749,
+        "numeric__calls_to_not_closed": 0.025952420083770824,
+        "numeric__closed": 0.08993725672661994,
+        "numeric__customer_acquisition_cost": 0.4160911521968082,
+        "numeric__followup_1": 0.13189029722766274,
+        "numeric__followup_2": 0.15767928300978712,
+        "numeric__followup_3": 0.0601410693611707,
+        "numeric__followup_4": 0.20389947893997384,
+        "numeric__followup_5": 0.17884613328953242,
+        "numeric__leads_answered": 0.09484943594210828,
+        "numeric__not_closed": 0.14509620131735582,
+        "numeric__num_leads": 0.17106258806502272
+      },
+      "winner": "catboost"
+    },
+    "P3": {
+      "local_explanations": [
+        {
+          "contributions": {
+            "numeric__ad_budget": 0.05383395031094551,
+            "numeric__calls_to_closed": 0.779079794883728,
+            "numeric__calls_to_not_closed": -0.03504268452525139,
+            "numeric__closed": 0.013224208727478981,
+            "numeric__customer_acquisition_cost": 0.2234974354505539,
+            "numeric__followup_1": -0.06511053442955017,
+            "numeric__followup_2": -0.037541501224040985,
+            "numeric__followup_3": 0.010328373871743679,
+            "numeric__followup_4": -0.03887089714407921,
+            "numeric__followup_5": 0.0058897146955132484,
+            "numeric__leads_answered": -0.16507606208324432,
+            "numeric__not_closed": 0.03863873332738876,
+            "numeric__num_leads": 0.025371192023158073
+          },
+          "source_row_id": 1
+        },
+        {
+          "contributions": {
+            "numeric__ad_budget": -0.025924822315573692,
+            "numeric__calls_to_closed": -0.7440338134765625,
+            "numeric__calls_to_not_closed": 0.02741314470767975,
+            "numeric__closed": -0.025331012904644012,
+            "numeric__customer_acquisition_cost": -0.8269602656364441,
+            "numeric__followup_1": 0.023416198790073395,
+            "numeric__followup_2": 0.2113751918077469,
+            "numeric__followup_3": -0.08791752904653549,
+            "numeric__followup_4": 0.004274171777069569,
+            "numeric__followup_5": 0.11922086775302887,
+            "numeric__leads_answered": -0.32073718309402466,
+            "numeric__not_closed": 0.11193931847810745,
+            "numeric__num_leads": -0.14284388720989227
+          },
+          "source_row_id": 2
+        }
+      ],
+      "mean_abs_shap": {
+        "numeric__ad_budget": 0.057687029242515564,
+        "numeric__calls_to_closed": 0.9263288974761963,
+        "numeric__calls_to_not_closed": 0.0872880145907402,
+        "numeric__closed": 0.03460368141531944,
+        "numeric__customer_acquisition_cost": 0.4106201231479645,
+        "numeric__followup_1": 0.07921290397644043,
+        "numeric__followup_2": 0.1032993346452713,
+        "numeric__followup_3": 0.04884727671742439,
+        "numeric__followup_4": 0.047511160373687744,
+        "numeric__followup_5": 0.02799241803586483,
+        "numeric__leads_answered": 0.13737216591835022,
+        "numeric__not_closed": 0.06267192214727402,
+        "numeric__num_leads": 0.07587134093046188
+      },
+      "winner": "xgboost"
+    },
+    "P4": {
+      "local_explanations": [
+        {
+          "contributions": {
+            "budget_tier__budget_tier_High": 0.028746588662668698,
+            "budget_tier__budget_tier_Low": 0.06434509249023701,
+            "budget_tier__budget_tier_Mid": 0.24819495649930765,
+            "numeric__ad_budget": 0.07439095119052798,
+            "numeric__calls_to_closed": 0.9604761211615881,
+            "numeric__calls_to_not_closed": -0.006998476807438897,
+            "numeric__closed": 0.01844725284315679,
+            "numeric__customer_acquisition_cost": 0.035580924540703544,
+            "numeric__followup_1": 0.19582095650748169,
+            "numeric__followup_2": 0.2540292213601742,
+            "numeric__followup_3": -0.7386598376849786,
+            "numeric__followup_4": 0.2677544016036674,
+            "numeric__followup_5": 0.11419054139064773,
+            "numeric__leads_answered": -0.2210217207457233,
+            "numeric__not_closed": 0.02868508405067841,
+            "numeric__num_leads": -0.14748379822136376
+          },
+          "source_row_id": 1
+        },
+        {
+          "contributions": {
+            "budget_tier__budget_tier_High": -0.06509711368126911,
+            "budget_tier__budget_tier_Low": 0.06434509249023701,
+            "budget_tier__budget_tier_Mid": -0.26524187092771473,
+            "numeric__ad_budget": -0.31058922085994617,
+            "numeric__calls_to_closed": -0.7305500350936782,
+            "numeric__calls_to_not_closed": 0.08427031867101682,
+            "numeric__closed": -0.012247617063575656,
+            "numeric__customer_acquisition_cost": -0.42755886097988516,
+            "numeric__followup_1": -1.0197022983621045,
+            "numeric__followup_2": -1.2651422482054633,
+            "numeric__followup_3": 3.156315963363366,
+            "numeric__followup_4": -1.3991221634979039,
+            "numeric__followup_5": -0.5847148394982298,
+            "numeric__leads_answered": 1.0981117971058163,
+            "numeric__not_closed": -0.4050196728111727,
+            "numeric__num_leads": 0.6112420090333384
+          },
+          "source_row_id": 2
+        }
+      ],
+      "mean_abs_shap": {
+        "budget_tier__budget_tier_High": 0.03988163091144946,
+        "budget_tier__budget_tier_Low": 0.10590235775863516,
+        "budget_tier__budget_tier_Mid": 0.25643542145817794,
+        "numeric__ad_budget": 0.09595827070567053,
+        "numeric__calls_to_closed": 0.8217530981654804,
+        "numeric__calls_to_not_closed": 0.0753490216964357,
+        "numeric__closed": 0.018085627003894097,
+        "numeric__customer_acquisition_cost": 0.1169188470404076,
+        "numeric__followup_1": 0.4698816761760642,
+        "numeric__followup_2": 0.5870997622845491,
+        "numeric__followup_3": 1.48424802531147,
+        "numeric__followup_4": 0.5706142599378795,
+        "numeric__followup_5": 0.23594692046528287,
+        "numeric__leads_answered": 0.49118515860531675,
+        "numeric__not_closed": 0.13516905356300957,
+        "numeric__num_leads": 0.23479342643075327
+      },
+      "winner": "logistic"
+    },
+    "P6": {
+      "local_explanations": [
+        {
+          "contributions": {
+            "numeric__ad_budget": -8757.145735726177,
+            "numeric__calls_to_closed": -6364.140451415648,
+            "numeric__calls_to_not_closed": 34.692614686666865,
+            "numeric__closed": 2548.8910796162168,
+            "numeric__customer_acquisition_cost": 11817.60332581257,
+            "numeric__followup_1": -1502.6080033459232,
+            "numeric__followup_2": 388.401493209959,
+            "numeric__followup_3": -5401.575955535072,
+            "numeric__followup_4": 5996.703330569416,
+            "numeric__followup_5": 10394.007967959973,
+            "numeric__leads_answered": 832.7473481658593,
+            "numeric__not_closed": -13009.610787265308,
+            "numeric__num_leads": -7773.160760620089,
+            "numeric__purchased": 1707.202236436181
+          },
+          "source_row_id": 2
+        },
+        {
+          "contributions": {
+            "numeric__ad_budget": 2684.0934688559346,
+            "numeric__calls_to_closed": 15065.813324821424,
+            "numeric__calls_to_not_closed": -2.5777794194427344,
+            "numeric__closed": -7860.408864502385,
+            "numeric__customer_acquisition_cost": -6797.312517784514,
+            "numeric__followup_1": 853.7019348668425,
+            "numeric__followup_2": -206.4552016618902,
+            "numeric__followup_3": 3102.237832569823,
+            "numeric__followup_4": -2715.5630992331753,
+            "numeric__followup_5": -4821.357042654226,
+            "numeric__leads_answered": -434.2798850250429,
+            "numeric__not_closed": 2145.521208306868,
+            "numeric__num_leads": 3200.7387379109314,
+            "numeric__purchased": -16109.314336296302
+          },
+          "source_row_id": 5
+        }
+      ],
+      "mean_abs_shap": {
+        "numeric__ad_budget": 2602.683538813697,
+        "numeric__calls_to_closed": 6714.279989882522,
+        "numeric__calls_to_not_closed": 30.824010984811643,
+        "numeric__closed": 3224.299546910295,
+        "numeric__customer_acquisition_cost": 3257.434077996307,
+        "numeric__followup_1": 680.8913989226984,
+        "numeric__followup_2": 177.9425571713418,
+        "numeric__followup_3": 2511.8930793371824,
+        "numeric__followup_4": 2427.8115096864412,
+        "numeric__followup_5": 4179.0399966039295,
+        "numeric__leads_answered": 366.9130916653215,
+        "numeric__not_closed": 4267.099978890163,
+        "numeric__num_leads": 2904.47358834133,
+        "numeric__purchased": 3087.231709981855
+      },
+      "winner": "linear"
+    }
+  },
+  "super_customer_profile": {
+    "cac_population_mean": 1437.4587417009168,
+    "cac_savings_pct": 0.31079142938335447,
+    "cac_super_mean": 990.7088846880907,
+    "n_purchased": 3163,
+    "n_super": 529,
+    "pct_of_purchased": 0.16724628517230478,
+    "pct_of_total_profit": 0.336098052363554
   }
 }

@@ -1345,3 +1345,51 @@ def test_p5_conclusion_matches_spec_md_verbatim():
 
     assert spec_locked_text, "extraction anchor not found in SPEC.md -- test itself is broken, not a wording mismatch"
     assert rendered == spec_locked_text
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 13 (phase 6) -- super_customer_profile, deferred from phase
+# 5 (PHASE6.md D16). A dedicated fixture, not the shared 8-row one above
+# -- none of its rows happen to satisfy the super-customer filter.
+# ---------------------------------------------------------------------------
+SUPER_CUSTOMER_CSV_TEXT = (
+    ",".join(ld.EXPECTED_COLUMNS) + "\n"
+    "500,10,8,2,6,5,4,3,2,1,1,3,5,500,40.0,1,1,5000.0,Yes\n"    # super: referred=Yes, upsell=1, ltv=40>=34
+    "500,10,8,2,6,5,4,3,2,1,1,3,5,1000,20.0,1,1,2000.0,Yes\n"   # purchased, not super (ltv<34)
+    "500,10,8,2,6,5,4,3,2,1,1,3,5,1500,50.0,1,1,3000.0,No\n"    # purchased, not super (not referred)
+    "500,10,8,2,6,5,4,3,2,1,1,3,5,99999,50.0,0,1,99999.0,Yes\n" # purchased=0 -> excluded entirely
+)
+
+
+@pytest.fixture
+def super_customer_df(tmp_path, monkeypatch):
+    return _load(SUPER_CUSTOMER_CSV_TEXT, tmp_path, monkeypatch)
+
+
+def test_super_customer_profile(super_customer_df):
+    result = an.super_customer_profile(super_customer_df)
+    assert result["n_super"] == 1
+    assert result["n_purchased"] == 3  # the purchased=0 row is excluded entirely
+    assert result["pct_of_purchased"] == pytest.approx(1 / 3)
+    assert result["pct_of_total_profit"] == pytest.approx(5000 / (5000 + 2000 + 3000))
+    assert result["cac_super_mean"] == pytest.approx(500.0)
+    assert result["cac_population_mean"] == pytest.approx((500 + 1000 + 1500) / 3)
+    assert result["cac_savings_pct"] == pytest.approx(1 - 500 / ((500 + 1000 + 1500) / 3))
+
+
+def test_super_customer_profile_matches_spec_locked_numbers():
+    """The real CSV must reproduce SPEC.md's own stated figures exactly
+    -- these are given as ground truth in the brief, not computed here
+    for the first time. Skipped when the real CSV isn't present (CI)."""
+    csv_path = ld.DEFAULT_CSV
+    if not csv_path.exists():
+        pytest.skip("real CSV not present (expected in CI)")
+    df = ld.load_and_verify_csv(csv_path)
+    result = an.super_customer_profile(df)
+    assert result["n_super"] == 529
+    assert result["n_purchased"] == 3163
+    assert result["pct_of_purchased"] == pytest.approx(0.1672, abs=1e-4)
+    assert result["pct_of_total_profit"] == pytest.approx(0.3361, abs=1e-4)
+    assert result["cac_super_mean"] == pytest.approx(990.71, abs=0.01)
+    assert result["cac_population_mean"] == pytest.approx(1437.46, abs=0.01)
+    assert result["cac_savings_pct"] == pytest.approx(0.311, abs=1e-3)

@@ -187,6 +187,34 @@ def duplicate_sensitivity(df: pd.DataFrame) -> dict:
     }
 
 
+def super_customer_profile(df: pd.DataFrame) -> dict:
+    """SPEC.md's super-customer profile (§שש החבילות, חבילה 4) --
+    deferred from phase 5 to phase 6 (PHASE6.md D16). A fixed,
+    pre-declared filter on the purchased=1 population, not derived
+    here: purchased=1 AND referred=='Yes' AND upsell==1 AND
+    ltv_months>=34 (SPEC's stated top-quartile threshold). report_only
+    -- descriptive, never touches any modeling decision."""
+    purchased = df[df["purchased"] == 1]
+    is_super = (purchased["referred"] == "Yes") & (purchased["upsell"] == 1) & (purchased["ltv_months"] >= 34)
+    super_customers = purchased[is_super]
+
+    # SPEC's "31.1% זול יותר" compares against the population CAC (all
+    # purchased=1, super-customers included) -- verified empirically:
+    # comparing against the COMPLEMENT (purchased minus super) gives a
+    # different number (35.1%) that does not match SPEC's stated figure.
+    cac_super = float(super_customers["customer_acquisition_cost"].mean())
+    cac_population = float(purchased["customer_acquisition_cost"].mean())
+    return {
+        "n_super": int(is_super.sum()),
+        "n_purchased": int(len(purchased)),
+        "pct_of_purchased": float(is_super.sum() / len(purchased)),
+        "pct_of_total_profit": float(super_customers["cumulative_profit"].sum() / purchased["cumulative_profit"].sum()),
+        "cac_super_mean": cac_super,
+        "cac_population_mean": cac_population,
+        "cac_savings_pct": float(1 - cac_super / cac_population),
+    }
+
+
 def _safe_corr(a: pd.Series, b: pd.Series) -> float | None:
     """Pearson r, with every NaN-producing case (fewer than two valid
     pairs after alignment, zero variance in either side, or an empty

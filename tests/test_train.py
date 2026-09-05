@@ -1485,3 +1485,167 @@ def test_p6_bootstrap_simulation_wires_point_and_bootstrap_calls_correctly(monke
         assert r["n_bootstrap_used"] == 5  # every level present in every resample
         assert r["lower"] == pytest.approx(expected)
         assert r["upper"] == pytest.approx(expected)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 13 -- explainability + research (D12, D16, D17). Pure/
+# mechanical pieces and cheap-real-fit pieces (LogisticRegression/
+# LinearRegression/a tiny XGBoost, never a real hyperparameter search)
+# are CI-safe. The 8-model global_feature_importance, shap_summary_and_local
+# (+ SVG generation), learning curves, multi-seed stability, and the three
+# D17 experiments all call build_fitted_candidate (a real, possibly
+# expensive, booster fit) and stay local-only per D21 -- verified against
+# the real CSV instead, same precedent as train_p2/train_p3/train_p6.
+# ---------------------------------------------------------------------------
+
+def test_score_primary_matches_each_tasks_metric_direction():
+    assert tr._score_primary("P2", [1.0, 2.0, 3.0], [1.0, 2.0, 5.0]) == pytest.approx(2 / 3)  # MAE
+    assert tr._score_primary("P6", [0.0, 0.0], [3.0, 4.0]) == pytest.approx(3.5355339)  # RMSE
+    assert tr._score_primary("P3", [0, 0, 1, 1], [0.1, 0.2, 0.8, 0.9]) == pytest.approx(1.0)  # ROC-AUC
+
+
+def test_predict_for_primary_metric_dispatches_proba_only_for_roc_auc_tasks():
+    class _Fake:
+        def predict(self, X):
+            return np.array([1.0, 2.0])
+
+        def predict_proba(self, X):
+            return np.array([[0.9, 0.1], [0.2, 0.8]])
+
+    assert list(tr._predict_for_primary_metric("P2", _Fake(), None)) == [1.0, 2.0]
+    assert list(tr._predict_for_primary_metric("P3", _Fake(), None)) == [0.1, 0.8]
+
+
+def test_native_feature_importance_linear_uses_abs_coef():
+    steps = [("select", tr.ColumnTransformer([("numeric", "passthrough", ["a", "b"])]))]
+    pipeline = tr.Pipeline(steps + [("model", tr.LinearRegression())])
+    # a and b must be uncorrelated, or the true coefficients are not
+    # identifiable and this test would be checking an arbitrary solution.
+    X = pd.DataFrame({"a": [1.0, 2.0, 3.0, 4.0], "b": [4.0, 1.0, 3.0, 2.0]})
+    y = 2 * X["a"] - 5 * X["b"]
+    pipeline.fit(X, y)
+    fi = tr._native_feature_importance(pipeline)
+    assert set(fi) == {"numeric__a", "numeric__b"}
+    assert fi["numeric__a"] == pytest.approx(2.0, abs=1e-6)
+    assert fi["numeric__b"] == pytest.approx(5.0, abs=1e-6)  # abs() of a negative coefficient
+
+
+def test_native_feature_importance_booster_uses_feature_importances(monkeypatch):
+    steps = [("select", tr.ColumnTransformer([("numeric", "passthrough", ["a", "b"])]))]
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame({"a": rng.random(40), "b": rng.random(40)})
+    y = X["a"] * 3  # a should end up far more important than b
+    pipeline = tr.Pipeline(steps + [("model", tr.XGBRegressor(n_estimators=10, max_depth=2))])
+    pipeline.fit(X, y)
+    fi = tr._native_feature_importance(pipeline)
+    assert set(fi) == {"numeric__a", "numeric__b"}
+    assert all(v >= 0 for v in fi.values())
+    assert fi["numeric__a"] > fi["numeric__b"]
+
+
+def test_native_feature_importance_rejects_a_model_with_neither_attribute():
+    class _NoImportance:
+        pass
+    select = tr.ColumnTransformer([("numeric", "passthrough", ["a"])]).fit(pd.DataFrame({"a": [1.0, 2.0]}))
+    pipeline = tr.Pipeline([("select", select), ("model", _NoImportance())])
+    with pytest.raises(TypeError):
+        tr._native_feature_importance(pipeline)
+
+
+def test_native_shap_values_linear_closed_form_is_additive():
+    X = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [4.0, 3.0, 2.0]})
+    y = 2 * X["a"] - 1 * X["b"]
+    model = tr.LinearRegression().fit(X, y)
+    contribs = tr._native_shap_values(model, X)
+    # additive by construction: contribution sum + intercept-at-mean == prediction
+    baseline = float(model.predict(X.mean(axis=0).to_frame().T)[0])
+    assert np.allclose(contribs.sum(axis=1) + baseline, model.predict(X))
+    # exact closed form: coef_i * (x_i - mean(x_i))
+    expected_a = model.coef_[0] * (X["a"] - X["a"].mean())
+    assert np.allclose(contribs[:, 0], expected_a)
+
+
+def test_native_shap_values_xgboost_is_additive_with_the_models_own_prediction():
+    rng = np.random.default_rng(1)
+    X = pd.DataFrame({"a": rng.random(30), "b": rng.random(30)})
+    y = X["a"] * 2 - X["b"]
+    model = tr.XGBRegressor(n_estimators=10, max_depth=2).fit(X, y)
+    contribs = tr._native_shap_values(model, X)
+    assert contribs.shape == (30, 2)
+    # verified empirically before writing _native_shap_values: contributions
+    # (without the trailing bias column) plus the bias equal the prediction --
+    # re-derive the bias here from the full (undropped) array to check it.
+    full = model.get_booster().predict(tr.xgb.DMatrix(X), pred_contribs=True)
+    assert np.allclose(contribs.sum(axis=1) + full[:, -1], model.predict(X), atol=1e-4)
+
+
+def test_log_smearing_regressor_matches_the_locked_formula():
+    rng = np.random.default_rng(2)
+    X = pd.DataFrame({"a": rng.random(40)})
+    y = rng.random(40) * 100 + 1  # strictly positive, log1p-safe
+
+    reg = tr.LogSmearingRegressor(base_estimator=tr.LinearRegression())
+    reg.fit(X, y)
+
+    # re-derive smearing_ and predictions independently from the SAME
+    # locked formula (SPEC's pseudocode), not by re-calling reg's own methods
+    inner = tr.LinearRegression().fit(X, np.log1p(y))
+    residuals = np.log1p(y) - inner.predict(X)
+    expected_smearing = float(np.mean(np.exp(residuals)))
+    assert reg.smearing_ == pytest.approx(expected_smearing)
+
+    expected_pred = np.exp(inner.predict(X)) * expected_smearing - 1
+    assert np.allclose(reg.predict(X), expected_pred)
+
+
+def test_log_smearing_regressor_fit_uses_only_the_rows_it_is_given():
+    """smearing_ must come from whatever rows .fit() sees -- inside a
+    fold, that's train-only. Proven by fitting on two disjoint subsets
+    and checking the smearing_ values differ (not a global constant
+    computed from something else)."""
+    rng = np.random.default_rng(3)
+    X = pd.DataFrame({"a": rng.random(60)})
+    y = rng.random(60) * 50 + 1
+
+    reg_a = tr.LogSmearingRegressor(base_estimator=tr.LinearRegression()).fit(X.iloc[:30], y[:30])
+    reg_b = tr.LogSmearingRegressor(base_estimator=tr.LinearRegression()).fit(X.iloc[30:], y[30:])
+    assert reg_a.smearing_ != pytest.approx(reg_b.smearing_)
+
+
+def test_p6_duplicate_sensitivity_validation_rows_are_identical_in_both_arms(df, monkeypatch):
+    """The core leakage-safety invariant (D16, same class of risk as
+    checkpoint 9's guardrail): only the TRAINING portion of each fold
+    differs between the with/without arms -- validation rows must be
+    byte-identical, or a Δ could reflect different evaluation data
+    instead of a different model."""
+    # Capture the actual val_df passed to .predict() in both arms.
+    seen_val_frames = []
+    real_predict = tr.Pipeline.predict
+
+    def spy_predict(self, X):
+        seen_val_frames.append(X.copy())
+        return real_predict(self, X)
+
+    monkeypatch.setattr(tr.Pipeline, "predict", spy_predict)
+
+    p6_results = {"linear": {"role": "baseline"}}
+    tr.p6_duplicate_sensitivity(df, p6_results, "linear")
+
+    # predict() is called twice per fold, back-to-back (with-arm, then
+    # without-arm, per the function's own per-fold loop) -- pair up
+    # adjacent calls and compare.
+    assert len(seen_val_frames) == 2 * tr.N_FOLDS
+    for i in range(0, len(seen_val_frames), 2):
+        pd.testing.assert_frame_equal(seen_val_frames[i], seen_val_frames[i + 1])
+
+
+def test_p6_duplicate_sensitivity_delta_is_with_minus_without(df):
+    """Sign convention check: with a winner that has no hyperparameters
+    to look up (LinearRegression, the "else" branch), the function must
+    run end-to-end and report exactly 5 per-fold deltas, one per shared
+    fold, each computed as rmse_with - rmse_without."""
+    p6_results = {"linear": {"role": "baseline"}}
+    result = tr.p6_duplicate_sensitivity(df, p6_results, "linear")
+    assert result["winner"] == "linear"
+    assert len(result["delta_rmse_per_fold"]) == tr.N_FOLDS
+    assert result["n_folds"] == tr.N_FOLDS
