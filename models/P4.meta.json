@@ -44,7 +44,7 @@
     "model": "train",
     "ood_bounds": "train"
   },
-  "model_version": "P4-logistic-20260905-27fd0df",
+  "model_version": "P4-logistic-20260905-4ddf09d",
   "observed_ad_budget_values": [
     500.0,
     800.0,

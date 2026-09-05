@@ -3,7 +3,7 @@
   "alpha": 0.05,
   "artifact_role": "evaluation",
   "checksums": {
-    "artifact_sha256": "a420ca80ee25aa90cdaccbde097447fe37d9988566da2a46c06d5c0953efde20",
+    "artifact_sha256": "101576ba359c2ec862cecb3b3e5e738a0a8c7e9c6cc31fe8da388c21ff62201f",
     "source_csv_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa"
   },
   "conformal_quantile": 5.139283230129092,
@@ -44,7 +44,7 @@
     "ood_bounds": "train"
   },
   "interval_method": "split_conformal",
-  "model_version": "P2-catboost-20260905-27fd0df",
+  "model_version": "P2-catboost-20260905-4ddf09d",
   "observed_ad_budget_values": [
     500.0,
     800.0,
