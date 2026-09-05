@@ -349,6 +349,7 @@
 
 <nav class="tabs">
   <button class="tab-btn active" data-tab="roadmap">מפת שלבי הביצוע</button>
+  <button class="tab-btn" data-tab="planning">תמונת מצב לתכנון</button>
   <button class="tab-btn" data-tab="mockup">דוגמת ממשק — איך זה ייראה</button>
 </nav>
 
@@ -510,6 +511,38 @@
 
     <ul class="timeline" id="timeline"></ul>
 
+  </section>
+
+  <section class="panel" id="panel-planning">
+    <div class="policy-card">
+      <h2>תמונת מצב לתכנון</h2>
+      <p id="planning-current-state"></p>
+      <p>תקציר מצטבר לקראת הפאזה הבאה. הסטטוסים נגזרים מנתוני מפת הביצוע; <a href="docs/planning/SPEC.md">SPEC</a> קובע את האפיון ו<a href="docs/planning/codex-review.md">יומן ההכרעות</a> מתעד את ההחלטות. הראיות המפורטות נשארות בכרטיסי הפאזות.</p>
+      <p class="policy-fine">תוכן התקציר עודכן ב־05.09.2026. אלה סיכומי התוצרים והאימותים המתועדים, לא בדיקת שירותים או הרצת מודלים חדשה. בסגירת כל פאזה: מוסיפים תקציר ותוצרים, מעדכנים מגבלות ונקודת פתיחה, ובודקים התאמה ל־SPEC ולרישומי הסגירה. שינוי סטטוס לבדו אינו מעדכן את התוכן.</p>
+    </div>
+    <div id="planning-phase-summaries"></div>
+    <div class="policy-card">
+      <h2>החלטות ומגבלות שממשיכות איתנו</h2>
+      <ul>
+        <li>המוצר: כלי פנימי בעברית RTL. התשתית שנבחרה היא FastAPI ו־Render; נתונים והרשאות דרך Supabase. ההתחברות כבר קיימת.</li>
+        <li>הכפילויות נשמרות. הממצאים התיאוריים אינם ראיה סיבתית; רשומה אינה בהכרח לקוח נפרד. רשימות הפיצ'רים נקבעות ב־<a href="app/features.py">features.py</a>.</li>
+        <li>P2/P3/P4 מיועדים לאוכלוסיית purchased=1 בתום מחזור הקמפיין. טופס משותף עם prefill חובה; אין לכנותו חיזוי ללקוח חדש אם הוא דורש נתוני קמפיין.</li>
+        <li>P2 מציג תחזית וטווח Split Conformal; P3/P4 מציגים נטייה ושיעור בסיס. P4 מנבא הפניה בלבד, לא הסתברות להיות לקוח־על. אין להמציא טווחים או רמות ראיות.</li>
+        <li>P6 משווה ארבע אסטרטגיות בסך 50,000 ₪ באמצעות תוצרים מחושבים מראש. טווחי שתי המובילות חופפים; אין הכרזה על מנצחת או הבטחת רווח. P5 תומך בהמלצה לניסוי תפעולי מבוקר, לא במסקנה סיבתית.</li>
+        <li><strong>S9 נשארת בתוקף:</strong> פאזה 6 נסגרה עם 24/25 קריטריוני קבלה. קריטריון 21 נכשל משום שה־Holdout נפתח ארבע פעמים. ההחלטות והתוצאות נעולות; אין להריץ שוב פונקציות Holdout לצורך הכנת התכנון.</li>
+      </ul>
+    </div>
+    <div class="policy-card">
+      <h2>נקודת פתיחה לפאזה 7 — עיצוב מבני</h2>
+      <p>קיימים התחברות, נתונים, ניתוח תיאורי וארטיפקטי מודלים. כעת צריך להגדיר מה המשתמש רואה ואיך הוא פועל: Login, Overview, טופס החיזוי המשותף, Follow-up ו־Budget Simulator.</p>
+      <ul>
+        <li>להגדיר ניווט, היררכיית מידע, שדות קלט ו־prefill, תוצאות והסברים, ומקור הנתונים הנדרש לכל מסך.</li>
+        <li>לפרט loading / empty / error / OOD במקומות הרלוונטיים. להבחין בין קלט פגום, חריגה מתחום האימון וערך חוקי פנימי שלא נצפה.</li>
+        <li>להציג אי־ודאות, שיעורי בסיס והסתייגויות לפי סוג התוצאה; להגדיר נגישות, שימוש בנייד ו־RTL. גרפים טכניים באנגלית והסברים סביבם בעברית, לפי סעיף השפה ב־SPEC.</li>
+        <li>תוצר הפאזה: מפרט מסכים ומצבים עם קריטריוני קבלה וצרכי מידע לפאזה 8. נעילת סכמות API בפאזה 8, מימושן ב־9, עיצוב חזותי ב־10 ודשבורד ב־11.</li>
+      </ul>
+      <p>נקודת הפתיחה נכתבה לקראת פאזה 7; יש לעדכן אותה בסגירת הפאזה. תכנון אינו הוראת ביצוע.</p>
+    </div>
   </section>
 
   <!-- ===================== TAB 2: MOCKUP ===================== -->
@@ -842,11 +875,20 @@ const PHASES = [
       test:"25 קריטריוני קבלה ב-PHASE6.md: metrics/Holdout/ארטיפקטים תואמים ל-metadata; ה-Holdout נפתח פעם אחת; כל Baseline קיבל אותו split/פרוטוקול/פיצ'רים; אין חישוב אי-ודאות בזמן בקשה; One-SE שימש לבחירה בלבד; הרצה חוזרת מייצרת metrics.json זהה ביט-בביט",
       evidence:"metrics.json + run_metadata.json + עקומות כיול + גרפי SHAP/feature-importance"},
     note:"תכנון מפורט נכתב ב-docs/planning/PHASE6.md (16 checkpoints, 25 קריטריוני קבלה) ועבר שלושה סבבי ביקורת Codex–Claude; קודקס לא מצא פער נוסף בסבב 3. ארבעה תיקוני SPEC אושרו במפורש על ידי המשתמש ויושמו ב-SPEC.md: S1 (04.09.2026) — גדלי הפיצול של P6 תוקנו ל-2,776/695 (train_test_split מחשב ceil, לא floor). S6 (04.09.2026) — פרוטוקול רגישות P4 על כלל האוכלוסייה תוקן: מתאמנת על 2,867 שורות (3,500 פחות 633 שורות ה-Holdout של P4) בהיפר-פרמטרים בירושה ובלי כוונון חדש, ומוערכת יחד עם P4 הראשי על אותן 633 שורות בתוך הפתיחה היחידה — הניסוח הקודם ('פיצול משלו' + 'אסור לגעת ב-Holdout' על 'כלל 3,500') לא היה ניתן לקיום בו-זמנית. S7 (05.09.2026, checkpoint 12) — פרוטוקול ה-Bootstrap ל-P6 תוקן: ה-Bootstrap רץ על המודל הנפרס הזוכה גם אם הוא Linear/Logistic; רק Dummy ומודלים מפסידים אינם מקבלים טווח — הניסוח הקודם ('למודל הזוכה בלבד' וגם 'ה-Baselines... אינם מקבלים טווח') סתר את עצמו כשהזוכה בפועל הוא Baseline (P6 winner=Linear). S8 (05.09.2026, checkpoint 13) — משפחת המודל לניסוי 'הגרסה המוקדמת' של P4 ננעלה במפורש: LogisticRegression(max_iter=50000), הזוכה של P4, בלי tuning — D17/SPEC לא הגדירו זאת קודם, ותיקון לטענה שגויה של קלוד ש-D17 'כתוב במקביל' ל-D18 (רק D18 קובע ירושת היפר-פרמטרים במפורש). עיקרי יתר ההכרעות (D1–D21): קוד יחיד scripts/train.py; folds משותפים ל-CV ולכל Baseline; גארדריל P6 מזווג בשינוי יחיד (תיקון מהותי מסבב 1); Bootstrap B=1,000 נעול מראש עם פיילוט זמן בלבד; כיול sigmoid דרך FrozenEstimator (cv='prefit' הוסר ב-sklearn 1.9.0); P3 רגיל מול משוקלל לשלושת ה-boosters; מדדי כיול על ה-Holdout בלבד; RSS נמדד לפני שובר השוויון לא אחריו; פרופיל P6 לכל תקציב מדויק (לא לפי טייר — תיקון docstring ב-features.py). יומן ההכרעות (docs/planning/codex-review.md) עודכן בשורות S1/S6/S7/S8. המשתמש בחן את השינויים בפועל ואישר במפורש 04.09.2026 את planning_status: approved_for_execution — אישור נפרד מאישור תוכן ההכרעות בשיחת התכנון. המשתמש נתן הוראת ביצוע נפרדת ומפורשת 04.09.2026: branch feat/models נפתח מ-main (אחרי commit 2baa365, אישור התכנון). execution_status: in_progress. **checkpoints 1–16 בוצעו, אומתו, עברו ביקורת ואושרו במפורש — done, כולל S8 (משפחת המודל לניסוי 'הגרסה המוקדמת' של P4).** ⛔ **checkpoint 14 (פתיחת ה-Holdout) נסגר כ-done עם חריגת S9 מתועדת במפורש ובאופן בלתי הפיך: ה-Holdout נפתח בפועל 4 פעמים ולא פעם אחת כפי שדווח במקור (נמצא בביקורת Codex, אושר על ידי קלוד לאחר audit עצמאי) — קריטריון 21 נשאר FAILED לצמיתות, 24/25 קריטריוני קבלה בלבד, ואין לנסח בשום מקום שכל 25 עברו.** לא נמצא סחף בהחלטות (קוד קפוא, תוצאות זהות ביט-בביט בין כל ההרצות); checkpoint 15 תוקן מראש (D22) כדי שלא תישנה החריגה. ✅ Codex בדק את commits `e7b94f0`/`64afa3d`/`7589089` ואישר את הסגירה; המשתמש העביר לקלוד את הוראת הסגירה ואישר במפורש 05.09.2026 לסגור את checkpoint 14 כ-done על בסיס זה. **checkpoint 15 (ארטיפקטים + meta.json מלא, D15/D22) — סבב ביקורת ראשון מצא שני פערי D22 אמיתיים (observed_ad_budget_values קראה Holdout; population_n.holdout חושב מחדש במקום נקרא מהקפוא) ופער provenance (git_sha לא זיהה את הקוד שבנה בפועל) — כולם תוקנו: commit קוד+בדיקות נפרד (4ddf09d), worktree נקי, בנייה מהקוד הנקי בלבד, ואומת ש-model_version/git_sha תואמים בדיוק. P2 (CatBoost) מתועד בפירוש כלא-זהה ביט-בביט בסריאליזציה (רק תחזיותיו זהות). ✅ Codex בדק את commits `4ddf09d`/`079f291` ואישר את checkpoint 15; המשתמש העביר לקלוד את הוראת הסגירה — done.** **checkpoint 16 (עדכון ROADMAP · ביקורת Codex · סריקת secrets · PR) — done.** סבב ראשון הפר את קריטריון 25 (PR #17 נפתח לפני ביקורת Codex) — PR נסגר ללא מיזוג, מתועד. Codex בדק את commits הענף ישירות ולא מצא ממצא מהותי (307/307, secrets נקי, JSON/SVG/ROADMAP תקינים; הערה לא-חוסמת על trailing whitespace ב-SVG אוטומטיים). PR #18 נפתח אחרי התיקון, CI ירוק על שלוש ההרצות, Codex אימת ואישר סופית; המשתמש העביר לקלוד את הוראת הסגירה. **קריטריון 21 נשאר FAILED (S9) — 24/25 קריטריוני קבלה, לא 25/25.** ✅ **המשתמש אישר במפורש 05.09.2026 את המיזוג** — PR #18 מוזג ל-main (`31e9704`), CI על main ירוק, main מקומי עודכן ו-pytest 307/307 הורץ שוב ישירות עליו. ✅ **המשתמש נתן הוראה נפרדת ומפורשת 05.09.2026: 'סגור את פאזה 6'.** execution_status: in_progress → done (planning_status ללא שינוי, approved_for_execution). 16/16 checkpoints done, PR #18 מוזג ל-main (`31e9704`), CI ירוק, pytest 307/307 על main. ⛔ **קריטריון 21 נשאר FAILED (S9) לצמיתות — הסגירה אינה מוחקת את החריגה; 24/25 קריטריוני קבלה, לא 25/25.** פאזה 7 לא נגעה — אין branch חדש, אין תכנון, execution_status עדיין not_started; שער 6→7 הוא תהליך מעבר נפרד, לא נפתח כאן. ר' items למטה לראיה המלאה של כל checkpoint." },
-  { num:7, name:"עיצוב מבני", branch:"design/ia", execution_status:"not_started", planning_status:"outline_only",
-    items:["מסכי יעד, היררכיית מידע","מצבי loading/empty/error/OOD","הצגת נקודה+טווח, שיעורי בסיס, רמת ראיות"],
-    accept:{product:"מפרט מסכי יעד ומצבים",
-      test:"לכל מסך מוגדר מצב loading/empty/error/OOD + הצגת נקודה+טווח",
-      evidence:"מסמך IA / הפקת Stitch (קריאה בלבד)"} },
+  { num:7, name:"עיצוב מבני", branch:"design/ia", execution_status:"in_progress", planning_status:"approved_for_execution",
+    items:[
+      {t:"checkpoint 1 — ענף design/ia מ-main מסונכרן", s:"done", u:"2026-09-05",
+        e:"git switch -c design/ia מ-commit c8800c8 (docs: close gate 6->7, main). git log -1 מאמת שהענף פותח בדיוק מה-commit הזה, אחרי amend שהסיר את שורת Claude-Session לפי strip-claude-session-from-public-commits (הרפו ציבורי; במועד יצירת הענף, לפני ה-push, ה-commit טרם פורסם). ✅ אושר במפורש על ידי המשתמש 05.09.2026 יחד עם checkpoints 2-4."},
+      {t:"checkpoint 2 — אימות סופי של מטריצת 14 שדות החוזה מול המסמך המאושר", s:"done", u:"2026-09-05",
+        e:"סקריפט אימות (8/8 PASS): 14 שורות ממוספרות 1-14 ב-docs/IA.md §8, סדר השדות זהה לרשימת SPEC.md § חוזי תגובה, טבלת 'לא-רלוונטי' קיימת לשדות ייעודיים-למסווג. הצלבה מול הארטיפקטים: models/P2.meta.json['interval_method']=='split_conformal', models/P3.meta.json['calibration_method']=='sigmoid' ו-'base_rate' קיים — לא הוקלד. ✅ אושר במפורש על ידי המשתמש 05.09.2026 יחד עם checkpoints 1,3,4."},
+      {t:"checkpoint 3 — עדכון ROADMAP.html: סטטוסים וראיות", s:"done", u:"2026-09-05",
+        e:"עדכון commit 8452089: execution_status not_started -> in_progress (עקבי עם planning_status: approved_for_execution), checkpoints 1-2 סומנו awaiting_approval עם ראיה. ✅ אושר במפורש על ידי המשתמש 05.09.2026 יחד עם checkpoints 1,2,4."},
+      {t:"checkpoint 4 — ביקורת Codex על הענף, סריקת secrets, ואז PR (בסדר הזה בלבד)", s:"done", u:"2026-09-05",
+        e:"סריקת secrets תוקנה ל-git diff origin/main...design/ia (merge-base) אחרי שהסריקה הראשונית (main design/ia, שתי נקודות) פספסה 4 מתוך 5 קבצי ה-diff — נקייה. שני commits בדיוק (c8800c8, 8452089) נדחפו ל-origin/design/ia, ואז PR #19 (github.com/drorsh88AI/funneliq-marketing-intelligence/pull/19) נפתח ל-main, אחרי אישור ראשוני וסופי נפרד לכל אחת משתי הפקודות לפי פרוטוקול האישור הכפול. gh pr checks: שתי ריצות COMPLETED/SUCCESS. pytest 307/307. pr7_body.md (untracked, בשורש הריפו) נמחק אחרי הפתיחה. ✅ ביקורת Codex סופית על ה-PR לא מצאה ממצא. ✅ אושר במפורש על ידי המשתמש 05.09.2026 יחד עם checkpoints 1-3. ⛔ אין אישור למיזוג PR #19 — זו הוראה נפרדת."}],
+    accept:{product:"docs/IA.md — מפרט חמשת המסכים, המצבים ומטריצת 14 השדות",
+      test:"20 קריטריוני קבלה ב-PHASE7.md: מצבי loading/empty/error/OOD פר-מסך; כל 14 שדות החוזה ממופים למקור זמין בפועל; ספי propensity_band ו-evidence_level מדויקים; 401 ו-403 נקבעים מקוד הסטטוס בלבד; כלל הדור מוגדר; אפס שורות הוא שגיאת זמינות; קריאות funnel_records מעומדות; שפת הגרפים לפי S11",
+      evidence:"docs/IA.md + docs/planning/PHASE7.md + תיקוני S10 ו-S11 ב-SPEC.md וביומן ההכרעות"},
+    note:"תכנון מפורט נכתב ב-docs/planning/PHASE7.md (עשר הכרעות D1–D10, ארבע השלמות, 20 קריטריוני קבלה), ותוצר הפאזה ב-docs/IA.md. עבר שבעה סבבים מול Codex ב-05.09.2026, בשני שלבים נפרדים: ארבעה סבבי הכרעות שסגרו את D1–D10 ואת ארבע ההשלמות, ואחריהם שלושה סבבי ביקורת מסמכים על PHASE7.md ו-IA.md. ✅ Codex אישר סופית את המסמכים ולא מצא ממצא נוסף, והמשתמש אישר במפורש 05.09.2026; ייחוס האישור ב-S10, ב-S11 וביומן ההכרעות עודכן בהתאם באותו מועד. שני שדות חוזה נדחו לכאן במפורש מפאזה 6 (PHASE6.md:302 ו-PHASE6.md:476): propensity_band ו-evidence_level. אחד עשר ממצאים אומתו מול הקבצים השמורים, ושישה מהם שינו הכרעה: גבולות ה-OOD שונים בין P2/P3/P4 (customer_acquisition_cost min 400 מול 500, followup_3 min 2 מול 1, not_closed max 20 מול 19) ולכן OOD הוא מצב של פאנל ולא של טופס · top_two_overlap=true ולכן מצב אין-מנצחת-ודאית הוא ברירת המחדל של הסימולטור ולא מקרה קצה · conformal_coverage=0.9289 מול alpha=0.05 · 13 פיצ'רי קלט בלבד, בלי leads_not_answered ובלי referred, ולכן שניים מששת ה-invariants אינם ישימים · כל 13 השדות ב-NOT_NULL_INT_COLUMNS ולכן כולם חובה · funnel_records נושא grant select to authenticated עם policy organization=northbound ולכן prefill מהטבלה בר-ביצוע · seeds 42/43/44/45, ארבעה פיצולים נפרדים · scripts/train.py:407-414 חותך את הגבול התחתון באפס. שני תיקוני SPEC. S10 (אומת כמספר פנוי: בשימוש S1 ו-S6 עד S9; S2 עד S5 לא הונפקו): רמת הראיות אינה משנה את גבולות הטווח, והטווח נקבע בשיטה בלבד. S11, נמצא בביקורת המסמכים: סתירה פנימית ב-SPEC בין § Dataviz (כותרות ומקרא בעברית) לבין § שפת הגרפים (כותרות, צירים ומקרא באנגלית) — § שפת הגרפים גובר, כהכרעה המאוחרת מסבב 8 שחלה במפורש גם על הגרפים החיים, והשורה ב-§ Dataviz תוקנה כשארית מיושנת. שש שגיאות של קלוד נתפסו בביקורת ותוקנו: הצדקה מעגלית ב-D1 (גזירת ספים מעקומות הכיול של ה-Holdout, אחרי שגזירה מה-Holdout נפסלה) · ספירת ה-invariants ב-D4 (ארבעה ישימים ועוד כלל מפורש אחד, לא חמישה ועוד אחד) · הטענה שרוחב הטווח ב-P2 קבוע לכל הרשומות (החיתוך באפס מקצר אותו כאשר התחזית קטנה מ-q) · ההצהרה שהמודל לא ראה את רשומת ה-prefill (הפיצולים נפרדים למשימות) · שפת הגרפים ב-IA.md, שנבעה מהיצמדות לשורה המיושנת ב-SPEC והובילה לגילוי S11 · טבלת OOD שהציגה שלושה פיצ'רים נבדלים במקום שבעה. שגיאה שביעית נתפסה באימות עצמי: 1.1 כפול 0.4635 שווה 50.985 אחוז ולא 50.99, ערך על גבול עיגול — תוקן ל-3 ספרות עם כלל מפורש שההשוואה תמיד מול 0.9/1.1 כפול base_rate מ-meta.json. ארבע השלמות מקורות נתונים: התפלגות calls_to_closed אינה ב-followup_insight ומצטברת בצד השרת מ-funnel_records בלי view שלישי · גרסאות המודלים הוסרו מ-Overview ונשארות בפרטי פאנלי התוצאה · מדדי CV ו-Holdout נקראים בצד השרת מ-metrics.json, ועקומות הכיול ו-SHAP נשארות ב-REPORT.md בלבד · budget_tier_insight אינו מחזיר טייר ריק ולכן שורת gap אינה מומצאת. סבב ביקורת מסמכים שני תיקן שלוש טעויות נוספות: שם טייר NULL אינו הופך את conversion_rate ל-NULL, שכן ה-view מחשב avg גם לקבוצה הזו — הערכים שחזרו מוצגים כמות שהם ו-N/A נובע רק מכך שהמדד עצמו חסר · אפס שורות אינו הוכחת חוסר הרשאה: 401 ו-403 נקבעים מקוד הסטטוס בלבד, ו-200 עם אפס שורות למשתמש מורשה הוא שגיאת זמינות נתונים ולא ערך עסקי · אגרגציה על funnel_records חייבת לקרוא את כל העמודים, שכן תקרת ברירת המחדל היא 1,000 שורות מול 3,163 באוכלוסייה, עם סדר יציב לפי source_row_id ואימות סגירות מול ספירה עצמאית של האוכלוסייה המסוננת ולא מול אורך הרשימה שהתקבלה, שהוא בדיקה מעגלית שקטיעה עוברת אותה. דפוס העימוד של fetch_all_rows() ב-scripts/verify_data_contract.py:44 מאומץ ומותאם בפאזה 9, שכן הפונקציה עצמה מקבעת select כוכבית בלי סינון ואינה מתאימה כמות שהיא. בורר ה-prefill, לעומת זאת, רשאי להציג מבחר מוגבל ומסודר כי הוא מציע דוגמאות ואינו מחשב אגרגט, ובלבד שאינו מוצג כרשימה מלאה. באותו סבב הוסרו גם שאריות במסמך: גרסאות המודלים ב-Overview ועקומת הכיול בפאנל P4. docs/IA.md נכתב בשלב התכנון כטיוטת תוצר שהוכנה לביקורת, וממצאי ביקורת המסמכים תוקנו בשלב התכנון ולא נדחו לביצוע. planning_status עבר outline_only ⇒ planning_in_progress ⇒ approved_for_execution, האחרון על בסיס אישור מפורש של המשתמש 05.09.2026. ⚠ אישור התכנון אינו הוראת ביצוע: execution_status נשאר not_started — אין ענף design/ia, אין commit ואין PR עד להוראה נפרדת ומפורשת. אפס קריאות Stitch, גם קריאה — העיצוב החזותי הוא פאזה 10."},
   { num:8, name:"נעילת חוזה API", branch:"feat/api-contract", execution_status:"not_started", planning_status:"outline_only",
     items:["סכמות OpenAPI לפי צרכי המסכים מפאזה 7","14 שדות חוזה התגובה, לכל טווח interval_method","interval_method כבר קנוני ב-SPEC (split_conformal / bootstrap_percentile) — הפאזה מקבעת בסכמה ואינה מכריעה"],
     accept:{product:"סכמות OpenAPI נעולות",
@@ -953,6 +995,30 @@ function gateHtml(p, next){
     </div>`;
 }
 
+// תקציר תוכן בלבד — שמות וסטטוסים נלקחים מ-PHASES, ללא מקור סטטוס נוסף.
+const PHASE_SUMMARIES = {
+  0: {text:"אומתו נתוני המקור והטענות באפיון, הופרדו חוקי תקינות מציפיות הדאטהסט ונרשמו הכרעות לפני המימוש.", links:[["docs/planning/PHASE0.md","אימות והכרעות"]]},
+  1: {text:"הוקמו שלד FastAPI עם health-check, סביבת תלויות נעולה, repository ו־CI. ה־CSV נשאר מחוץ ל־Git.", links:[["app/main.py","שלד השירות"],["requirements.txt","תלויות"],[".github/workflows/ci.yml","CI"]]},
+  2: {text:"השירות נפרס ב־Render; תועדו אימות גישה ציבורית, פריסה אוטומטית והתאוששות לאחר restart.", links:[["docs/planning/PHASE2.md","תכנון הפריסה"],["render.yaml","הגדרת הפריסה"]]},
+  3: {text:"הוקמו סכמת הנתונים, טעינת המקור, views והרשאות RLS. תועדו בדיקות הנתונים והגישה לפי סוג המשתמש.", links:[["docs/planning/PHASE3.md","נתונים והרשאות"]]},
+  4: {text:"מומשו התחברות בעברית, session, יציאה ובדיקות הרשאה. הוגדרה גישת דמו; אין הרשמה ציבורית.", links:[["docs/planning/PHASE4.md","אפיון ההתחברות"],["app/static/index.html","ממשק קיים"]]},
+  5: {text:"הושלמו ניקוי ובדיקות נתונים, מטריצת זמינות פיצ'רים וניתוחים תיאוריים של תקציב והמשך מעקב, כולל גרפים ומגבלות פרשנות.", links:[["docs/FINDINGS.md","ממצאים"],["docs/findings.json","נתוני הממצאים"],["docs/feature_matrix.md","מטריצת פיצ'רים"]]},
+  6: {text:"אומנו ונבחרו מודלי P2/P3/P4/P6 ונשמרו ארטיפקטים, metadata, מדדים, כיול, טווחים ותרשימי הסבר. הסגירה כוללת את חריגת S9: 24/25 קריטריונים, קריטריון 21 נכשל. חיבור המודלים ל־API שייך לפאזה 9.", links:[["docs/planning/PHASE6.md","פרוטוקולים וחריגות"],["models/metrics.json","מדדים שמורים"],["models/P6_simulation.json","סימולציית תקציב"]]}
+};
+
+function renderPlanningSummary(){
+  document.getElementById('planning-current-state').textContent = roadmapStateSummary().text;
+  document.getElementById('planning-phase-summaries').innerHTML = PHASES
+    .filter(p => p.execution_status === 'done')
+    .map(p => {
+      const summary = PHASE_SUMMARIES[p.num];
+      return `<div class="policy-card"><h2>${p.num}. ${esc(p.name)}</h2>` +
+        `<p>${esc(summary ? summary.text : 'הפאזה הושלמה; יש להוסיף תקציר תוצרים במסגרת הסגירה.')}</p>` +
+        (summary ? `<p>${summary.links.map(([path, label]) => `<a href="${esc(path)}">${esc(label)}</a>`).join(' · ')}</p>` : '') +
+        `</div>`;
+    }).join('');
+}
+
 function render(){
   const tl = document.getElementById('timeline');
   tl.innerHTML = '';
@@ -1027,6 +1093,7 @@ function render(){
     tl.appendChild(li);
   });
   updateProgress();
+  renderPlanningSummary();
 }
 
 /* שתי סקאלות נפרדות — אסור למזג לאחוז משולב אחד. */
