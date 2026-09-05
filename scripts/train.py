@@ -2384,11 +2384,23 @@ BASE_RATE = {"P3": 0.4635, "P4": 0.4271}
 AD_BUDGET_OOD_RANGE = (500.0, 20000.0)
 
 
-def observed_ad_budget_values(df: pd.DataFrame) -> list[float]:
-    """The distinct ad_budget values actually observed in the CSV
-    (D15) -- lets phase 9 tell "unseen value inside the training range"
-    apart from hard OOD (outside AD_BUDGET_OOD_RANGE)."""
-    return sorted(float(v) for v in df["ad_budget"].dropna().unique())
+def observed_ad_budget_values(train_frames: list[pd.DataFrame]) -> list[float]:
+    """The distinct ad_budget values observed across the given TRAIN
+    frames ONLY -- D15's field exists specifically to let phase 9 tell
+    "unseen value inside the training range" apart from hard OOD, so it
+    must reflect what training actually saw, not the raw CSV (which
+    also includes calibration and Holdout rows -- reading Holdout data
+    for any purpose is exactly what D22 forbids in checkpoint 15,
+    regardless of how benign the field looks). Takes every task's
+    train_df as a list and unions them, so a value missing from one
+    task's own draw but present in another's is still captured;
+    verified empirically that even a SINGLE task's train (2,024+ rows)
+    already contains all 16 population-wide values, so this is not a
+    close call."""
+    values: set[float] = set()
+    for train_df in train_frames:
+        values.update(float(v) for v in train_df["ad_budget"].dropna().unique())
+    return sorted(values)
 
 
 def ood_bounds(train_df: pd.DataFrame, task: str) -> dict:
@@ -2468,17 +2480,26 @@ def _sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def build_task_artifact(task: str, df: pd.DataFrame, metrics: dict, git_sha: str, training_date: str) -> tuple[object, dict]:
+def build_task_artifact(task: str, df: pd.DataFrame, metrics: dict, git_sha: str, training_date: str,
+                         observed_ad_budget: list[float]) -> tuple[object, dict]:
     """Builds the deployed object (fitted Pipeline for P2/P6, the
     calibrated wrapper for P3/P4 -- D14) and its full .meta.json (D15)
     for one task, using ONLY train/calibration and the already-locked
     choices already sitting in `metrics` (checkpoints 6-13's frozen
     results) -- never a Holdout-touching function (D22). `checksums`
-    is filled in by the caller once the .joblib bytes actually exist."""
+    is filled in by the caller once the .joblib bytes actually exist.
+    `observed_ad_budget` must already be computed from TRAIN frames
+    only (observed_ad_budget_values) -- this function never reads
+    ad_budget off `df` directly, precisely so it cannot accidentally
+    pick up a Holdout row's value. population_n['holdout'] is read
+    from the ALREADY-frozen {task}_holdout metrics checkpoint 14 wrote
+    (n_holdout) -- never recomputed via split_task, which would
+    re-derive a Holdout-sized number from scratch every time this runs
+    instead of reusing the one number that's supposed to exist once."""
     winner = metrics[f"{task}_selection"]["winner"]
     results = metrics[task]
     train_df = build_task_train_frame(df, task)
-    parts = split_task(df, task)  # row counts only -- never scores anything, not a Holdout-touching function
+    parts = split_task(df, task)  # train/calibration row counts only -- required to fit the artifact anyway
 
     if task in ("P3", "P4"):
         cal = calibrate_task_winner(task, df, results, winner)
@@ -2498,12 +2519,12 @@ def build_task_artifact(task: str, df: pd.DataFrame, metrics: dict, git_sha: str
         "population_n": {
             "train": int(len(parts["train"])),
             "calibration": 0 if parts["calibration"] is None else int(len(parts["calibration"])),
-            "holdout": int(len(parts["holdout"])),
+            "holdout": metrics[f"{task}_holdout"]["n_holdout"],  # frozen at checkpoint 14, never recomputed
         },
         "seed": SEEDS[task],
         "cv_folds": 5,
         "ood_bounds": ood_bounds(train_df, task),
-        "observed_ad_budget_values": observed_ad_budget_values(df),
+        "observed_ad_budget_values": observed_ad_budget,
         "fit_sources": fit_sources_for_task(task),
         "artifact_role": "evaluation",  # the Evaluation artifact IS what's deployed (SPEC) -- no refit on train+holdout
         "training_date": training_date,
@@ -2540,11 +2561,16 @@ def build_all_artifacts(df: pd.DataFrame, metrics: dict, models_dir: Path) -> di
     happened at checkpoint 10). Returns a summary for run_metadata.json.
     Never calls a Holdout-touching function anywhere in this path."""
     models_dir.mkdir(parents=True, exist_ok=True)
+    # Computed ONCE, from every task's train_df -- never from `df`
+    # directly (D22: observed_ad_budget_values must never see a
+    # calibration/Holdout row's ad_budget).
+    observed_ad_budget = observed_ad_budget_values([build_task_train_frame(df, t) for t in ("P2", "P3", "P4", "P6")])
+    git_sha, training_date = git_sha7(), dt.date.today().strftime("%Y%m%d")
     summary = {}
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
         for task in ("P2", "P3", "P4", "P6"):
-            artifact, meta = build_task_artifact(task, df, metrics, git_sha7(), dt.date.today().strftime("%Y%m%d"))
+            artifact, meta = build_task_artifact(task, df, metrics, git_sha, training_date, observed_ad_budget)
             joblib_path = models_dir / f"{task}.joblib"
             joblib.dump(artifact, joblib_path)
             meta["checksums"]["artifact_sha256"] = _sha256_file(joblib_path)

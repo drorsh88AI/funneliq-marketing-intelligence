@@ -1822,9 +1822,28 @@ def test_p4_sensitivity_holdout_comparison_raises_if_populations_ever_overlap(df
 # ---------------------------------------------------------------------------
 
 def test_observed_ad_budget_values_is_sorted_and_unique(df):
-    values = tr.observed_ad_budget_values(df)
+    train_df = tr.build_task_train_frame(df, "P2")
+    values = tr.observed_ad_budget_values([train_df])
     assert values == sorted(set(values))
     assert all(isinstance(v, float) for v in values)
+    assert set(values) == set(float(v) for v in train_df["ad_budget"].dropna().unique())
+
+
+def test_observed_ad_budget_values_never_sees_a_frame_it_is_not_given(df):
+    """D22 fix: observed_ad_budget_values must take train frame(s)
+    directly, never the full df -- a sentinel value planted in a frame
+    that stands in for Holdout (never passed to the function) must be
+    structurally impossible to see, not merely absent by chance."""
+    train_df = tr.build_task_train_frame(df, "P2")
+    sentinel = 999_999.0
+    assert sentinel not in set(train_df["ad_budget"])
+
+    holdout_like_df = train_df.copy()
+    holdout_like_df.loc[holdout_like_df.index[0], "ad_budget"] = sentinel  # never passed in below
+
+    result = tr.observed_ad_budget_values([train_df])  # only the real train frame goes in
+    assert sentinel not in result
+    assert set(result) == set(float(v) for v in train_df["ad_budget"].dropna().unique())
 
 
 def test_ood_bounds_uses_train_only_and_locks_ad_budget_range(df):
@@ -1885,22 +1904,46 @@ def _fake_measure_rss(pipeline, sample, tmp_dir):
 def _checkpoint15_fake_metrics() -> dict:
     """A minimal, already-frozen metrics.json stand-in -- exactly the
     shape build_all_artifacts reads (winner + best_params per task,
-    P2's conformal quantile, P3/P4's calibration status). Never
-    contains a Holdout-derived number this test could accidentally
-    depend on."""
+    P2's conformal quantile, P3/P4's calibration status, each task's
+    frozen n_holdout). The n_holdout values are arbitrary sentinels
+    (not the real 633/695) specifically so a test can tell "read from
+    here" apart from "recomputed via split_task" -- see
+    test_build_task_artifact_reads_holdout_count_from_frozen_metrics."""
     return {
         "P2": {"stub": {"role": "candidate", "best_params": {}}},
         "P2_selection": {"winner": "stub"},
         "P2_conformal": {"q": 1.2345, "alpha": 0.05},
+        "P2_holdout": {"n_holdout": 111},
         "P3": {"stub": {"role": "candidate", "best_params": {}}},
         "P3_selection": {"winner": "stub"},
         "P3_calibration": {"calibration_status": "calibrated", "calibration_method": "sigmoid"},
+        "P3_holdout": {"n_holdout": 222},
         "P4": {"stub": {"role": "candidate", "best_params": {}}},
         "P4_selection": {"winner": "stub"},
         "P4_calibration": {"calibration_status": "calibrated", "calibration_method": "sigmoid"},
+        "P4_holdout": {"n_holdout": 333},
         "P6": {"p6_1_reference": {"role": "candidate", "best_params": {}}},
         "P6_selection": {"winner": "stub"},
+        "P6_holdout": {"n_holdout": 444},
     }
+
+
+def test_build_task_artifact_reads_holdout_count_from_frozen_metrics_not_recomputed(df, monkeypatch):
+    """D22 fix: population_n['holdout'] must come from the ALREADY
+    frozen {task}_holdout.n_holdout checkpoint 14 wrote -- never
+    recomputed by re-partitioning df via split_task. The fake metrics'
+    n_holdout values (111/222/333/444) are deliberately far from the
+    real split sizes (633/695) so a pass-through can be told apart from
+    a fresh computation, not just checked for being "some positive
+    number"."""
+    monkeypatch.setattr(tr, "build_fitted_candidate", _fake_build_any_task)
+    monkeypatch.setattr(tr, "build_task_calibration_frame", lambda given_df, t: _synthetic_calibration_frame(t))
+
+    fake_metrics = _checkpoint15_fake_metrics()
+    observed = tr.observed_ad_budget_values([tr.build_task_train_frame(df, "P2")])
+    for task, expected_n_holdout in (("P2", 111), ("P3", 222), ("P4", 333), ("P6", 444)):
+        _, meta = tr.build_task_artifact(task, df, fake_metrics, "abc1234", "20260101", observed)
+        assert meta["population_n"]["holdout"] == expected_n_holdout
 
 
 def test_build_all_artifacts_never_calls_a_holdout_function(df, monkeypatch, tmp_path):
@@ -1937,6 +1980,17 @@ def test_build_all_artifacts_never_calls_a_holdout_function(df, monkeypatch, tmp
     assert tr.read_metrics_json(tmp_path / "P6.meta.json")["interval_method"] == "bootstrap_percentile"
     assert tr.read_metrics_json(tmp_path / "P6.meta.json")["p6_log1p_smearing"] != 0.0
 
+    # D22: observed_ad_budget_values must match the TRAIN-only union exactly --
+    # not a superset that could only be explained by calibration/Holdout rows.
+    expected_ad_budget = set(tr.observed_ad_budget_values(
+        [tr.build_task_train_frame(df, t) for t in ("P2", "P3", "P4", "P6")]
+    ))
+    for task in ("P2", "P3", "P4", "P6"):
+        meta = tr.read_metrics_json(tmp_path / f"{task}.meta.json")
+        assert set(meta["observed_ad_budget_values"]) == expected_ad_budget
+        # the fake metrics' n_holdout sentinels (111/222/333/444), never a recomputed count
+        assert meta["population_n"]["holdout"] in (111, 222, 333, 444)
+
 
 def test_build_task_artifact_raises_if_calibration_genuinely_failed(df, monkeypatch):
     """P3/P4 only: build_task_artifact must never silently deploy an
@@ -1949,5 +2003,6 @@ def test_build_task_artifact_raises_if_calibration_genuinely_failed(df, monkeypa
                          lambda given_df, t: pd.DataFrame({**{c: [0.0] * 10 for c in tr.model_feature_columns(t)},
                                                             tr.TARGET[t]: (["No"] * 10 if t == "P4" else [0] * 10)}))
 
+    observed = tr.observed_ad_budget_values([tr.build_task_train_frame(df, "P4")])
     with pytest.raises(RuntimeError, match="calibration failed"):
-        tr.build_task_artifact("P4", df, _checkpoint15_fake_metrics(), "abc1234", "20260101")
+        tr.build_task_artifact("P4", df, _checkpoint15_fake_metrics(), "abc1234", "20260101", observed)
