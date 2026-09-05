@@ -842,10 +842,10 @@ JSON/SVG/`ROADMAP.html` תקינים; הערה לא-חוסמת אחת (trailing 
 ה-CI על ה-PR החדש → עדכון הראיה. לא הורץ אימון/Bootstrap/Holdout בסבב
 תיקון זה. ✅ **PR #18 נפתח אחרי commit `a883ba5`**:
 https://github.com/drorsh88AI/funneliq-marketing-intelligence/pull/18
-— CI ירוק על שלוש ההרצות (push+PR+push נוסף). ✅ המשתמש אימת עצמאית:
+— CI ירוק על שלוש ההרצות (push+PR+push נוסף). ✅ Codex אימת:
 PR #17 סגור ללא מיזוג, PR #18 פתוח ותקין עם CI ירוק, worktree נקי,
-pytest 307/307 — בלי הרצת Holdout/אימון/Bootstrap. Codex אישר סופית
-את checkpoint 16 לאחר בדיקת commits `a883ba5`/`03a75ed`, מצב
+pytest 307/307 — בלי הרצת Holdout/אימון/Bootstrap — ואישר סופית
+את checkpoint 16 על בסיס בדיקת commits `a883ba5`/`03a75ed`, מצב
 PR #17/#18, והרצת pytest המלאה; המשתמש העביר לקלוד את הוראת הסגירה —
 `done`. **קריטריון 21 נשאר FAILED (S9) — 24/25 קריטריוני קבלה, לא
 25/25.** ⛔ **PR #18 לא מוזג — ממתין להוראת מיזוג מפורשת ונפרדת.**
