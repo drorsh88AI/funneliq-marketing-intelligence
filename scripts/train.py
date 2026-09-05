@@ -1903,16 +1903,19 @@ EARLY_FUNNEL_FEATURES = ["ad_budget", "num_leads", "leads_answered", "followup_1
 
 
 def train_p4_early_funnel(df: pd.DataFrame) -> dict:
-    """D17: hyperparameters "inherited" -- from P4's actual WINNER
-    (checkpoint 10: LogisticRegression(max_iter=50000)), not CatBoost.
-    SPEC's D17/D18 phrasing is "מהזוכה של P4" (from P4's winner) in
-    both the population-sensitivity row (D18, explicit) and this one
-    (parallel phrasing, same table) -- neither names CatBoost, and at
-    planning time P4's eventual winner wasn't yet known. Consistent
-    with D18's explicit wording and with checkpoint 14's planned
-    comparison being apples-to-apples against P4's actual deployed
-    model. Shares P4's own split/folds (same population, same seed).
-    No search. research_only: never a deployment candidate."""
+    """D17 does NOT name a model family for this experiment (unlike
+    D18's population-sensitivity, which explicitly says "בהיפר-
+    פרמטרים בירושה מהזוכה של P4") -- an earlier version of this
+    docstring incorrectly claimed the two rows were parallel-worded;
+    Codex review caught that (S8). Model family here is a locked
+    interpretation decision, approved by the user 2026-09-05:
+    LogisticRegression(max_iter=50000), P4's actual winner (checkpoint
+    10), no tuning -- so the ONLY change from the deployed model is
+    feature availability (4 early-funnel columns), giving a true
+    apples-to-apples comparison. Locked in SPEC.md's P4 package
+    description (§שש החבילות) and PHASE6.md's D17/§ג (S8). Shares
+    P4's own split/folds (same population, same seed). No search.
+    research_only: never a deployment candidate."""
     task = "P4"
     train_df = build_task_train_frame(df, task)
     y = encode_referred_target(train_df[TARGET[task]])
@@ -1931,8 +1934,12 @@ def train_p4_early_funnel(df: pd.DataFrame) -> dict:
 def train_p4_population_sensitivity(df: pd.DataFrame) -> dict:
     """D18/S6: trains on 3,500 minus P4's 633 Holdout rows (= 2,867),
     own internal folds (seed 46), hyperparameters inherited from P4's
-    actual winner (LogisticRegression(max_iter=50000), same reasoning
-    as train_p4_early_funnel) -- no new tuning, so they stay
+    actual winner (LogisticRegression(max_iter=50000)) -- D18 states
+    this explicitly ("בהיפר-פרמטרים בירושה מהזוכה של P4"), unlike
+    train_p4_early_funnel's model choice, which D17 leaves open and
+    which is a separate, locked interpretation decision (S8) that
+    happens to land on the same model family for the same reason. No
+    new tuning here either, so the inherited hyperparameters stay
     Holdout-clean too. ⛔ Does NOT touch the P4 Holdout here --
     checkpoint 13 only trains this model and reports its OWN internal
     CV stability; the real comparison against P4's primary model on
