@@ -16,8 +16,8 @@ alone is known directly at prediction time; nothing else is, regardless
 of whether a candidate column happens to be campaign-level or
 customer-level ("שאר המשפך" is illustrative wording there, not a
 narrower rule -- every other P6 candidate, `purchased` included, is
-substituted from a median profile per budget tier at serving time
-(חבילה 6), not read from the column itself. That is exactly what
+substituted from a median profile per exact ad_budget level at serving
+time (חבילה 6), not read from the column itself. That is exactly what
 "Derived" (נגזרת) names, and it applies to P6 only -- P2/P3/P4's
 snapshot (end of campaign cycle) has every candidate column available
 directly, no substitution needed.
@@ -92,10 +92,10 @@ FEATURES = {task: _feature_list(task) for task in TARGET}
 # on a granularity argument -- "customer-level, not part of המשפך" -- that
 # does not answer the availability question SPEC.md's snapshot rule
 # actually asks. Every candidate other than ad_budget, purchased included,
-# is substituted from the median profile per budget tier at serving time
-# (חבילה 6), computed from training data within each fold. Still a real,
-# observed training feature; only the SERVING-time value is
-# profile-derived, not the training signal itself.
+# is substituted from the median profile per exact ad_budget level at
+# serving time (חבילה 6), computed from training data within each fold.
+# Still a real, observed training feature; only the SERVING-time value
+# is profile-derived, not the training signal itself.
 DERIVED_FROM_PROFILE = {
     "P6": frozenset(FEATURES["P6"]) - {"ad_budget"},
 }
