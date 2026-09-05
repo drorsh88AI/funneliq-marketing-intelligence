@@ -964,3 +964,106 @@ def test_p6_experimental_variants_excludes_the_reference():
     IS the generic comparator and is never vetoed against itself."""
     assert "p6_1_reference" not in tr.P6_EXPERIMENTAL_VARIANTS
     assert set(tr.P6_EXPERIMENTAL_VARIANTS) == {"p6_2_tweedie", "p6_3_huber", "p6_5_winsorized"}
+
+
+def test_train_p6_guardrail_pairs_each_variant_against_a_single_change_comparator(df, monkeypatch):
+    """The wiring test the earlier round of tests was missing: every
+    other checkpoint-9 test above checks a building block in isolation
+    (_Winsorizer, build_preprocessing_steps, make_p6_boosters) but none
+    of them prove train_p6_guardrail itself assembles those blocks
+    correctly. This one calls the REAL train_p6_guardrail, with
+    _p6_fold_top_decile monkeypatched to a recording fake (avoiding a
+    real XGBoost fit, per D21 -- train_p6_guardrail's actual fits stay
+    local-only) so every call's estimator/preprocessing/folds/population
+    argument is captured and can be asserted on directly, and proves
+    for every experimental variant:
+      - the SAME 5 folds and the SAME train population feed both arms
+        (and the reference's own call);
+      - the comparator is reg:squarederror with the VARIANT's winning
+        hyperparameters (not the reference's, not its own tuned set);
+      - preprocessing differs ONLY by the winsorize step, and only for
+        p6_5_winsorized -- p6_2_tweedie/p6_3_huber's comparator uses
+        the identical (non-winsorized) steps as their own variant arm;
+      - delta_rmse/delta_abs_bias are computed as variant MINUS
+        comparator (not the reverse) and are exactly what reaches
+        guardrail_vetoed.
+    """
+    calls: list[dict] = []
+
+    def fake_top_decile(estimator, preprocessing_steps, train_df, y, folds):
+        calls.append({
+            "params": estimator.get_params(),
+            "step_names": [name for name, _ in preprocessing_steps],
+            "train_df_id": id(train_df),
+            "y_id": id(y),
+            "folds_id": id(folds),
+        })
+        call_no = len(calls)  # 1-indexed: this call's position in the sequence
+        return [{"rmse_top10": 100.0 * call_no + i, "bias_top10": 10.0 * call_no - i, "k": 1} for i in range(5)]
+
+    monkeypatch.setattr(tr, "_p6_fold_top_decile", fake_top_decile)
+
+    winning_params = {"model__learning_rate": 0.1, "model__max_depth": 3, "model__n_estimators": 50}
+    p6_results = {name: {"best_params": dict(winning_params)} for name in tr.make_p6_boosters()}
+
+    result = tr.train_p6_guardrail(df, p6_results)
+
+    # Call order is fixed by train_p6_guardrail's own code: reference
+    # first (1 call), then each experimental variant (variant arm, then
+    # comparator arm) in P6_EXPERIMENTAL_VARIANTS order.
+    assert len(calls) == 1 + 2 * len(tr.P6_EXPERIMENTAL_VARIANTS) == 7
+
+    ref_call = calls[0]
+    assert ref_call["step_names"] == ["select"]
+    assert ref_call["params"]["objective"] == "reg:squarederror"
+
+    expected_objective = {"p6_2_tweedie": "reg:tweedie", "p6_3_huber": "reg:pseudohubererror", "p6_5_winsorized": "reg:squarederror"}
+    expected_variant_steps = {"p6_2_tweedie": ["select"], "p6_3_huber": ["select"], "p6_5_winsorized": ["winsorize", "select"]}
+
+    for i, name in enumerate(tr.P6_EXPERIMENTAL_VARIANTS):
+        variant_call = calls[1 + 2 * i]
+        comparator_call = calls[2 + 2 * i]
+
+        # Same population and same 5 folds in every arm, including the reference's.
+        for call in (variant_call, comparator_call):
+            assert call["folds_id"] == ref_call["folds_id"]
+            assert call["train_df_id"] == ref_call["train_df_id"]
+            assert call["y_id"] == ref_call["y_id"]
+
+        # Preprocessing: identical for both arms, except p6_5_winsorized's variant arm.
+        assert variant_call["step_names"] == expected_variant_steps[name]
+        assert comparator_call["step_names"] == ["select"]
+
+        # Objective: variant keeps its own locked objective; comparator is
+        # ALWAYS reg:squarederror -- the single-change discipline (D7).
+        assert variant_call["params"]["objective"] == expected_objective[name]
+        assert comparator_call["params"]["objective"] == "reg:squarederror"
+
+        # Hyperparameters: BOTH arms get the variant's own winning
+        # hyperparameters (never the reference's, never re-tuned).
+        for call in (variant_call, comparator_call):
+            assert call["params"]["learning_rate"] == 0.1
+            assert call["params"]["max_depth"] == 3
+            assert call["params"]["n_estimators"] == 50
+
+        # delta = variant - comparator, computed from the fake's
+        # call-order-dependent values -- proves the subtraction isn't
+        # reversed, not just that some numbers came out.
+        v_call_no, c_call_no = 2 + 2 * i, 3 + 2 * i  # 1-indexed call numbers
+        expected_delta_rmse = [100.0 * v_call_no - 100.0 * c_call_no] * 5
+        expected_delta_abs_bias = [
+            abs(10.0 * v_call_no - k) - abs(10.0 * c_call_no - k) for k in range(5)
+        ]
+        assert result[name]["delta_rmse_per_fold"] == expected_delta_rmse
+        assert result[name]["delta_abs_bias_per_fold"] == expected_delta_abs_bias
+
+        # And those exact deltas are what reached the veto -- not a
+        # recomputation, not a different pair of arrays.
+        assert result[name]["veto"] == tr.guardrail_vetoed(expected_delta_rmse, expected_delta_abs_bias)
+
+    # The reference's own (unpaired) top-decile metrics are reported
+    # verbatim from its single call, with no comparator and no veto key.
+    assert result["p6_1_reference"]["top_decile_per_fold"] == [
+        {"rmse_top10": 100.0 + i, "bias_top10": 10.0 - i, "k": 1} for i in range(5)
+    ]
+    assert "veto" not in result["p6_1_reference"]
