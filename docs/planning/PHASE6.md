@@ -824,6 +824,7 @@ checkpoint 15 (ארטיפקטים + `.meta.json` מלא, D15; D22 — לא לג�
 בכל ארבעת הארטיפקטים; כל ארבעתם נטענו בתהליכי Python נפרדים וחזו
 בהצלחה; `checksums.artifact_sha256` אומת מול sha256 בפועל של כל קובץ.
 קריטריון 21 נשאר FAILED (S9) — checkpoint זה לא נוגע בו. אימות עצמי
-בלבד — `awaiting_approval`, לא `done`.
+בלבד. ✅ המשתמש אישר במפורש 05.09.2026 (commits `4ddf09d`, `079f291`) —
+`done`. אין הוראת ביצוע ל-checkpoint 16.
 
 ראה `ROADMAP.html` §checkpoints 1–15 לראיה המלאה של כל אחד.
