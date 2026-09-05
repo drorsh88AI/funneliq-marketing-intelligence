@@ -10,8 +10,8 @@ currently holds checkpoint 3's split layer, checkpoint 4's shared CV
 folds + preprocessing Pipelines, checkpoint 5's decision-rule pure
 functions (One-SE, the paired guardrail veto, Split Conformal's
 quantile, top-decile metrics, Lift@K) -- all built and tested before
-any model is trained -- and checkpoints 6-8's actual training (P2, P3,
-P4).
+any model is trained -- and checkpoints 6-9's actual training (P2, P3,
+P4, P6 + P6's paired guardrail crossover).
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from scripts.load_data import load_and_verify_csv  # noqa: E402
 
 import numpy as np
 import pandas as pd
-from sklearn.base import clone
+from sklearn.base import BaseEstimator, TransformerMixin, clone
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier, DummyRegressor
 from sklearn.linear_model import LinearRegression, LogisticRegression
@@ -172,7 +172,31 @@ def _add_budget_tier(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def build_preprocessing_steps(task: str, encode_budget_tier: bool) -> list[tuple[str, object]]:
+class _Winsorizer(BaseEstimator, TransformerMixin):
+    """P6-5's experimental variant (D7, SPEC.md's P6 candidate table):
+    clips each of `columns` to its [p1, p99] bounds, learned in fit()
+    from that call's rows only -- inside a Pipeline, fit() only ever
+    sees a fold's training rows, so bounds are always fold-local
+    training-only (SPEC: "נלמדת בתוך כל fold מנתוני האימון של אותו
+    fold"), never the population and never the target (winsorization is
+    features-only, SPEC forbids it on cumulative_profit outright).
+    transform() applies the SAME stored bounds to whatever it's given
+    (that fold's train or validation rows) -- clip(), not a re-fit."""
+    def __init__(self, columns: list[str]):
+        self.columns = columns
+
+    def fit(self, X: pd.DataFrame, y=None) -> "_Winsorizer":
+        self.bounds_ = {col: (X[col].quantile(0.01), X[col].quantile(0.99)) for col in self.columns}
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        out = X.copy()
+        for col, (lo, hi) in self.bounds_.items():
+            out[col] = out[col].clip(lo, hi)
+        return out
+
+
+def build_preprocessing_steps(task: str, encode_budget_tier: bool, winsorize: bool = False) -> list[tuple[str, object]]:
     """The Pipeline steps every model for this task starts with, before
     the model step (added by later checkpoints) -- numeric passthrough
     of model_feature_columns(task), no imputer (D5). P4 only: budget_tier
@@ -180,9 +204,14 @@ def build_preprocessing_steps(task: str, encode_budget_tier: bool) -> list[tuple
     pipeline computes it at serving time from raw features, not from a
     pre-tiered input -- either left as a raw category for CatBoost's
     native categorical handling (encode_budget_tier=False), or one-hot
-    encoded for the Logistic baseline (encode_budget_tier=True)."""
+    encoded for the Logistic baseline (encode_budget_tier=True).
+    winsorize=True (P6-5 only, D7) inserts _Winsorizer ahead of column
+    selection -- every other candidate/Baseline gets winsorize=False, so
+    P6-5's ONLY difference from Reference_P6 is this one step."""
     numeric_cols = model_feature_columns(task)
     steps: list[tuple[str, object]] = []
+    if winsorize:
+        steps.append(("winsorize", _Winsorizer(columns=numeric_cols)))
     column_transformers = [("numeric", "passthrough", numeric_cols)]
     if task == "P4":
         steps.append(("budget_tier", FunctionTransformer(_add_budget_tier)))
@@ -916,6 +945,171 @@ def train_p4(df: pd.DataFrame) -> dict:
     return results
 
 
+# ---------------------------------------------------------------------------
+# Checkpoint 9 -- P6: search + the paired guardrail crossover (D7) +
+# veto activation.
+# ---------------------------------------------------------------------------
+
+# D13's P6 metric set: RMSE is primary (SPEC.md's rationale -- the
+# simulator SUMS predictions, and expectation of a sum is the sum of
+# expectations, which squared loss targets; MAE targets the median).
+# MAE and R² are secondary, same multi-metric-search-with-one-refit
+# principle as every other task.
+P6_SCORING = {"rmse": "neg_root_mean_squared_error", "mae": "neg_mean_absolute_error", "r2": "r2"}
+P6_PRIMARY_METRIC = "rmse"
+P6_NEGATED_SCORERS = {"rmse", "mae"}
+
+# Locked objective parameters for P6-2/P6-3 (SPEC.md's P6 candidate
+# table) -- NOT searched, fixed at construction exactly like the
+# objective itself; only learning_rate/max_depth/n_estimators are
+# tuned (xgboost_param_distributions()), identical search space to
+# every other candidate so each stays a true single-change comparison.
+P6_LOCKED_OBJECTIVE_PARAMS = {
+    "p6_2_tweedie": {"objective": "reg:tweedie", "tweedie_variance_power": 1.5},
+    "p6_3_huber": {"objective": "reg:pseudohubererror", "huber_slope": 1.0},
+}
+# The three candidates the guardrail veto applies to (SPEC.md: "מצומצם
+# לוריאנטים הניסויים בלבד") -- p6_1_reference has no comparator and is
+# never vetoed.
+P6_EXPERIMENTAL_VARIANTS = ("p6_2_tweedie", "p6_3_huber", "p6_5_winsorized")
+
+
+def make_p6_boosters() -> dict:
+    """P6's four search candidates (SPEC.md §שש החבילות, חבילה 6): all
+    XGBRegressor so every guardrail comparison (D7) is a true single
+    change -- objective for Tweedie/Huber, preprocessing (winsorized
+    features) for P6-5. Each value is (estimator, param_distributions,
+    winsorize) -- winsorize=True only for p6_5_winsorized, threaded
+    through to build_preprocessing_steps by the caller."""
+    def _xgb(**locked):
+        return XGBRegressor(random_state=SEARCH_RANDOM_STATE, n_jobs=SEARCH_N_JOBS, verbosity=0, **locked)
+
+    return {
+        "p6_1_reference": (_xgb(objective="reg:squarederror"), xgboost_param_distributions(), False),
+        "p6_2_tweedie": (_xgb(**P6_LOCKED_OBJECTIVE_PARAMS["p6_2_tweedie"]), xgboost_param_distributions(), False),
+        "p6_3_huber": (_xgb(**P6_LOCKED_OBJECTIVE_PARAMS["p6_3_huber"]), xgboost_param_distributions(), False),
+        "p6_5_winsorized": (_xgb(objective="reg:squarederror"), xgboost_param_distributions(), True),
+    }
+
+
+def train_p6(df: pd.DataFrame) -> dict:
+    """Checkpoint 9's search: P6's four candidates (searched, 20 x 5
+    folds each = 400 fits total, SPEC.md's locked selection budget) +
+    two Baselines (Dummy, Linear), all on the same 5 shared folds over
+    P6's train set, on all three of D13's CV metrics (RMSE primary).
+    Baselines and p6_1_reference/p6_2/p6_3 share the standard
+    (non-winsorized) preprocessing; only p6_5_winsorized's own Pipeline
+    differs, by that one step. Selection (One-SE + RSS tie-break) is
+    checkpoint 10's job."""
+    task = "P6"
+    train_df = build_task_train_frame(df, task)
+    y = train_df[TARGET[task]]
+    folds = build_folds(df, task)
+    standard_steps = build_preprocessing_steps(task, encode_budget_tier=False)
+
+    results = {}
+    for name, (estimator, param_distributions, winsorize) in make_p6_boosters().items():
+        steps = build_preprocessing_steps(task, encode_budget_tier=False, winsorize=winsorize)
+        candidate = _search_candidate(
+            estimator, param_distributions, steps, train_df, y, folds,
+            P6_SCORING, refit=P6_PRIMARY_METRIC,
+        )
+        results[name] = _metric_summary(
+            candidate["fold_scores"], "candidate", candidate["best_params"], negated_scorers=P6_NEGATED_SCORERS,
+        )
+
+    baselines = {
+        "dummy": DummyRegressor(strategy="mean"),
+        "linear": LinearRegression(),
+    }
+    for name, estimator in baselines.items():
+        candidate = _baseline_candidate(estimator, standard_steps, train_df, y, folds, P6_SCORING)
+        role = "benchmark" if name == "dummy" else "baseline"
+        results[name] = _metric_summary(candidate["fold_scores"], role, negated_scorers=P6_NEGATED_SCORERS)
+
+    return results
+
+
+def _p6_fold_top_decile(estimator, preprocessing_steps, train_df: pd.DataFrame, y: np.ndarray, folds) -> list[dict]:
+    """Refits `estimator` fresh on each of the 5 shared folds' train
+    rows and evaluates top_decile_metrics (checkpoint 5) on that same
+    fold's own validation rows -- never the Holdout (SPEC.md: "בתוך
+    חלק ה-validation של כל fold... לעולם לא על ה-Holdout"). Needed
+    because RandomizedSearchCV's cv_results_ only exposes the scalar
+    scoring metrics (RMSE/MAE/R²), not per-row predictions, and the
+    guardrail's top-decile deltas (D7) require actual predictions."""
+    out = []
+    for train_idx, val_idx in folds:
+        pipeline = Pipeline(preprocessing_steps + [("model", clone(estimator))])
+        pipeline.fit(train_df.iloc[train_idx], y[train_idx])
+        pred = pipeline.predict(train_df.iloc[val_idx])
+        out.append(top_decile_metrics(y[val_idx], pred))
+    return out
+
+
+def train_p6_guardrail(df: pd.DataFrame, p6_results: dict) -> dict:
+    """Checkpoint 9's paired guardrail crossover (D7) + veto activation.
+    For each of the 3 experimental variants, refits BOTH the variant's
+    own winning config AND a single-change comparator (same winning
+    hyperparameters, reg:squarederror objective, standard/non-winsorized
+    preprocessing) on the same 5 folds, computes the paired top-decile
+    deltas, and runs checkpoint 5's guardrail_vetoed. p6_1_reference
+    gets its own top-decile metrics reported (SPEC: "עובר מעבר תחזיות
+    משלו לדיווח") with no comparator and no veto -- it IS the generic
+    comparator, and the veto's scope is explicitly limited to the 3
+    experimental variants (SPEC.md § מקבילת ההשוואה). Fit budget: 3
+    variants x 2 arms x 5 folds + 5 for p6_1_reference = 35, exactly
+    D7's stated budget."""
+    task = "P6"
+    train_df = build_task_train_frame(df, task)
+    y = train_df[TARGET[task]].to_numpy()
+    folds = build_folds(df, task)
+    standard_steps = build_preprocessing_steps(task, encode_budget_tier=False)
+    boosters = make_p6_boosters()
+
+    def _winning_params(name: str) -> dict:
+        return {k.removeprefix("model__"): v for k, v in p6_results[name]["best_params"].items()}
+
+    ref_estimator, _, _ = boosters["p6_1_reference"]
+    ref_fitted = clone(ref_estimator).set_params(**_winning_params("p6_1_reference"))
+    guardrail: dict = {
+        "p6_1_reference": {"top_decile_per_fold": _p6_fold_top_decile(ref_fitted, standard_steps, train_df, y, folds)},
+    }
+
+    for name in P6_EXPERIMENTAL_VARIANTS:
+        variant_estimator, _, winsorize = boosters[name]
+        winning_params = _winning_params(name)
+        variant_steps = build_preprocessing_steps(task, encode_budget_tier=False, winsorize=winsorize)
+
+        variant_fitted = clone(variant_estimator).set_params(**winning_params)
+        variant_topdecile = _p6_fold_top_decile(variant_fitted, variant_steps, train_df, y, folds)
+
+        # Single-change comparator (SPEC.md § מקבילת ההשוואה): same
+        # winning hyperparameters, reg:squarederror objective, standard
+        # preprocessing -- the ONE thing that differs from the variant
+        # is whichever single thing defines that variant (objective for
+        # Tweedie/Huber, the winsorize step for P6-5, which is already
+        # reg:squarederror so nothing else changes for it).
+        comparator = XGBRegressor(
+            objective="reg:squarederror", random_state=SEARCH_RANDOM_STATE, n_jobs=SEARCH_N_JOBS, verbosity=0,
+            **winning_params,
+        )
+        comparator_topdecile = _p6_fold_top_decile(comparator, standard_steps, train_df, y, folds)
+
+        delta_rmse = [v["rmse_top10"] - c["rmse_top10"] for v, c in zip(variant_topdecile, comparator_topdecile)]
+        delta_abs_bias = [abs(v["bias_top10"]) - abs(c["bias_top10"]) for v, c in zip(variant_topdecile, comparator_topdecile)]
+
+        guardrail[name] = {
+            "variant_top_decile_per_fold": variant_topdecile,
+            "comparator_top_decile_per_fold": comparator_topdecile,
+            "delta_rmse_per_fold": delta_rmse,
+            "delta_abs_bias_per_fold": delta_abs_bias,
+            "veto": guardrail_vetoed(delta_rmse, delta_abs_bias),
+        }
+
+    return guardrail
+
+
 def read_metrics_json(path: Path) -> dict:
     """Whatever tasks have been written so far -- {} if the file
     doesn't exist yet (checkpoint 6 is the first task to write it)."""
@@ -1018,6 +1212,24 @@ if __name__ == "__main__":
               f"ROC-AUC={r['mean_roc_auc']:.4f}+-{r['std_roc_auc']:.4f} "
               f"Lift@10%={r['mean_lift_at_10']:.4f}")
 
+    print("--- checkpoint 9: P6 search + paired guardrail crossover ---")
+    p6_results = train_p6(df)
+    for name, r in sorted(p6_results.items()):
+        print(f"P6/{name}: role={r['role']} "
+              f"RMSE={r['mean_rmse']:.4f}+-{r['std_rmse']:.4f} "
+              f"MAE={r['mean_mae']:.4f}+-{r['std_mae']:.4f} "
+              f"R2={r['mean_r2']:.4f}+-{r['std_r2']:.4f}")
+
+    p6_guardrail = train_p6_guardrail(df, p6_results)
+    ref = p6_guardrail["p6_1_reference"]["top_decile_per_fold"]
+    print(f"P6/p6_1_reference top-decile: rmse_top10={[round(d['rmse_top10'], 2) for d in ref]} "
+          f"bias_top10={[round(d['bias_top10'], 2) for d in ref]}")
+    for name in P6_EXPERIMENTAL_VARIANTS:
+        g = p6_guardrail[name]
+        print(f"P6/{name} guardrail: delta_rmse={[round(d, 2) for d in g['delta_rmse_per_fold']]} "
+              f"delta_abs_bias={[round(d, 2) for d in g['delta_abs_bias_per_fold']]} "
+              f"vetoed={g['veto']['vetoed']}")
+
     metrics_path = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
     all_metrics = read_metrics_json(metrics_path)
     all_metrics["P2"] = p2_results
@@ -1025,5 +1237,7 @@ if __name__ == "__main__":
     all_metrics["P3_weighted_comparison"] = p3_weighted
     all_metrics["P3_manual_rules"] = {"brief_rule": p3_brief_rule, "operational_rule": p3_operational_rule}
     all_metrics["P4"] = p4_results
+    all_metrics["P6"] = p6_results
+    all_metrics["P6_guardrail"] = p6_guardrail
     write_metrics_json(all_metrics, metrics_path)
     print(f"wrote {metrics_path}")

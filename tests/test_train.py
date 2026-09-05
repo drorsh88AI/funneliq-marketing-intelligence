@@ -858,3 +858,109 @@ def test_p4_cat_features_index_matches_model_feature_columns_length():
     checkpoint 4's pipeline-shape tests already pin down."""
     n_numeric = len(tr.model_feature_columns("P4"))
     assert n_numeric == 13  # 14 FEATURES["P4"] minus leads_not_answered (D4)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 9 -- P6 search + paired guardrail crossover (D7). Pure/
+# mechanical pieces only (D21): _Winsorizer's fit/transform contract,
+# build_preprocessing_steps(winsorize=True)'s structure, and
+# make_p6_boosters' locked objective params + clone-safety. train_p6 and
+# train_p6_guardrail (real fits) stay local-only, same precedent as
+# train_p2/train_p3/train_p4.
+# ---------------------------------------------------------------------------
+
+def test_winsorizer_fit_computes_column_wise_p1_p99_from_the_given_rows():
+    train = pd.DataFrame({"a": list(range(100)), "b": list(range(100, 200))})
+    w = tr._Winsorizer(columns=["a", "b"])
+    w.fit(train)
+    assert w.bounds_["a"] == (train["a"].quantile(0.01), train["a"].quantile(0.99))
+    assert w.bounds_["b"] == (train["b"].quantile(0.01), train["b"].quantile(0.99))
+
+
+def test_winsorizer_transform_clips_to_the_fitted_bounds_not_a_recomputation():
+    """The bounds come from fit()'s rows only -- transform() applies
+    them unchanged to whatever it's given, even values far outside what
+    fit() ever saw. This is the fold-isolation contract D7/D8א require:
+    a validation fold's own extreme values must never widen the bounds
+    learned from its fold's training rows."""
+    train = pd.DataFrame({"a": list(range(100))})  # p1~0.99, p99~98.01
+    w = tr._Winsorizer(columns=["a"]).fit(train)
+    lo, hi = w.bounds_["a"]
+
+    val = pd.DataFrame({"a": [-1000, 0, 50, 99, 1000]})
+    out = w.transform(val)
+    assert out["a"].iloc[0] == lo   # far below train's p1 -> clipped to train's bound
+    assert out["a"].iloc[1] == lo   # 0 is also below lo here -> clipped
+    assert out["a"].iloc[2] == 50   # inside bounds -> unchanged
+    assert out["a"].iloc[3] == hi   # above train's p99 -> clipped to train's bound
+    assert out["a"].iloc[4] == hi   # far above -> clipped to the same bound, not re-fit
+    assert w.bounds_["a"] == (lo, hi)  # transform never mutates bounds_
+
+
+def test_winsorizer_transform_does_not_mutate_the_input_frame():
+    train = pd.DataFrame({"a": [1, 2, 3, 1000]})
+    w = tr._Winsorizer(columns=["a"]).fit(train)
+    before = train.copy()
+    w.transform(train)
+    pd.testing.assert_frame_equal(train, before)
+
+
+def test_build_preprocessing_steps_winsorize_true_adds_a_winsorize_step_before_select():
+    steps = tr.build_preprocessing_steps("P6", encode_budget_tier=False, winsorize=True)
+    assert [name for name, _ in steps] == ["winsorize", "select"]
+    winsorizer = dict(steps)["winsorize"]
+    assert isinstance(winsorizer, tr._Winsorizer)
+    assert winsorizer.columns == tr.model_feature_columns("P6")
+
+
+def test_build_preprocessing_steps_winsorize_false_is_unchanged_from_before():
+    """Regression guard: adding the winsorize parameter must not alter
+    the default (or explicit False) behavior every other task/checkpoint
+    already depends on."""
+    default_steps = tr.build_preprocessing_steps("P6", encode_budget_tier=False)
+    explicit_false_steps = tr.build_preprocessing_steps("P6", encode_budget_tier=False, winsorize=False)
+    assert [name for name, _ in default_steps] == ["select"]
+    assert [name for name, _ in explicit_false_steps] == ["select"]
+
+
+def test_make_p6_boosters_has_the_four_locked_candidates():
+    boosters = tr.make_p6_boosters()
+    assert set(boosters) == {"p6_1_reference", "p6_2_tweedie", "p6_3_huber", "p6_5_winsorized"}
+    for name, (_, param_distributions, winsorize) in boosters.items():
+        assert param_distributions == tr.xgboost_param_distributions()
+        assert winsorize == (name == "p6_5_winsorized")
+
+
+def test_make_p6_boosters_objectives_match_spec_and_are_locked_not_searched():
+    boosters = tr.make_p6_boosters()
+    assert boosters["p6_1_reference"][0].get_params()["objective"] == "reg:squarederror"
+    tweedie = boosters["p6_2_tweedie"][0].get_params()
+    assert tweedie["objective"] == "reg:tweedie"
+    assert tweedie["tweedie_variance_power"] == 1.5
+    huber = boosters["p6_3_huber"][0].get_params()
+    assert huber["objective"] == "reg:pseudohubererror"
+    assert huber["huber_slope"] == 1.0
+    assert boosters["p6_5_winsorized"][0].get_params()["objective"] == "reg:squarederror"
+    # None of the locked objective params are search axes.
+    for param_distributions in (tr.xgboost_param_distributions(),):
+        assert "model__objective" not in param_distributions
+        assert "model__tweedie_variance_power" not in param_distributions
+        assert "model__huber_slope" not in param_distributions
+
+
+def test_make_p6_boosters_estimators_are_clone_safe():
+    """Verified empirically before writing train_p6_guardrail (which
+    clones each of these): unlike CatBoost's cat_features (checkpoint
+    8), none of XGBoost's tweedie_variance_power/huber_slope break
+    clone()."""
+    from sklearn.base import clone
+    for estimator, _, _ in tr.make_p6_boosters().values():
+        clone(estimator)  # must not raise
+
+
+def test_p6_experimental_variants_excludes_the_reference():
+    """The guardrail veto's scope is explicitly limited to the 3
+    experimental variants (SPEC.md § מקבילת ההשוואה) -- p6_1_reference
+    IS the generic comparator and is never vetoed against itself."""
+    assert "p6_1_reference" not in tr.P6_EXPERIMENTAL_VARIANTS
+    assert set(tr.P6_EXPERIMENTAL_VARIANTS) == {"p6_2_tweedie", "p6_3_huber", "p6_5_winsorized"}
