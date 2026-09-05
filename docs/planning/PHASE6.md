@@ -839,7 +839,10 @@ checkpoint 16 (עדכון `ROADMAP.html`/מסמכי התכנון · ביקורת
 JSON/SVG/`ROADMAP.html` תקינים; הערה לא-חוסמת אחת (trailing whitespace
 ב-SVG שנוצרו אוטומטית על ידי matplotlib). הסדר מתוקן מכאן: commit של
 ראיית checkpoint 16 → PR חדש נפתח **אחרי** ה-commit → המתנה לכל ריצות
-ה-CI על ה-PR החדש → עדכון הראיה. אין מיזוג ואין `done` ללא ביקורת/אישור
-סופי נפרד. לא הורץ אימון/Bootstrap/Holdout בסבב תיקון זה.
+ה-CI על ה-PR החדש → עדכון הראיה. לא הורץ אימון/Bootstrap/Holdout בסבב
+תיקון זה. ✅ **PR #18 נפתח אחרי commit `a883ba5`**:
+https://github.com/drorsh88AI/funneliq-marketing-intelligence/pull/18
+— CI ירוק על שתי ההרצות (push+PR). אין מיזוג ואין `done` ללא
+ביקורת/אישור סופי נפרד.
 
 ראה `ROADMAP.html` §checkpoints 1–16 לראיה המלאה של כל אחד.
