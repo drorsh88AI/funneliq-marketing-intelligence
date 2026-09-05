@@ -1161,3 +1161,77 @@ def test_rss_measurement_script_is_valid_python_syntax():
     string would otherwise only surface the next time someone runs
     checkpoint 10 for real."""
     compile(tr._RSS_MEASUREMENT_SCRIPT, "<_RSS_MEASUREMENT_SCRIPT>", "exec")
+
+
+def test_lock_winner_orchestrates_build_measure_then_select(df, monkeypatch, tmp_path):
+    """The wiring test the other checkpoint-10 tests above don't cover:
+    they each check eligible_candidates/p6_deployable_results/select_winner
+    in isolation, but none of them prove lock_winner itself calls them
+    together correctly. build_fitted_candidate and
+    measure_rss_and_predict_time are monkeypatched (no real fit, per
+    D21) to a call-recording fake; build_task_train_frame is left real
+    (pure pandas, already covered elsewhere, zero fit involved) so
+    lock_winner's own df/task plumbing runs for real. Proves:
+      - exactly the One-SE eligible names are built and measured, each
+        exactly once -- not the ineligible candidate, not the benchmark;
+      - every eligible candidate's build+measure happens BEFORE
+        select_winner is even called (D19, criterion 6: measured for
+        every eligible candidate, not only whichever pair is tied);
+      - for P6, `results` is passed straight through to
+        build_fitted_candidate untouched -- lock_winner does not
+        re-apply the guardrail itself, that's p6_deployable_results'
+        job in the caller, before lock_winner ever sees the dict;
+      - the returned eligible/winner/rss_bytes/predict_seconds match
+        exactly what the fakes produced.
+    """
+    results = {
+        "best": {"role": "candidate", "mean_rmse": 5.0, "se_rmse": 0.1, "std_rmse": 0.2},
+        "within_one_se": {"role": "candidate", "mean_rmse": 5.05, "se_rmse": 0.01, "std_rmse": 0.3},
+        "outside_one_se": {"role": "candidate", "mean_rmse": 10.0, "se_rmse": 0.01, "std_rmse": 0.01},
+        "dummy": {"role": "benchmark", "mean_rmse": 0.1, "se_rmse": 0.0, "std_rmse": 0.0},
+    }
+    results_snapshot = {k: dict(v) for k, v in results.items()}
+    events: list[tuple[str, str]] = []
+
+    def fake_build(task, name, res, given_df):
+        assert task == "P6"
+        assert res is results  # straight through, not re-filtered by lock_winner
+        assert given_df is df
+        events.append(("build", name))
+        return f"pipeline:{name}"
+
+    def fake_measure(pipeline, sample, tmp_dir_arg):
+        assert tmp_dir_arg == tmp_path
+        name = pipeline.split(":", 1)[1]
+        events.append(("measure", name))
+        return {"rss_bytes": 1000 + len(name), "predict_seconds": 0.001 * len(name)}
+
+    def fake_select_winner(eligible, primary_metric, rss_bytes, predict_seconds):
+        events.append(("select", ""))
+        # every eligible candidate must already be measured by now
+        assert set(eligible) == set(rss_bytes) == set(predict_seconds)
+        return "within_one_se"
+
+    monkeypatch.setattr(tr, "build_fitted_candidate", fake_build)
+    monkeypatch.setattr(tr, "measure_rss_and_predict_time", fake_measure)
+    monkeypatch.setattr(tr, "select_winner", fake_select_winner)
+
+    result = tr.lock_winner("P6", df, results, tmp_path)
+
+    # exactly the One-SE eligible names, each built and measured exactly once
+    built_names = [n for op, n in events if op == "build"]
+    measured_names = [n for op, n in events if op == "measure"]
+    assert built_names == ["best", "within_one_se"]
+    assert measured_names == ["best", "within_one_se"]
+
+    # select_winner only runs after every eligible candidate is measured
+    assert events[-1] == ("select", "")
+    assert [op for op, _ in events[:-1]] == ["build", "measure", "build", "measure"]
+
+    # lock_winner must not mutate or re-filter what it was given
+    assert {k: dict(v) for k, v in results.items()} == results_snapshot
+
+    assert result["eligible"] == ["best", "within_one_se"]
+    assert result["winner"] == "within_one_se"
+    assert result["rss_bytes"] == {"best": 1000 + len("best"), "within_one_se": 1000 + len("within_one_se")}
+    assert result["predict_seconds"] == {"best": 0.001 * len("best"), "within_one_se": 0.001 * len("within_one_se")}
