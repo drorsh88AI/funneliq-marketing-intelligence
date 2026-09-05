@@ -878,7 +878,7 @@ const PHASES = [
   { num:7, name:"עיצוב מבני", branch:"design/ia", execution_status:"in_progress", planning_status:"approved_for_execution",
     items:[
       {t:"checkpoint 1 — ענף design/ia מ-main מסונכרן", s:"done", u:"2026-09-05",
-        e:"git switch -c design/ia מ-commit c8800c8 (docs: close gate 6->7, main). git log -1 מאמת שהענף פותח בדיוק מה-commit הזה, אחרי amend שהסיר את שורת Claude-Session לפי strip-claude-session-from-public-commits (הרפו ציבורי; אף push עדיין לא בוצע). ✅ אושר במפורש על ידי המשתמש 05.09.2026 יחד עם checkpoints 2-4."},
+        e:"git switch -c design/ia מ-commit c8800c8 (docs: close gate 6->7, main). git log -1 מאמת שהענף פותח בדיוק מה-commit הזה, אחרי amend שהסיר את שורת Claude-Session לפי strip-claude-session-from-public-commits (הרפו ציבורי; במועד יצירת הענף, לפני ה-push, ה-commit טרם פורסם). ✅ אושר במפורש על ידי המשתמש 05.09.2026 יחד עם checkpoints 2-4."},
       {t:"checkpoint 2 — אימות סופי של מטריצת 14 שדות החוזה מול המסמך המאושר", s:"done", u:"2026-09-05",
         e:"סקריפט אימות (8/8 PASS): 14 שורות ממוספרות 1-14 ב-docs/IA.md §8, סדר השדות זהה לרשימת SPEC.md § חוזי תגובה, טבלת 'לא-רלוונטי' קיימת לשדות ייעודיים-למסווג. הצלבה מול הארטיפקטים: models/P2.meta.json['interval_method']=='split_conformal', models/P3.meta.json['calibration_method']=='sigmoid' ו-'base_rate' קיים — לא הוקלד. ✅ אושר במפורש על ידי המשתמש 05.09.2026 יחד עם checkpoints 1,3,4."},
       {t:"checkpoint 3 — עדכון ROADMAP.html: סטטוסים וראיות", s:"done", u:"2026-09-05",
