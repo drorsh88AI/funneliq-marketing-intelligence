@@ -536,7 +536,7 @@ D13 (הפרדת מדדי הכיול), D15 (ששת שדות ה-metadata), D18 (פ
 נפתח מ-`main` (אחרי commit `2baa365`, אישור התכנון). `execution_status`
 עודכן ל-`in_progress`. פאזה 6 בביצוע.
 
-**checkpoints 1–10 בוצעו, אומתו עצמאית, עברו ביקורת ואושרו — כולם
+**checkpoints 1–11 בוצעו, אומתו עצמאית, עברו ביקורת ואושרו — כולם
 `done`.** כל checkpoint עבר את אותו שער אישור ברמת checkpoint
 (`ROADMAP.html`): מסומן `awaiting_approval` אחרי אימות עצמי של קלוד,
 הופך ל-`done` רק אחרי ביקורת Codex ואישור סופי מפורש של המשתמש —
@@ -629,4 +629,16 @@ CatBoost בפשטות) ו-**P6 — הזוכה Linear** (זכאי, מנצח את 
 263/263 ב-`pytest`. ✅ המשתמש בדק את שני ה-commits (`7178a37`,
 `0e4b2a7`) עצמאית — אושר במפורש 05.09.2026.
 
-ראה `ROADMAP.html` §checkpoints 1–10 לראיה המלאה של כל אחד.
+checkpoint 11 (כיול P3/P4 על סט ה-calibration, D10 + קוונטיל Conformal
+ל-P2, D9) — `CalibratedClassifierCV(FrozenEstimator(pipeline),
+method='sigmoid')` על הזוכה מ-checkpoint 10, מותאם על train ומכויל על
+ה-calibration בלבד (לא Holdout); `calibration_status` נגזר מהצלחת
+ה-fit בפועל, לא מונח. P2: אותו pipeline, שאריות על ה-calibration,
+`conformal_quantile` עם `alpha=0.05`. שתי בדיקות orchestration נכתבו
+**מראש** הפעם (לא רק בעקבות תיקון) — לקח מ-checkpoints 9-10.
+269/269 ב-`pytest`, שני הכיולים (`P3`/`P4`) הצליחו בפועל,
+`P2 q=5.1393`. ✅ המשתמש בדק את ה-diff, הריץ 20/20 ממוקדות ו-269/269
+מלאות, ואימת עצמאית מול ה-CSV (פיצולים 2024/506, q=5.139283, כיולים
+הצליחו עם הזוכים הנכונים) — אושר במפורש 05.09.2026.
+
+ראה `ROADMAP.html` §checkpoints 1–11 לראיה המלאה של כל אחד.
