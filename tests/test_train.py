@@ -1235,3 +1235,150 @@ def test_lock_winner_orchestrates_build_measure_then_select(df, monkeypatch, tmp
     assert result["winner"] == "within_one_se"
     assert result["rss_bytes"] == {"best": 1000 + len("best"), "within_one_se": 1000 + len("within_one_se")}
     assert result["predict_seconds"] == {"best": 0.001 * len("best"), "within_one_se": 0.001 * len("within_one_se")}
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 11 -- P3/P4 sigmoid calibration (D10) + P2's Split
+# Conformal quantile (D9). build_task_calibration_frame is pure pandas
+# (CI-safe, like build_task_train_frame). fit_sigmoid_calibrator does a
+# real (but cheap -- LogisticRegression, not a real booster) fit, so
+# its success/failure branches are tested directly with real sklearn
+# behavior. calibrate_task_winner/train_p2_conformal call
+# build_fitted_candidate, which fits an expensive real booster -- kept
+# local-only (D21) except for an orchestration test per candidate that
+# monkeypatches build_fitted_candidate to a CHEAP-but-real stand-in
+# (same build_preprocessing_steps/build_task_train_frame plumbing,
+# LogisticRegression/LinearRegression instead of the real booster) so
+# the calibration/conformal machinery itself still runs for real
+# against the real calibration split.
+# ---------------------------------------------------------------------------
+
+def test_build_task_calibration_frame_matches_split_task_calibration_ids(df):
+    for task in ("P2", "P3", "P4"):
+        cal_df = tr.build_task_calibration_frame(df, task)
+        parts = tr.split_task(df, task)
+        assert set(cal_df["source_row_id"]) == set(parts["calibration"])
+        assert list(cal_df.index) == list(range(len(cal_df)))
+
+
+def test_build_task_calibration_frame_rejects_p6():
+    with pytest.raises(ValueError):
+        tr.build_task_calibration_frame(pd.DataFrame({"source_row_id": []}), "P6")
+
+
+def test_fit_sigmoid_calibrator_reports_calibrated_on_success():
+    rng = np.random.default_rng(1)
+    X = pd.DataFrame({"a": rng.random(40), "b": rng.random(40)})
+    y = (X["a"] > 0.5).astype(int)
+    pipeline = tr.LogisticRegression().fit(X, y)
+
+    result = tr.fit_sigmoid_calibrator(pipeline, X, y)
+    assert result["calibration_status"] == "calibrated"
+    assert result["calibration_method"] == "sigmoid"
+    assert result["calibrator"] is not None
+    assert result["calibrator"].predict_proba(X).shape == (40, 2)
+
+
+def test_fit_sigmoid_calibrator_reports_uncalibrated_on_a_real_failure():
+    """A single-class calibration target is a genuine sklearn failure
+    (verified empirically before writing fit_sigmoid_calibrator) --
+    not simulated, to prove the except branch catches the REAL
+    exception type CalibratedClassifierCV actually raises."""
+    rng = np.random.default_rng(1)
+    X = pd.DataFrame({"a": rng.random(40), "b": rng.random(40)})
+    pipeline = tr.LogisticRegression().fit(X, (X["a"] > 0.5).astype(int))  # fitted on 2 classes
+
+    y_single_class = pd.Series([0] * 40)
+    result = tr.fit_sigmoid_calibrator(pipeline, X, y_single_class)
+    assert result["calibration_status"] == "uncalibrated"
+    assert result["calibration_method"] == "sigmoid"
+    assert result["calibrator"] is None
+    assert "error" in result and result["error"]  # the real exception message, not swallowed
+
+
+def _fake_cheap_classifier_pipeline(task, name, results, given_df):
+    """Stands in for build_fitted_candidate in checkpoint-11
+    orchestration tests: a REAL fit, using the SAME preprocessing
+    plumbing (build_preprocessing_steps/build_task_train_frame) a real
+    candidate would use, with LogisticRegression swapped in for the
+    expensive booster -- so the returned Pipeline is shaped exactly
+    like what CalibratedClassifierCV will later see on the real
+    calibration frame, without ever fitting a real booster (D21)."""
+    steps = tr.build_preprocessing_steps(task, encode_budget_tier=(task == "P4"))
+    pipeline = tr.Pipeline(steps + [("model", tr.LogisticRegression(max_iter=1000))])
+    train_df = tr.build_task_train_frame(given_df, task)
+    y_train = tr.encode_referred_target(train_df[tr.TARGET[task]]) if task == "P4" else train_df[tr.TARGET[task]]
+    pipeline.fit(train_df, y_train)
+    return pipeline
+
+
+def _synthetic_calibration_frame(task: str, n_per_class: int = 15) -> pd.DataFrame:
+    """A calibration-shaped frame big enough for CalibratedClassifierCV's
+    default cv=5 (needs >=5 members per class even with a FrozenEstimator
+    -- verified empirically: it still runs cross_val_predict internally
+    to gather held-out-style predictions). The real calibration splits
+    are 506 rows; the shared 60-row fixture's own calibration split (7
+    rows) is realistic for split-size tests but too small for a real
+    sigmoid fit, so this orchestration test supplies its own."""
+    rng = np.random.default_rng(42)
+    cols = tr.model_feature_columns(task)
+    n = n_per_class * 2
+    data = {c: rng.random(n) * 100 for c in cols}
+    data[tr.TARGET[task]] = (["Yes"] * n_per_class + ["No"] * n_per_class) if task == "P4" else ([1] * n_per_class + [0] * n_per_class)
+    return pd.DataFrame(data)
+
+
+def test_calibrate_task_winner_wires_the_right_split_and_target_encoding(df, monkeypatch):
+    for task in ("P3", "P4"):
+        calls = []
+        fake_results = {"stub": {"role": "candidate"}}
+        fake_cal_df = _synthetic_calibration_frame(task)
+
+        def fake_build(t, name, res, given_df, _calls=calls):
+            _calls.append((t, name, res is fake_results, given_df is df))
+            return _fake_cheap_classifier_pipeline(t, name, res, given_df)
+
+        def fake_calibration_frame(given_df, t, _fake_cal_df=fake_cal_df):
+            assert given_df is df
+            return _fake_cal_df
+
+        monkeypatch.setattr(tr, "build_fitted_candidate", fake_build)
+        monkeypatch.setattr(tr, "build_task_calibration_frame", fake_calibration_frame)
+
+        result = tr.calibrate_task_winner(task, df, fake_results, "stub")
+
+        assert calls == [(task, "stub", True, True)]  # called once, with the exact args given
+        assert result["winner"] == "stub"
+        assert result["calibration_status"] == "calibrated"
+        assert result["calibration_method"] == "sigmoid"
+        assert result["calibrator"] is not None
+
+
+def test_train_p2_conformal_computes_the_quantile_from_calibration_residuals(df, monkeypatch):
+    calls = []
+    fake_results = {"stub": {"role": "candidate"}}
+
+    def fake_build_p2(task, name, res, given_df):
+        calls.append((task, name, res is fake_results, given_df is df))
+        steps = tr.build_preprocessing_steps("P2", encode_budget_tier=False)
+        pipeline = tr.Pipeline(steps + [("model", tr.LinearRegression())])
+        train_df = tr.build_task_train_frame(given_df, "P2")
+        pipeline.fit(train_df, train_df[tr.TARGET["P2"]])
+        return pipeline
+
+    monkeypatch.setattr(tr, "build_fitted_candidate", fake_build_p2)
+
+    result = tr.train_p2_conformal(df, fake_results, "stub")
+
+    assert calls == [("P2", "stub", True, True)]
+    assert result["winner"] == "stub"
+    assert result["alpha"] == 0.05
+
+    # Recompute independently through the same (deterministic) fake
+    # pipeline + the real calibration frame -- proves the returned q is
+    # the wiring's actual output, not just some float.
+    independent_pipeline = fake_build_p2("P2", "stub", fake_results, df)
+    cal_df = tr.build_task_calibration_frame(df, "P2")
+    expected_residuals = cal_df[tr.TARGET["P2"]].to_numpy() - independent_pipeline.predict(cal_df)
+    expected_q = tr.conformal_quantile(expected_residuals, alpha=0.05)
+    assert result["q"] == pytest.approx(expected_q)

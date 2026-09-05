@@ -10,9 +10,11 @@ currently holds checkpoint 3's split layer, checkpoint 4's shared CV
 folds + preprocessing Pipelines, checkpoint 5's decision-rule pure
 functions (One-SE, the paired guardrail veto, Split Conformal's
 quantile, top-decile metrics, Lift@K) -- all built and tested before
-any model is trained -- and checkpoints 6-10's actual training (P2, P3,
-P4, P6 + P6's paired guardrail crossover) and model selection (One-SE
-eligibility, RSS/prediction-time measurement, the winner tie-break).
+any model is trained -- and checkpoints 6-11's actual training (P2, P3,
+P4, P6 + P6's paired guardrail crossover), model selection (One-SE
+eligibility, RSS/prediction-time measurement, the winner tie-break),
+and calibration (P3/P4 sigmoid calibration, P2's Split Conformal
+quantile).
 """
 from __future__ import annotations
 
@@ -31,8 +33,10 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin, clone
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier, DummyRegressor
+from sklearn.frozen import FrozenEstimator
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, make_scorer, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import (
@@ -1350,6 +1354,77 @@ def lock_winner(task: str, df: pd.DataFrame, results: dict, tmp_dir: Path) -> di
     }
 
 
+# ---------------------------------------------------------------------------
+# Checkpoint 11 -- P3/P4 sigmoid calibration on the calibration split
+# (D10), P2's Split Conformal quantile (D9). Both run on the LOCKED
+# winner from checkpoint 10 -- no retuning, no re-selection here.
+# ---------------------------------------------------------------------------
+
+def build_task_calibration_frame(df: pd.DataFrame, task: str) -> pd.DataFrame:
+    """The task's calibration rows (from split_task), as a 0..n-1-indexed
+    frame -- mirrors build_task_train_frame exactly, for the OTHER
+    split (D2's dev = train + calibration). P6 has no calibration
+    split (train IS its dev set); calling this for P6 is a caller
+    error, raised loudly rather than silently returning an empty or
+    wrong frame."""
+    if task == "P6":
+        raise ValueError("P6 has no calibration split (D2) -- there is nothing to build here")
+    parts = split_task(df, task)
+    pop = task_population(df, task)
+    return pop[pop["source_row_id"].isin(parts["calibration"])].reset_index(drop=True)
+
+
+def fit_sigmoid_calibrator(pipeline, cal_df: pd.DataFrame, y_cal) -> dict:
+    """D10: CalibratedClassifierCV(FrozenEstimator(pipeline),
+    method='sigmoid').fit(X_cal, y_cal) -- once, after the model and
+    its hyperparameters are already locked (checkpoint 10); `pipeline`
+    must already be fitted on TRAIN (FrozenEstimator refuses to refit
+    it). cv='prefit' was removed in sklearn 1.9.0 (S3) -- FrozenEstimator
+    is the replacement, verified empirically before writing this.
+    calibration_status is "calibrated" ONLY if the fit actually
+    succeeds; otherwise "uncalibrated" with the exception recorded,
+    never silently swallowed into a fake-successful calibrator."""
+    try:
+        calibrator = CalibratedClassifierCV(FrozenEstimator(pipeline), method="sigmoid")
+        calibrator.fit(cal_df, y_cal)
+        return {"calibrator": calibrator, "calibration_status": "calibrated", "calibration_method": "sigmoid"}
+    except Exception as exc:
+        return {
+            "calibrator": None, "calibration_status": "uncalibrated",
+            "calibration_method": "sigmoid", "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def calibrate_task_winner(task: str, df: pd.DataFrame, results: dict, winner: str) -> dict:
+    """Orchestrates D10 for one classification task (P3 or P4): builds
+    the winning Pipeline fitted on TRAIN (build_fitted_candidate,
+    checkpoint 10 -- the exact winning hyperparameters, never refit or
+    retuned here), then calibrates it with sigmoid on the CALIBRATION
+    split -- never train, never the Holdout. Returns the calibrator
+    itself (for checkpoint 15's artifact) plus the JSON-safe status
+    fields."""
+    pipeline = build_fitted_candidate(task, winner, results, df)
+    cal_df = build_task_calibration_frame(df, task)
+    y_cal = encode_referred_target(cal_df[TARGET[task]]) if task == "P4" else cal_df[TARGET[task]]
+    fit_result = fit_sigmoid_calibrator(pipeline, cal_df, y_cal)
+    return {"winner": winner, **fit_result}
+
+
+def train_p2_conformal(df: pd.DataFrame, p2_results: dict, winner: str) -> dict:
+    """D9: Split Conformal's quantile for P2, computed from the
+    ALREADY-fitted-on-train winning P2 pipeline's residuals on the
+    calibration split -- never refit on calibration, never touches the
+    Holdout. alpha=0.05 for consistency with the Bootstrap's 95%
+    (SPEC does not itself pin a value)."""
+    alpha = 0.05
+    pipeline = build_fitted_candidate("P2", winner, p2_results, df)
+    cal_df = build_task_calibration_frame(df, "P2")
+    y_cal = cal_df[TARGET["P2"]].to_numpy()
+    residuals = y_cal - pipeline.predict(cal_df)
+    q = conformal_quantile(residuals, alpha=alpha)
+    return {"winner": winner, "alpha": alpha, "q": q}
+
+
 def read_metrics_json(path: Path) -> dict:
     """Whatever tasks have been written so far -- {} if the file
     doesn't exist yet (checkpoint 6 is the first task to write it)."""
@@ -1504,6 +1579,18 @@ if __name__ == "__main__":
         ms = {n: round(s * 1000, 4) for n, s in sel["predict_seconds"].items()}
         print(f"{task} eligible={sel['eligible']} rss_MB={rss_mb} predict_ms={ms} winner={sel['winner']}")
 
+    print("--- checkpoint 11: P3/P4 sigmoid calibration + P2 Split Conformal quantile ---")
+    p2_conformal = train_p2_conformal(df, p2_results, selections["P2"]["winner"])
+    print(f"P2 conformal: winner={p2_conformal['winner']} alpha={p2_conformal['alpha']} q={p2_conformal['q']:.4f}")
+
+    calibrations = {
+        "P3": calibrate_task_winner("P3", df, p3_results, selections["P3"]["winner"]),
+        "P4": calibrate_task_winner("P4", df, p4_results, selections["P4"]["winner"]),
+    }
+    for task, cal in calibrations.items():
+        print(f"{task} calibration: winner={cal['winner']} status={cal['calibration_status']} "
+              f"method={cal['calibration_method']}" + (f" error={cal['error']}" if cal["calibration_status"] == "uncalibrated" else ""))
+
     metrics_path = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
     all_metrics = read_metrics_json(metrics_path)
     all_metrics["P2"] = p2_results
@@ -1519,5 +1606,11 @@ if __name__ == "__main__":
     # (D14, checkpoint 15), not here.
     for task, sel in selections.items():
         all_metrics[f"{task}_selection"] = {"eligible": sel["eligible"], "winner": sel["winner"]}
+    all_metrics["P2_conformal"] = p2_conformal
+    # The fitted calibrator object itself is not JSON-safe and is not
+    # deterministic-content per D14 anyway -- it becomes the actual
+    # .joblib artifact in checkpoint 15. Only the audit fields go here.
+    for task, cal in calibrations.items():
+        all_metrics[f"{task}_calibration"] = {k: v for k, v in cal.items() if k != "calibrator"}
     write_metrics_json(all_metrics, metrics_path)
     print(f"wrote {metrics_path}")
