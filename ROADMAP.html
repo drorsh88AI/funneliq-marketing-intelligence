@@ -77,14 +77,14 @@
   /* ---- approval box ---- */
   .approval-box{
     background:var(--brand-dim); border:1px solid #cddaf7; border-radius:var(--radius);
-    padding:16px 18px; margin-bottom:22px; font-size:13.5px; color:#173a8f;
+    padding:0; margin-bottom:22px; font-size:13.5px; color:#173a8f;
   }
   .approval-box strong{display:block; margin-bottom:6px; font-size:14px;}
 
   /* ---- traceability table ---- */
   .trace-card{
     background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
-    box-shadow:var(--shadow); padding:20px 22px; margin-bottom:22px;
+    box-shadow:var(--shadow); padding:0; margin-bottom:22px;
   }
   .trace-card h2{margin:0 0 4px; font-size:16px;}
   .trace-card .trace-sub{color:var(--text-dim); font-size:13px; margin-bottom:14px;}
@@ -193,7 +193,7 @@
 
   .policy-card{
     background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
-    box-shadow:var(--shadow); padding:20px 22px; margin-bottom:22px;
+    box-shadow:var(--shadow); padding:0; margin-bottom:22px;
   }
   .policy-card h2{margin:0 0 4px; font-size:16px;}
   .policy-card .policy-sub{color:var(--text-dim); font-size:13px; margin-bottom:14px;}
@@ -204,6 +204,22 @@
     font-size:12.5px; color:var(--text-dim);
   }
   .policy-card .policy-fine b{color:var(--text);}
+
+  details.info-panel > summary{
+    list-style:none; cursor:pointer; padding:16px 18px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  details.info-panel.policy-card > summary,
+  details.info-panel.trace-card > summary{padding:20px 22px;}
+  details.info-panel > summary::-webkit-details-marker{display:none;}
+  details.info-panel > summary:hover{background:rgba(255,255,255,.38);}
+  details.info-panel > summary strong,
+  details.info-panel > summary h2{margin:0;}
+  .info-panel-content{padding:0 18px 16px;}
+  .policy-card .info-panel-content,
+  .trace-card .info-panel-content{padding:0 22px 20px;}
+  .info-panel-chevron{color:var(--text-dim); font-size:12px; transition:transform .15s; flex-shrink:0;}
+  details.info-panel[open] > summary .info-panel-chevron{transform:rotate(180deg);}
 
   .plan-chip{
     display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600;
@@ -368,8 +384,9 @@
       </div>
     </div>
 
-    <div class="approval-box">
-      <strong>⚠ אישור כפול — לא אישור בודד</strong>
+    <details class="info-panel approval-box">
+      <summary><strong>⚠ אישור כפול — לא אישור בודד</strong><span class="info-panel-chevron">▾</span></summary>
+      <div class="info-panel-content">
       כל פאזה, שינוי מסמך או פעולה חיצונית דורשים אישור ראשוני ולאחריו אישור
       סופי נוסף. השלמת פאזה אינה מאשרת אוטומטית את הפאזה הבאה. <b>גם התחלת
       כל פאזה עצמה כפופה לכך.</b> לדוגמה: פאזה 0 בוצעה רק אחרי אישור ראשוני
@@ -396,10 +413,12 @@
       לא <span class="inline-code">done</span> מוקדם מדי ולא
       <span class="inline-code">not_started</span> תוך מחיקת עבודה שכבר
       נעשתה. חל על כל הפאזות מכאן ואילך.
-    </div>
+      </div>
+    </details>
 
-    <div class="policy-card" id="policy-gate">
-      <h2>מדיניות מעבר — שער תכנון ואישור לפני כל פאזה</h2>
+    <details class="info-panel policy-card" id="policy-gate">
+      <summary><h2>מדיניות מעבר — שער תכנון ואישור לפני כל פאזה</h2><span class="info-panel-chevron">▾</span></summary>
+      <div class="info-panel-content">
       <div class="policy-sub">
         חלה על כל המעברים ללא יוצא מן הכלל: <span class="ltr">0→1, 1→2, 2→3, 3→4</span> וכן הלאה עד <span class="ltr">13→14</span>.
         התכנון של פאזות עתידיות הוא <b>תכנון-על בלבד</b> — רשימת תתי-המשימות שלהן אינה תוכנית
@@ -428,10 +447,12 @@
         <br><br>
         <span id="policy-current-state"></span>
       </div>
-    </div>
+      </div>
+    </details>
 
-    <div class="trace-card">
-      <h2>עקיבות לשש חבילות העבודה (הבריף)</h2>
+    <details class="info-panel trace-card">
+      <summary><h2>עקיבות לשש חבילות העבודה (הבריף)</h2><span class="info-panel-chevron">▾</span></summary>
+      <div class="info-panel-content">
       <div class="trace-sub">מיפוי בין כל חבילה בבריף לפאזת הביצוע האחראית ולסעיף היציב ב-SPEC.md (הפניה לפי כותרת, לא מספר שורה)</div>
       <div class="trace-scroll">
       <table class="trace-table">
@@ -476,7 +497,8 @@
         </tbody>
       </table>
       </div>
-    </div>
+      </div>
+    </details>
 
     <div class="filters" id="filters">
       <button class="active" data-filter="all">הכל (15)</button>
