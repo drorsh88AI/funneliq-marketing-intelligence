@@ -328,7 +328,7 @@
     <h1>FunnelIQ — מפת ביצוע</h1>
     <div class="sub">מסמך חי המתעדכן ידנית לפי התקדמות בפועל — אינו קוד האפליקציה</div>
   </div>
-  <span class="status-pill" id="headline-status">✅ פאזות 0–3 הושלמו ואושרו · שער 3→4 פתוח</span>
+  <span class="status-pill" id="headline-status"></span>
 </header>
 
 <nav class="tabs">
@@ -426,9 +426,7 @@
         לכן אינו נספר באחוז השלמת משימות הביצוע שלה, ופאזה אינה מסומנת כלא-מושלמת רק משום
         שתכנון הפאזה הבאה טרם הסתיים. הוא מוצג בנפרד באזור “שער מעבר לפאזה הבאה” שבכל פאזה.
         <br><br>
-        <b>מצב נוכחי:</b> פאזות 0 ו-1 הושלמו ואושרו · פאזה 2 בתכנון מפורט ועדיין אינה בביצוע ·
-        פאזות 3–14 מכילות תכנון-על בלבד, ואין להרחיב אותן כעת לתוכניות ביצוע סופיות על בסיס ניחושים.
-        כל אחת מהן תעבור תכנון מפורט לאחר אישור הפאזה הקודמת.
+        <span id="policy-current-state"></span>
       </div>
     </div>
 
@@ -1010,6 +1008,50 @@ function render(){
 }
 
 /* שתי סקאלות נפרדות — אסור למזג לאחוז משולב אחד. */
+function roadmapStateSummary(){
+  let lastDoneIndex = -1;
+  for(let i=0; i<PHASES.length; i++){
+    if(PHASES[i].execution_status === 'done' &&
+       PHASES[i].planning_status === 'approved_for_execution') lastDoneIndex = i;
+    else break;
+  }
+
+  const parts = [];
+  if(lastDoneIndex === 0) parts.push('פאזה 0 הושלמה ואושרה');
+  else if(lastDoneIndex > 0) parts.push(`פאזות 0–${PHASES[lastDoneIndex].num} הושלמו ואושרו`);
+
+  const activeIndex = PHASES.findIndex(p =>
+    p.execution_status === 'in_progress' || p.execution_status === 'awaiting_approval');
+  let gateFromIndex = lastDoneIndex;
+
+  if(activeIndex >= 0){
+    const active = PHASES[activeIndex];
+    parts.push(active.execution_status === 'in_progress'
+      ? `פאזה ${active.num} בביצוע`
+      : `פאזה ${active.num} ממתינה לאישור`);
+    gateFromIndex = activeIndex;
+  } else if(lastDoneIndex < PHASES.length - 1){
+    const next = PHASES[lastDoneIndex + 1];
+    if(next.planning_status === 'approved_for_execution')
+      parts.push(`פאזה ${next.num} מאושרת וממתינה להוראת ביצוע`);
+    else if(next.planning_status === 'under_review')
+      parts.push(`פאזה ${next.num} בבדיקת תכנון`);
+    else parts.push(`פאזה ${next.num} בתכנון-על בלבד`);
+  }
+
+  if(gateFromIndex >= 0 && gateFromIndex < PHASES.length - 1){
+    const current = PHASES[gateFromIndex];
+    const next = PHASES[gateFromIndex + 1];
+    const closed = next.planning_status === 'approved_for_execution';
+    parts.push(`שער ${current.num}→${next.num} ${closed ? 'סגור' : 'פתוח'}`);
+  }
+
+  return {
+    icon: activeIndex >= 0 ? '🔄' : (lastDoneIndex === PHASES.length - 1 ? '✅' : '⏳'),
+    text: parts.join(' · ')
+  };
+}
+
 function updateProgress(){
   const done = PHASES.filter(p=>p.execution_status==='done').length;
   document.getElementById('progress-count').textContent = `${done} / ${PHASES.length}`;
@@ -1018,6 +1060,10 @@ function updateProgress(){
   const planned = PHASES.filter(p=>p.planning_status==='approved_for_execution').length;
   document.getElementById('plan-count').textContent = `${planned} / ${PHASES.length}`;
   document.getElementById('plan-fill').style.width = (planned/PHASES.length*100)+'%';
+
+  const current = roadmapStateSummary();
+  document.getElementById('headline-status').textContent = `${current.icon} ${current.text}`;
+  document.getElementById('policy-current-state').innerHTML = `<b>מצב נוכחי:</b> ${esc(current.text)}.`;
 }
 
 document.getElementById('filters').addEventListener('click', e=>{
