@@ -1,0 +1,140 @@
+{
+  "algo": "linear",
+  "artifact_role": "evaluation",
+  "bootstrap_b": 1000,
+  "bootstrap_percentiles": [
+    2.5,
+    97.5
+  ],
+  "checksums": {
+    "artifact_sha256": "2364e4f0b722b444b26fac9390c33e53f234fc6d69f80091640ad0a6fd790519",
+    "source_csv_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa"
+  },
+  "cv_folds": 5,
+  "feature_columns": [
+    "ad_budget",
+    "num_leads",
+    "leads_answered",
+    "followup_1",
+    "followup_2",
+    "followup_3",
+    "followup_4",
+    "followup_5",
+    "not_closed",
+    "closed",
+    "calls_to_closed",
+    "calls_to_not_closed",
+    "customer_acquisition_cost",
+    "purchased"
+  ],
+  "feature_dtypes": {
+    "ad_budget": "int64",
+    "calls_to_closed": "int64",
+    "calls_to_not_closed": "int64",
+    "closed": "int64",
+    "customer_acquisition_cost": "int64",
+    "followup_1": "int64",
+    "followup_2": "int64",
+    "followup_3": "int64",
+    "followup_4": "int64",
+    "followup_5": "int64",
+    "leads_answered": "int64",
+    "not_closed": "int64",
+    "num_leads": "int64",
+    "purchased": "int64"
+  },
+  "fit_sources": {
+    "bootstrap": "train",
+    "model": "train",
+    "ood_bounds": "train"
+  },
+  "interval_method": "bootstrap_percentile",
+  "model_version": "P6-linear-20260905-4ddf09d",
+  "observed_ad_budget_values": [
+    500.0,
+    800.0,
+    1000.0,
+    1500.0,
+    2000.0,
+    2500.0,
+    3000.0,
+    4000.0,
+    5000.0,
+    6000.0,
+    7000.0,
+    8000.0,
+    10000.0,
+    12000.0,
+    15000.0,
+    20000.0
+  ],
+  "ood_bounds": {
+    "ad_budget": {
+      "max": 20000.0,
+      "min": 500.0
+    },
+    "calls_to_closed": {
+      "max": 9.0,
+      "min": 0.0
+    },
+    "calls_to_not_closed": {
+      "max": 7.0,
+      "min": 0.0
+    },
+    "closed": {
+      "max": 9.0,
+      "min": 0.0
+    },
+    "customer_acquisition_cost": {
+      "max": 6666.0,
+      "min": 0.0
+    },
+    "followup_1": {
+      "max": 65.0,
+      "min": 3.0
+    },
+    "followup_2": {
+      "max": 49.0,
+      "min": 2.0
+    },
+    "followup_3": {
+      "max": 40.0,
+      "min": 1.0
+    },
+    "followup_4": {
+      "max": 37.0,
+      "min": 1.0
+    },
+    "followup_5": {
+      "max": 27.0,
+      "min": 1.0
+    },
+    "leads_answered": {
+      "max": 84.0,
+      "min": 4.0
+    },
+    "not_closed": {
+      "max": 20.0,
+      "min": 0.0
+    },
+    "num_leads": {
+      "max": 139.0,
+      "min": 11.0
+    },
+    "purchased": {
+      "max": 1.0,
+      "min": 0.0
+    }
+  },
+  "p6_log1p_smearing": 1.0447968480599414,
+  "population_n": {
+    "calibration": 0,
+    "holdout": 695,
+    "train": 2776
+  },
+  "seed": 45,
+  "snapshot": "budget_allocation_moment",
+  "target": "cumulative_profit",
+  "task": "P6",
+  "training_date": "20260905"
+}

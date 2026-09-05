@@ -54,13 +54,13 @@ majority baseline = **53.65%**.
 ישירות לפייתון של הסביבה, בנתיב המלא:
 
 ```
-<CONDA_ENV>\python.exe
+C:\Users\dror_\programs\anaconda\envs\pro1_FunnelIQ\python.exe
 ```
 
 לדוגמה:
-- Bash: `"<CONDA_ENV>/python.exe" script.py`
-- PowerShell: `& "<CONDA_ENV>\python.exe" script.py`
-- pip: `... python.exe -m pip install <pkg>`
+- Bash: `"C:/Users/dror_/programs/anaconda/envs/pro1_FunnelIQ/python.exe" script.py`
+- PowerShell: `& "C:\Users\dror_\programs\anaconda\envs\pro1_FunnelIQ\python.exe" script.py`
+- pip: `& "C:\Users\dror_\programs\anaconda\envs\pro1_FunnelIQ\python.exe" -m pip install <pkg>`
 
 זה מבטיח שכל הרצה משתמשת בסביבה הנכונה בלי הפעלה ידנית, גם כשכל קריאת Bash
 פותחת שֶׁל חדש (state לא נשמר בין קריאות).
