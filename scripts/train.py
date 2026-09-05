@@ -25,6 +25,8 @@ tasks, segmentation, D18's P4 sensitivity comparison, P6's Backtest).
 """
 from __future__ import annotations
 
+import datetime as dt
+import hashlib
 import json
 import math
 import subprocess
@@ -36,6 +38,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.features import DERIVED_FROM_PROFILE, FEATURES, TARGET, budget_tier  # noqa: E402
 from scripts.load_data import EXPECTED_COLUMNS, load_and_verify_csv  # noqa: E402
+# Imported as a module, not `from ... import EXPECTED_SHA256` -- checkpoint
+# 15's .meta.json reads load_data_module.EXPECTED_SHA256 at call time so
+# tests that monkeypatch scripts.load_data.EXPECTED_SHA256 (the shared `df`
+# fixture already does) are reflected here too, not frozen at import time.
+from scripts import load_data as load_data_module  # noqa: E402
 # Imported before matplotlib.pyplot below -- scripts.analysis's own
 # module-level matplotlib.use("Agg") + fixed svg.hashsalt (PHASE5.md D9)
 # must run first, so checkpoint 13's SVGs are headless and deterministic
@@ -2349,7 +2356,270 @@ def write_metrics_json(all_results: dict, path: Path) -> None:
         f.write("\n")
 
 
+# ---------------------------------------------------------------------------
+# Checkpoint 15 -- artifacts + full .meta.json (D15), models/ size (D14).
+# D22 (S9's fix, docs/planning/PHASE6.md): this section may NEVER call
+# holdout_evaluate_p2, holdout_evaluate_p3_p4, holdout_evaluate_p6,
+# p4_sensitivity_holdout_comparison, or p6_backtest. It builds each
+# deployed artifact from train/calibration only, using the winner/
+# hyperparameters/calibrator already locked at checkpoints 6-13, and
+# treats every Holdout number checkpoint 14 already wrote into
+# metrics.json as frozen -- never recomputed. Invoked ONLY via
+# `python scripts/train.py --build-artifacts` (see the __main__ guard
+# below), never as part of the full-pipeline run: re-running that would
+# re-execute checkpoints 3-14 in full, including the five Holdout
+# functions above -- exactly the sixth opening D22 exists to prevent.
+# ---------------------------------------------------------------------------
+
+SNAPSHOT = {
+    "P2": "end_of_campaign_cycle", "P3": "end_of_campaign_cycle",
+    "P4": "end_of_campaign_cycle", "P6": "budget_allocation_moment",
+}
+# Population base rates (SPEC.md), report-only context carried onto the
+# artifact's own schema -- never the CV/Holdout denominator (D13/9א use
+# each evaluation set's own base_rate for Lift@10%, not this constant).
+BASE_RATE = {"P3": 0.4635, "P4": 0.4271}
+# SPEC-locked OOD policy range for ad_budget -- NOT this split's observed
+# min/max, which must never decide the policy boundary (D15).
+AD_BUDGET_OOD_RANGE = (500.0, 20000.0)
+
+
+def observed_ad_budget_values(df: pd.DataFrame) -> list[float]:
+    """The distinct ad_budget values actually observed in the CSV
+    (D15) -- lets phase 9 tell "unseen value inside the training range"
+    apart from hard OOD (outside AD_BUDGET_OOD_RANGE)."""
+    return sorted(float(v) for v in df["ad_budget"].dropna().unique())
+
+
+def ood_bounds(train_df: pd.DataFrame, task: str) -> dict:
+    """Per-numeric-feature [min, max] from TRAIN ONLY (D15) -- never
+    calibration, never Holdout. ad_budget's bound is the SPEC-locked
+    range (AD_BUDGET_OOD_RANGE), not this split's own min/max."""
+    bounds = {
+        col: {"min": float(train_df[col].min()), "max": float(train_df[col].max())}
+        for col in model_feature_columns(task)
+        if col != "ad_budget" and pd.api.types.is_numeric_dtype(train_df[col])
+    }
+    bounds["ad_budget"] = {"min": AD_BUDGET_OOD_RANGE[0], "max": AD_BUDGET_OOD_RANGE[1]}
+    return bounds
+
+
+def fit_sources_for_task(task: str) -> dict:
+    """D15/criterion 18א: which split fit each artifact component --
+    the check that proves on the artifact itself that no component was
+    ever fit from Holdout."""
+    sources = {"model": "train", "ood_bounds": "train"}
+    if task == "P2":
+        sources["conformal_quantile"] = "calibration"
+    elif task in ("P3", "P4"):
+        sources["calibrator"] = "calibration"
+    elif task == "P6":
+        sources["bootstrap"] = "train"
+    return sources
+
+
+def git_sha7() -> str:
+    """Short git SHA of HEAD -- run_metadata.json only (D14, volatile,
+    never metrics.json/.meta.json's deterministic fields). "unknown" if
+    git is unavailable (e.g. a source tarball with no .git) rather than
+    crashing the build over a documentation field."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short=7", "HEAD"], capture_output=True, text=True, check=True,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "unknown"
+
+
+def library_versions() -> dict:
+    """run_metadata.json only (D14, volatile)."""
+    import catboost
+    import lightgbm
+    import sklearn
+    return {
+        "python": sys.version.split()[0], "sklearn": sklearn.__version__,
+        "xgboost": xgb.__version__, "lightgbm": lightgbm.__version__,
+        "catboost": catboost.__version__, "numpy": np.__version__, "pandas": pd.__version__,
+    }
+
+
+def p6_log1p_smearing_value(df: pd.DataFrame, p6_results: dict) -> float:
+    """The Duan smearing factor for P6-4 (D17's log1p research
+    experiment), fit ONCE on the full P6 train set with
+    p6_1_reference's winning hyperparameters (no tuning) -- SPEC
+    requires it saved (D15) even though P6-4 is never a deployment
+    candidate. Train-only, same as checkpoint 13's per-fold version;
+    never touches Holdout."""
+    task = "P6"
+    train_df = build_task_train_frame(df, task)
+    y = train_df[TARGET[task]].to_numpy()
+    steps = build_preprocessing_steps(task, encode_budget_tier=False)
+    winning_params = {k.removeprefix("model__"): v for k, v in p6_results["p6_1_reference"]["best_params"].items()}
+    base_estimator = XGBRegressor(objective="reg:squarederror", random_state=SEARCH_RANDOM_STATE,
+                                   n_jobs=SEARCH_N_JOBS, verbosity=0, **winning_params)
+    pipeline = Pipeline(steps + [("model", LogSmearingRegressor(base_estimator=base_estimator))])
+    pipeline.fit(train_df, y)
+    return float(pipeline.named_steps["model"].smearing_)
+
+
+def _sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def build_task_artifact(task: str, df: pd.DataFrame, metrics: dict, git_sha: str, training_date: str) -> tuple[object, dict]:
+    """Builds the deployed object (fitted Pipeline for P2/P6, the
+    calibrated wrapper for P3/P4 -- D14) and its full .meta.json (D15)
+    for one task, using ONLY train/calibration and the already-locked
+    choices already sitting in `metrics` (checkpoints 6-13's frozen
+    results) -- never a Holdout-touching function (D22). `checksums`
+    is filled in by the caller once the .joblib bytes actually exist."""
+    winner = metrics[f"{task}_selection"]["winner"]
+    results = metrics[task]
+    train_df = build_task_train_frame(df, task)
+    parts = split_task(df, task)  # row counts only -- never scores anything, not a Holdout-touching function
+
+    if task in ("P3", "P4"):
+        cal = calibrate_task_winner(task, df, results, winner)
+        if cal["calibration_status"] != "calibrated":
+            raise RuntimeError(f"{task}: cannot build a deployable artifact -- calibration failed ({cal.get('error')})")
+        artifact = cal["calibrator"]
+    else:
+        artifact = build_fitted_candidate(task, winner, results, df)
+
+    meta = {
+        "task": task,
+        "algo": winner,
+        "target": TARGET[task],
+        "snapshot": SNAPSHOT[task],
+        "feature_columns": model_feature_columns(task),
+        "feature_dtypes": {c: str(train_df[c].dtype) for c in model_feature_columns(task)},
+        "population_n": {
+            "train": int(len(parts["train"])),
+            "calibration": 0 if parts["calibration"] is None else int(len(parts["calibration"])),
+            "holdout": int(len(parts["holdout"])),
+        },
+        "seed": SEEDS[task],
+        "cv_folds": 5,
+        "ood_bounds": ood_bounds(train_df, task),
+        "observed_ad_budget_values": observed_ad_budget_values(df),
+        "fit_sources": fit_sources_for_task(task),
+        "artifact_role": "evaluation",  # the Evaluation artifact IS what's deployed (SPEC) -- no refit on train+holdout
+        "training_date": training_date,
+        "model_version": f"{task}-{winner}-{training_date}-{git_sha}",
+        "checksums": {"source_csv_sha256": load_data_module.EXPECTED_SHA256, "artifact_sha256": None},
+    }
+
+    if task == "P2":
+        conf = metrics["P2_conformal"]
+        meta["interval_method"] = "split_conformal"
+        meta["conformal_quantile"] = conf["q"]
+        meta["alpha"] = conf["alpha"]
+    elif task in ("P3", "P4"):
+        cal_meta = metrics[f"{task}_calibration"]
+        meta["calibration_status"] = cal_meta["calibration_status"]
+        meta["calibration_method"] = cal_meta["calibration_method"]
+        meta["base_rate"] = BASE_RATE[task]
+    elif task == "P6":
+        meta["interval_method"] = "bootstrap_percentile"
+        meta["bootstrap_b"] = BOOTSTRAP_B
+        meta["bootstrap_percentiles"] = [2.5, 97.5]
+        meta["p6_log1p_smearing"] = p6_log1p_smearing_value(df, results)
+
+    return artifact, meta
+
+
+def build_all_artifacts(df: pd.DataFrame, metrics: dict, models_dir: Path) -> dict:
+    """Orchestrates checkpoint 15 for all four tasks: builds each
+    deployed object from train/calibration only (build_task_artifact,
+    D22), writes {task}.joblib + {task}.meta.json, fills in
+    artifact_sha256 once the .joblib exists, and measures each
+    artifact's own RSS/predict time (D19's mechanism, reused here to
+    document the DEPLOYED footprint -- not a tie-break, that already
+    happened at checkpoint 10). Returns a summary for run_metadata.json.
+    Never calls a Holdout-touching function anywhere in this path."""
+    models_dir.mkdir(parents=True, exist_ok=True)
+    summary = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        for task in ("P2", "P3", "P4", "P6"):
+            artifact, meta = build_task_artifact(task, df, metrics, git_sha7(), dt.date.today().strftime("%Y%m%d"))
+            joblib_path = models_dir / f"{task}.joblib"
+            joblib.dump(artifact, joblib_path)
+            meta["checksums"]["artifact_sha256"] = _sha256_file(joblib_path)
+            write_metrics_json(meta, models_dir / f"{task}.meta.json")
+
+            sample = build_task_train_frame(df, task).iloc[[0]]
+            measured = measure_rss_and_predict_time(artifact, sample, tmp_dir)
+            summary[task] = {
+                "winner": meta["algo"], "model_version": meta["model_version"],
+                "artifact_sha256": meta["checksums"]["artifact_sha256"],
+                "rss_bytes": measured["rss_bytes"], "predict_seconds": measured["predict_seconds"],
+            }
+    return summary
+
+
+def _run_checkpoint_15() -> None:
+    """checkpoint 15's entire scope. Invoked ONLY via `python
+    scripts/train.py --build-artifacts` -- never touches Holdout (D22).
+    Reads the already-frozen models/metrics.json checkpoint 14 wrote
+    (raises if it's missing/empty rather than silently building nothing
+    meaningful), refits every task's deployed artifact from
+    train/calibration only, and writes {task}.joblib/.meta.json plus
+    run_metadata.json. metrics.json itself is untouched here -- it was
+    already deterministic-content-only as of checkpoint 14 (D14)."""
+    project_root = Path(__file__).resolve().parent.parent
+    df = load_and_verify_csv(project_root / "funnel_marketing_data.csv")
+    metrics_path = project_root / "models" / "metrics.json"
+    metrics = read_metrics_json(metrics_path)
+    if not metrics or "P2_selection" not in metrics:
+        raise RuntimeError(
+            f"{metrics_path} is missing or incomplete -- run the full pipeline "
+            "(checkpoints 3-14) first; checkpoint 15 only builds artifacts from "
+            "results that already exist, it never computes them."
+        )
+
+    models_dir = project_root / "models"
+    t0 = time.perf_counter()
+    summary = build_all_artifacts(df, metrics, models_dir)
+    build_seconds = time.perf_counter() - t0
+
+    run_metadata = {
+        "timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "git_sha": git_sha7(),
+        "platform": sys.platform,
+        "library_versions": library_versions(),
+        "build_seconds": build_seconds,
+        "artifacts": summary,
+    }
+    write_metrics_json(run_metadata, models_dir / "run_metadata.json")
+
+    models_size_bytes = sum(f.stat().st_size for f in models_dir.iterdir() if f.is_file())
+    print(f"checkpoint 15: models/ size = {models_size_bytes / 1_048_576:.2f} MB; "
+          f"build took {build_seconds:.2f}s")
+    for task, s in sorted(summary.items()):
+        print(f"  {task}: winner={s['winner']} version={s['model_version']} "
+              f"rss_MB={s['rss_bytes'] / 1_048_576:.2f} predict_ms={s['predict_seconds'] * 1000:.4f}")
+
+
 if __name__ == "__main__":
+    # D22: --build-artifacts is checkpoint 15's ENTIRE, separate entry
+    # point -- it must return before a single line of the full-pipeline
+    # code below ever runs, since that code re-executes checkpoints
+    # 3-14 in full, including the five Holdout-touching functions.
+    # The self-reimport/rebind below (module __module__ fix, checkpoint
+    # 10) applies to both paths, since build_all_artifacts also builds
+    # Pipelines carrying _add_budget_tier/_Winsorizer.
+    import importlib
+    _real_module = importlib.import_module("scripts.train")
+    _add_budget_tier = _real_module._add_budget_tier
+    _Winsorizer = _real_module._Winsorizer
+
+    if "--build-artifacts" in sys.argv:
+        _run_checkpoint_15()
+        raise SystemExit(0)
+
     # Running this file directly (python scripts/train.py) makes every
     # class/function defined in it carry __module__="__main__" -- a
     # Pipeline built here pickles a reference to "__main__._Winsorizer"
@@ -2357,17 +2627,9 @@ if __name__ == "__main__":
     # RSS-measurement subprocess; later, phase 9's serving process
     # loading the deployed .joblib) cannot resolve (verified empirically
     # -- AttributeError/PicklingError on the two module-level helpers
-    # that ever get pickled: _add_budget_tier, _Winsorizer). Fixed by
-    # re-importing this same file under its real dotted name (the
-    # sys.path insert above already makes "scripts" importable) and
-    # rebinding those two names in THIS module's globals to that copy
-    # -- build_preprocessing_steps/build_fitted_candidate look them up
-    # from globals() at call time, so every Pipeline built from here on
-    # picks up the properly-named versions transparently.
-    import importlib
-    _real_module = importlib.import_module("scripts.train")
-    _add_budget_tier = _real_module._add_budget_tier
-    _Winsorizer = _real_module._Winsorizer
+    # that ever get pickled: _add_budget_tier, _Winsorizer). Already
+    # fixed above, before the --build-artifacts dispatch, so both paths
+    # get the properly-named versions transparently.
 
     df = load_and_verify_csv(Path(__file__).resolve().parent.parent / "funnel_marketing_data.csv")
     for task in ("P2", "P3", "P4", "P6"):

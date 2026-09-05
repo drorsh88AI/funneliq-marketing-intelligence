@@ -1,0 +1,45 @@
+{
+  "artifacts": {
+    "P2": {
+      "artifact_sha256": "a420ca80ee25aa90cdaccbde097447fe37d9988566da2a46c06d5c0953efde20",
+      "model_version": "P2-catboost-20260905-27fd0df",
+      "predict_seconds": 0.001547113999258727,
+      "rss_bytes": 184020992,
+      "winner": "catboost"
+    },
+    "P3": {
+      "artifact_sha256": "a169f6b139c2c8f544f93a54f80baf309b8971bd71feab022b9f5675264d398a",
+      "model_version": "P3-xgboost-20260905-27fd0df",
+      "predict_seconds": 0.001978916999651119,
+      "rss_bytes": 263786496,
+      "winner": "xgboost"
+    },
+    "P4": {
+      "artifact_sha256": "57a7a54f67406b6c5f4746449e6d776a00e5e45dfc66928c63a6238805b09598",
+      "model_version": "P4-logistic-20260905-27fd0df",
+      "predict_seconds": 0.002704100999981165,
+      "rss_bytes": 209760256,
+      "winner": "logistic"
+    },
+    "P6": {
+      "artifact_sha256": "2364e4f0b722b444b26fac9390c33e53f234fc6d69f80091640ad0a6fd790519",
+      "model_version": "P6-linear-20260905-27fd0df",
+      "predict_seconds": 0.0009557050000876189,
+      "rss_bytes": 149663744,
+      "winner": "linear"
+    }
+  },
+  "build_seconds": 13.084157199948095,
+  "git_sha": "27fd0df",
+  "library_versions": {
+    "catboost": "1.2.10",
+    "lightgbm": "4.7.0",
+    "numpy": "2.5.2",
+    "pandas": "3.0.5",
+    "python": "3.12.14",
+    "sklearn": "1.9.0",
+    "xgboost": "3.4.1"
+  },
+  "platform": "win32",
+  "timestamp_utc": "2026-09-05T13:35:46.729323+00:00"
+}

@@ -1811,3 +1811,143 @@ def test_p4_sensitivity_holdout_comparison_raises_if_populations_ever_overlap(df
 
     with pytest.raises(RuntimeError, match="D18 violation"):
         tr.p4_sensitivity_holdout_comparison(df, {"stub": {"role": "candidate"}}, "stub")
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 15 -- artifacts + full .meta.json (D15), models/ size (D14).
+# D22 (S9's fix): none of these tests may call, or allow a call to,
+# holdout_evaluate_p2/p3_p4/p6, p4_sensitivity_holdout_comparison, or
+# p6_backtest -- checkpoint 15 must never touch Holdout, and the
+# orchestration test below is the tripwire that proves it.
+# ---------------------------------------------------------------------------
+
+def test_observed_ad_budget_values_is_sorted_and_unique(df):
+    values = tr.observed_ad_budget_values(df)
+    assert values == sorted(set(values))
+    assert all(isinstance(v, float) for v in values)
+
+
+def test_ood_bounds_uses_train_only_and_locks_ad_budget_range(df):
+    train_df = tr.build_task_train_frame(df, "P2")
+    bounds = tr.ood_bounds(train_df, "P2")
+    assert bounds["ad_budget"] == {"min": 500.0, "max": 20000.0}  # SPEC-locked, not this split's own min/max
+    for col in tr.model_feature_columns("P2"):
+        if col == "ad_budget":
+            continue
+        assert bounds[col]["min"] == float(train_df[col].min())
+        assert bounds[col]["max"] == float(train_df[col].max())
+
+
+@pytest.mark.parametrize("task,expected_keys", [
+    ("P2", {"model", "ood_bounds", "conformal_quantile"}),
+    ("P3", {"model", "ood_bounds", "calibrator"}),
+    ("P4", {"model", "ood_bounds", "calibrator"}),
+    ("P6", {"model", "ood_bounds", "bootstrap"}),
+])
+def test_fit_sources_for_task_matches_d15_per_task(task, expected_keys):
+    sources = tr.fit_sources_for_task(task)
+    assert set(sources) == expected_keys
+    assert sources["model"] == "train"
+    assert sources["ood_bounds"] == "train"
+    if task == "P2":
+        assert sources["conformal_quantile"] == "calibration"
+    elif task in ("P3", "P4"):
+        assert sources["calibrator"] == "calibration"
+    else:
+        assert sources["bootstrap"] == "train"
+
+
+def _fake_build_any_task(task, name, results, given_df, train_df=None):
+    """Stands in for build_fitted_candidate across all four tasks
+    (checkpoint-15 tests): a REAL, cheap fit -- LinearRegression for
+    P2/P6, LogisticRegression for P3/P4 -- using the SAME preprocessing
+    plumbing a real candidate would use (D21)."""
+    steps = tr.build_preprocessing_steps(task, encode_budget_tier=(task == "P4"))
+    t_df = train_df if train_df is not None else tr.build_task_train_frame(given_df, task)
+    if task == "P4":
+        estimator, y = tr.LogisticRegression(max_iter=1000), tr.encode_referred_target(t_df[tr.TARGET[task]])
+    elif task == "P3":
+        estimator, y = tr.LogisticRegression(max_iter=1000), t_df[tr.TARGET[task]]
+    else:
+        estimator, y = tr.LinearRegression(), t_df[tr.TARGET[task]]
+    pipeline = tr.Pipeline(steps + [("model", estimator)])
+    pipeline.fit(t_df, y)
+    return pipeline
+
+
+def _fake_measure_rss(pipeline, sample, tmp_dir):
+    """Stands in for measure_rss_and_predict_time: RSS measurement is
+    local-only (D21) -- a real subprocess call has no place in a
+    CI-safe test, and is platform-specific (Windows-only, D19)."""
+    return {"rss_bytes": 123_456_789, "predict_seconds": 0.001234}
+
+
+def _checkpoint15_fake_metrics() -> dict:
+    """A minimal, already-frozen metrics.json stand-in -- exactly the
+    shape build_all_artifacts reads (winner + best_params per task,
+    P2's conformal quantile, P3/P4's calibration status). Never
+    contains a Holdout-derived number this test could accidentally
+    depend on."""
+    return {
+        "P2": {"stub": {"role": "candidate", "best_params": {}}},
+        "P2_selection": {"winner": "stub"},
+        "P2_conformal": {"q": 1.2345, "alpha": 0.05},
+        "P3": {"stub": {"role": "candidate", "best_params": {}}},
+        "P3_selection": {"winner": "stub"},
+        "P3_calibration": {"calibration_status": "calibrated", "calibration_method": "sigmoid"},
+        "P4": {"stub": {"role": "candidate", "best_params": {}}},
+        "P4_selection": {"winner": "stub"},
+        "P4_calibration": {"calibration_status": "calibrated", "calibration_method": "sigmoid"},
+        "P6": {"p6_1_reference": {"role": "candidate", "best_params": {}}},
+        "P6_selection": {"winner": "stub"},
+    }
+
+
+def test_build_all_artifacts_never_calls_a_holdout_function(df, monkeypatch, tmp_path):
+    """D22's tripwire (checkpoint 15 must never touch Holdout): every
+    one of the five Holdout-touching functions is monkeypatched to
+    raise; the full artifact-build path must complete successfully,
+    for all four tasks, without ever calling any of them."""
+    def _boom(*args, **kwargs):
+        raise AssertionError("checkpoint 15 must never call a Holdout-touching function (D22)")
+
+    for name in ("holdout_evaluate_p2", "holdout_evaluate_p3_p4", "holdout_evaluate_p6",
+                 "p4_sensitivity_holdout_comparison", "p6_backtest"):
+        monkeypatch.setattr(tr, name, _boom)
+
+    monkeypatch.setattr(tr, "build_fitted_candidate", _fake_build_any_task)
+    monkeypatch.setattr(tr, "build_task_calibration_frame", lambda given_df, t: _synthetic_calibration_frame(t))
+    monkeypatch.setattr(tr, "measure_rss_and_predict_time", _fake_measure_rss)
+
+    summary = tr.build_all_artifacts(df, _checkpoint15_fake_metrics(), tmp_path)
+
+    assert set(summary) == {"P2", "P3", "P4", "P6"}
+    for task in summary:
+        assert (tmp_path / f"{task}.joblib").exists()
+        meta = tr.read_metrics_json(tmp_path / f"{task}.meta.json")
+        assert meta["task"] == task
+        assert meta["target"] == tr.TARGET[task]
+        assert meta["artifact_role"] == "evaluation"
+        assert meta["fit_sources"] == tr.fit_sources_for_task(task)
+        assert meta["checksums"]["artifact_sha256"]  # filled in, not left as None
+        assert meta["population_n"]["holdout"] > 0  # a row COUNT is fine -- never a score
+        assert summary[task]["rss_bytes"] == 123_456_789  # came from the fake, proves no real subprocess ran
+
+    assert tr.read_metrics_json(tmp_path / "P2.meta.json")["interval_method"] == "split_conformal"
+    assert tr.read_metrics_json(tmp_path / "P6.meta.json")["interval_method"] == "bootstrap_percentile"
+    assert tr.read_metrics_json(tmp_path / "P6.meta.json")["p6_log1p_smearing"] != 0.0
+
+
+def test_build_task_artifact_raises_if_calibration_genuinely_failed(df, monkeypatch):
+    """P3/P4 only: build_task_artifact must never silently deploy an
+    uncalibrated model -- a real calibration failure (single-class
+    calibration target, same real sklearn exception as
+    test_fit_sigmoid_calibrator_reports_uncalibrated_on_a_real_failure)
+    must raise, not produce a P3/P4.joblib anyway."""
+    monkeypatch.setattr(tr, "build_fitted_candidate", _fake_build_any_task)
+    monkeypatch.setattr(tr, "build_task_calibration_frame",
+                         lambda given_df, t: pd.DataFrame({**{c: [0.0] * 10 for c in tr.model_feature_columns(t)},
+                                                            tr.TARGET[t]: (["No"] * 10 if t == "P4" else [0] * 10)}))
+
+    with pytest.raises(RuntimeError, match="calibration failed"):
+        tr.build_task_artifact("P4", df, _checkpoint15_fake_metrics(), "abc1234", "20260101")

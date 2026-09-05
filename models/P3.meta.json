@@ -1,0 +1,130 @@
+{
+  "algo": "xgboost",
+  "artifact_role": "evaluation",
+  "base_rate": 0.4635,
+  "calibration_method": "sigmoid",
+  "calibration_status": "calibrated",
+  "checksums": {
+    "artifact_sha256": "a169f6b139c2c8f544f93a54f80baf309b8971bd71feab022b9f5675264d398a",
+    "source_csv_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa"
+  },
+  "cv_folds": 5,
+  "feature_columns": [
+    "ad_budget",
+    "num_leads",
+    "leads_answered",
+    "followup_1",
+    "followup_2",
+    "followup_3",
+    "followup_4",
+    "followup_5",
+    "not_closed",
+    "closed",
+    "calls_to_closed",
+    "calls_to_not_closed",
+    "customer_acquisition_cost"
+  ],
+  "feature_dtypes": {
+    "ad_budget": "int64",
+    "calls_to_closed": "int64",
+    "calls_to_not_closed": "int64",
+    "closed": "int64",
+    "customer_acquisition_cost": "int64",
+    "followup_1": "int64",
+    "followup_2": "int64",
+    "followup_3": "int64",
+    "followup_4": "int64",
+    "followup_5": "int64",
+    "leads_answered": "int64",
+    "not_closed": "int64",
+    "num_leads": "int64"
+  },
+  "fit_sources": {
+    "calibrator": "calibration",
+    "model": "train",
+    "ood_bounds": "train"
+  },
+  "model_version": "P3-xgboost-20260905-27fd0df",
+  "observed_ad_budget_values": [
+    500.0,
+    800.0,
+    1000.0,
+    1500.0,
+    2000.0,
+    2500.0,
+    3000.0,
+    4000.0,
+    5000.0,
+    6000.0,
+    7000.0,
+    8000.0,
+    10000.0,
+    12000.0,
+    15000.0,
+    20000.0
+  ],
+  "ood_bounds": {
+    "ad_budget": {
+      "max": 20000.0,
+      "min": 500.0
+    },
+    "calls_to_closed": {
+      "max": 9.0,
+      "min": 1.0
+    },
+    "calls_to_not_closed": {
+      "max": 7.0,
+      "min": 0.0
+    },
+    "closed": {
+      "max": 9.0,
+      "min": 1.0
+    },
+    "customer_acquisition_cost": {
+      "max": 6666.0,
+      "min": 500.0
+    },
+    "followup_1": {
+      "max": 66.0,
+      "min": 3.0
+    },
+    "followup_2": {
+      "max": 51.0,
+      "min": 2.0
+    },
+    "followup_3": {
+      "max": 42.0,
+      "min": 1.0
+    },
+    "followup_4": {
+      "max": 37.0,
+      "min": 1.0
+    },
+    "followup_5": {
+      "max": 27.0,
+      "min": 1.0
+    },
+    "leads_answered": {
+      "max": 84.0,
+      "min": 5.0
+    },
+    "not_closed": {
+      "max": 19.0,
+      "min": 0.0
+    },
+    "num_leads": {
+      "max": 139.0,
+      "min": 11.0
+    }
+  },
+  "population_n": {
+    "calibration": 506,
+    "holdout": 633,
+    "train": 2024
+  },
+  "seed": 43,
+  "snapshot": "end_of_campaign_cycle",
+  "target": "upsell",
+  "task": "P3",
+  "training_date": "20260905"
+}
