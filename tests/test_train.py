@@ -1067,3 +1067,97 @@ def test_train_p6_guardrail_pairs_each_variant_against_a_single_change_comparato
         {"rmse_top10": 100.0 + i, "bias_top10": 10.0 - i, "k": 1} for i in range(5)
     ]
     assert "veto" not in result["p6_1_reference"]
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint 10 -- One-SE eligibility, the paired guardrail's
+# step-ג' removal, and the winner tie-break: all pure decision
+# functions over synthetic {mean_*, std_*, se_*, role} dicts, no real
+# fit involved (D21). build_fitted_candidate/measure_rss_and_predict_time
+# /lock_winner do real fits + spawn a subprocess and stay local-only,
+# same precedent as every other train_pX function.
+# ---------------------------------------------------------------------------
+
+def test_eligible_candidates_higher_is_better_uses_the_best_models_se():
+    results = {
+        "best": {"role": "candidate", "mean_roc_auc": 0.80, "se_roc_auc": 0.02},
+        "within_one_se": {"role": "candidate", "mean_roc_auc": 0.79, "se_roc_auc": 0.005},
+        "outside_one_se": {"role": "candidate", "mean_roc_auc": 0.77, "se_roc_auc": 0.005},
+        "dummy": {"role": "benchmark", "mean_roc_auc": 0.99, "se_roc_auc": 0.0},
+    }
+    eligible = tr.eligible_candidates(results, "roc_auc", higher_is_better=True)
+    assert set(eligible) == {"best", "within_one_se"}  # dummy excluded regardless of its mean
+
+
+def test_eligible_candidates_lower_is_better_uses_the_best_models_se():
+    results = {
+        "best": {"role": "candidate", "mean_mae": 2.00, "se_mae": 0.10},
+        "within_one_se": {"role": "baseline", "mean_mae": 2.05, "se_mae": 0.03},
+        "outside_one_se": {"role": "candidate", "mean_mae": 2.20, "se_mae": 0.03},
+        "dummy": {"role": "benchmark", "mean_mae": 0.50, "se_mae": 0.0},
+    }
+    eligible = tr.eligible_candidates(results, "mae", higher_is_better=False)
+    assert set(eligible) == {"best", "within_one_se"}
+
+
+def test_p6_deployable_results_removes_only_vetoed_variants():
+    p6_results = {name: {"role": "candidate"} for name in tr.make_p6_boosters()}
+    p6_results["dummy"] = {"role": "benchmark"}
+    p6_results["linear"] = {"role": "baseline"}
+    p6_guardrail = {
+        "p6_2_tweedie": {"veto": {"vetoed": True}},
+        "p6_3_huber": {"veto": {"vetoed": False}},
+        "p6_5_winsorized": {"veto": {"vetoed": False}},
+    }
+    deployable = tr.p6_deployable_results(p6_results, p6_guardrail)
+    assert set(deployable) == {"p6_1_reference", "p6_3_huber", "p6_5_winsorized", "dummy", "linear"}
+    assert "p6_2_tweedie" not in deployable
+
+
+def test_select_winner_baseline_wins_outright_when_eligible():
+    """Simplicity beats any Boosting score -- the eligible baseline is
+    picked even though a candidate has a far better std/RSS/time."""
+    eligible = {
+        "booster": {"role": "candidate", "std_roc_auc": 0.001},
+        "baseline": {"role": "baseline", "std_roc_auc": 0.5},
+    }
+    rss_bytes = {"booster": 1, "baseline": 999_999_999}
+    predict_seconds = {"booster": 0.0001, "baseline": 10.0}
+    assert tr.select_winner(eligible, "roc_auc", rss_bytes, predict_seconds) == "baseline"
+
+
+def test_select_winner_breaks_ties_by_std_then_rss_then_predict_time():
+    # (a) distinct std -> lowest std wins even with worse RSS/time.
+    eligible = {
+        "a": {"role": "candidate", "std_rmse": 1.0},
+        "b": {"role": "candidate", "std_rmse": 2.0},
+    }
+    rss = {"a": 999, "b": 1}
+    ms = {"a": 999.0, "b": 0.1}
+    assert tr.select_winner(eligible, "rmse", rss, ms) == "a"
+
+    # (b) tied std -> lowest RSS wins.
+    eligible = {
+        "a": {"role": "candidate", "std_rmse": 1.0},
+        "b": {"role": "candidate", "std_rmse": 1.0},
+    }
+    rss = {"a": 500, "b": 100}
+    ms = {"a": 0.001, "b": 999.0}
+    assert tr.select_winner(eligible, "rmse", rss, ms) == "b"
+
+    # (c) tied std AND RSS -> lowest predict time wins.
+    eligible = {
+        "a": {"role": "candidate", "std_rmse": 1.0},
+        "b": {"role": "candidate", "std_rmse": 1.0},
+    }
+    rss = {"a": 100, "b": 100}
+    ms = {"a": 5.0, "b": 0.5}
+    assert tr.select_winner(eligible, "rmse", rss, ms) == "b"
+
+
+def test_rss_measurement_script_is_valid_python_syntax():
+    """Never executed in CI (Windows ctypes/psapi + a real fitted
+    pipeline, both local-only per D19/D21) -- but a typo in this
+    string would otherwise only surface the next time someone runs
+    checkpoint 10 for real."""
+    compile(tr._RSS_MEASUREMENT_SCRIPT, "<_RSS_MEASUREMENT_SCRIPT>", "exec")

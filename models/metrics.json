@@ -182,6 +182,14 @@
       "std_rmse": 0.38047957403451643
     }
   },
+  "P2_selection": {
+    "eligible": [
+      "catboost",
+      "lightgbm",
+      "xgboost"
+    ],
+    "winner": "catboost"
+  },
   "P3": {
     "catboost": {
       "best_params": {
@@ -783,6 +791,14 @@
       }
     }
   },
+  "P3_selection": {
+    "eligible": [
+      "catboost",
+      "lightgbm",
+      "xgboost"
+    ],
+    "winner": "xgboost"
+  },
   "P3_weighted_comparison": {
     "catboost": {
       "class_weight_ratios_per_fold": [
@@ -1133,6 +1149,13 @@
       "std_recall": 0.03385329587132099,
       "std_roc_auc": 0.012922686884166076
     }
+  },
+  "P4_selection": {
+    "eligible": [
+      "catboost",
+      "logistic"
+    ],
+    "winner": "logistic"
   },
   "P6": {
     "dummy": {
@@ -1645,5 +1668,13 @@
         "vetoed": false
       }
     }
+  },
+  "P6_selection": {
+    "eligible": [
+      "linear",
+      "p6_1_reference",
+      "p6_5_winsorized"
+    ],
+    "winner": "linear"
   }
 }

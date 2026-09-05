@@ -10,20 +10,24 @@ currently holds checkpoint 3's split layer, checkpoint 4's shared CV
 folds + preprocessing Pipelines, checkpoint 5's decision-rule pure
 functions (One-SE, the paired guardrail veto, Split Conformal's
 quantile, top-decile metrics, Lift@K) -- all built and tested before
-any model is trained -- and checkpoints 6-9's actual training (P2, P3,
-P4, P6 + P6's paired guardrail crossover).
+any model is trained -- and checkpoints 6-10's actual training (P2, P3,
+P4, P6 + P6's paired guardrail crossover) and model selection (One-SE
+eligibility, RSS/prediction-time measurement, the winner tie-break).
 """
 from __future__ import annotations
 
 import json
 import math
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.features import FEATURES, TARGET, budget_tier  # noqa: E402
 from scripts.load_data import load_and_verify_csv  # noqa: E402
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin, clone
@@ -1110,6 +1114,242 @@ def train_p6_guardrail(df: pd.DataFrame, p6_results: dict) -> dict:
     return guardrail
 
 
+# ---------------------------------------------------------------------------
+# Checkpoint 10 -- RSS + prediction time for every One-SE-eligible
+# candidate (D19, measured BEFORE the tie-break and before the
+# Holdout opens) -> tie-break -> locking the winner per task.
+# ---------------------------------------------------------------------------
+
+PRIMARY_METRIC = {"P2": "mae", "P3": "roc_auc", "P4": "roc_auc", "P6": "rmse"}
+HIGHER_IS_BETTER = {"P2": False, "P3": True, "P4": True, "P6": False}
+
+
+def p6_deployable_results(p6_results: dict, p6_guardrail: dict) -> dict:
+    """SPEC's decision-order step ג': removes any P6 experimental
+    variant the guardrail vetoed, before One-SE ever sees it (One-SE
+    "cannot bring back" a vetoed variant). p6_1_reference, dummy and
+    linear are never subject to the veto and pass through unchanged --
+    only names in P6_EXPERIMENTAL_VARIANTS can be removed here."""
+    vetoed = {name for name in P6_EXPERIMENTAL_VARIANTS if p6_guardrail[name]["veto"]["vetoed"]}
+    return {name: r for name, r in p6_results.items() if name not in vetoed}
+
+
+def eligible_candidates(results: dict, primary_metric: str, higher_is_better: bool) -> dict:
+    """SPEC's decision-order step ד': every DEPLOYABLE candidate
+    (role != "benchmark" -- Dummy never participates in One-SE) whose
+    mean on the primary metric is within one SE of the best deployable
+    candidate's mean (checkpoint 5's one_se_eligible, using the best
+    model's own SE, never the candidate's). For P6, `results` must
+    already have vetoed variants removed by p6_deployable_results
+    (step ג') before being passed in here -- this function does not
+    know about the guardrail at all."""
+    deployable = {name: r for name, r in results.items() if r["role"] != "benchmark"}
+    mean_key, se_key = f"mean_{primary_metric}", f"se_{primary_metric}"
+    best_name = (max if higher_is_better else min)(deployable, key=lambda n: deployable[n][mean_key])
+    best_mean, best_se = deployable[best_name][mean_key], deployable[best_name][se_key]
+    return {
+        name: r for name, r in deployable.items()
+        if one_se_eligible(r[mean_key], best_mean, best_se, higher_is_better)
+    }
+
+
+def select_winner(eligible: dict, primary_metric: str, rss_bytes: dict, predict_seconds: dict) -> str:
+    """SPEC's decision-order step ה': among One-SE-eligible, deployable
+    candidates, a Linear/Logistic Baseline is picked outright if
+    eligible -- simplicity beats any Boosting score, no tie-break
+    needed since there is only ever one such Baseline per task.
+    Otherwise, ties among eligible Boosting candidates break by (a)
+    lower CV std on the primary metric, then (b) lower RSS, then (c)
+    lower prediction time -- SPEC's stated order, applied as a single
+    lexicographic sort so a real (near-impossible) three-way std tie
+    still resolves deterministically. rss_bytes/predict_seconds must
+    already be measured (D19) for every name in `eligible` -- this
+    function makes no measurement itself, only the documented
+    decision."""
+    baselines = [name for name, r in eligible.items() if r["role"] == "baseline"]
+    if baselines:
+        return baselines[0]
+    std_key = f"std_{primary_metric}"
+    return min(eligible, key=lambda name: (eligible[name][std_key], rss_bytes[name], predict_seconds[name]))
+
+
+def build_fitted_candidate(task: str, name: str, results: dict, df: pd.DataFrame) -> Pipeline:
+    """Refits ONE eligible, deployable candidate on the task's FULL
+    train set (not a single CV fold) using its own winning
+    configuration -- the real object a clean subprocess loads to
+    measure RSS and prediction time (D19). Mirrors each train_pX
+    function's own Pipeline construction for that exact candidate;
+    Boosting candidates get their searched best_params re-applied,
+    Linear/Logistic Baselines are built exactly as their train_pX
+    counterpart does (same max_iter, same preprocessing)."""
+    train_df = build_task_train_frame(df, task)
+    target = train_df[TARGET[task]]
+    y = encode_referred_target(target) if task == "P4" else target
+
+    def _with_winning_params(estimator):
+        params = {k.removeprefix("model__"): v for k, v in results[name]["best_params"].items()}
+        return clone(estimator).set_params(**params)
+
+    if task == "P2":
+        steps = build_preprocessing_steps(task, encode_budget_tier=False)
+        boosters = make_p2_boosters()
+        estimator = _with_winning_params(boosters[name][0]) if name in boosters else LinearRegression()
+        pipeline = Pipeline(steps + [("model", estimator)])
+        pipeline.fit(train_df, y)
+        return pipeline
+
+    if task == "P3":
+        steps = build_preprocessing_steps(task, encode_budget_tier=False)
+        boosters = make_p3_boosters()
+        # max_iter=5000 -- must match train_p3's own Baseline exactly (checkpoint 7).
+        estimator = _with_winning_params(boosters[name][0]) if name in boosters else LogisticRegression(max_iter=5000)
+        pipeline = Pipeline(steps + [("model", estimator)])
+        pipeline.fit(train_df, y)
+        return pipeline
+
+    if task == "P4":
+        if name == "catboost":
+            estimator = _with_winning_params(make_p4_boosters()["catboost"][0])
+            steps = build_preprocessing_steps(task, encode_budget_tier=False)
+            cat_features_index = len(model_feature_columns(task))
+            pipeline = Pipeline(steps + [("model", estimator)])
+            pipeline.fit(train_df, y, model__cat_features=[cat_features_index])
+            return pipeline
+        # max_iter=50000 -- must match train_p4's own Baseline exactly (checkpoint 8).
+        steps = build_preprocessing_steps(task, encode_budget_tier=True)
+        pipeline = Pipeline(steps + [("model", LogisticRegression(max_iter=50000))])
+        pipeline.fit(train_df, y)
+        return pipeline
+
+    if task == "P6":
+        boosters = make_p6_boosters()
+        if name in boosters:
+            _, _, winsorize = boosters[name]
+            estimator = _with_winning_params(boosters[name][0])
+            steps = build_preprocessing_steps(task, encode_budget_tier=False, winsorize=winsorize)
+        else:
+            estimator = LinearRegression()
+            steps = build_preprocessing_steps(task, encode_budget_tier=False)
+        pipeline = Pipeline(steps + [("model", estimator)])
+        pipeline.fit(train_df, y)
+        return pipeline
+
+    raise ValueError(f"unknown task {task!r}")
+
+
+# D19's "~6 lines of stdlib" RSS reader, run inside a freshly-spawned
+# subprocess (not this long-running process, which has every library
+# for every task already imported -- that overhead would swamp the
+# relative comparison between candidates). Windows-only (ctypes.windll
+# / psapi) -- this measures the RELATIVE footprint between candidates
+# on THIS machine; phase 12 re-measures on Render's actual Linux
+# container to check the absolute 512MB limit (D19's documented
+# platform gap). A subprocess script, not a second file -- D1 keeps
+# every line of phase 6 in this one module.
+_RSS_MEASUREMENT_SCRIPT = """
+import ctypes, ctypes.wintypes as wt, json, sys, time
+import joblib
+
+class _ProcessMemoryCounters(ctypes.Structure):
+    _fields_ = [
+        ("cb", wt.DWORD), ("PageFaultCount", wt.DWORD),
+        ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+        ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
+    ]
+
+# Explicit argtypes/restype are mandatory here, not stylistic: without
+# them ctypes defaults GetCurrentProcess()'s return to a 32-bit c_int,
+# which silently mishandles the 64-bit pseudo-handle on this platform
+# -- verified empirically (GetProcessMemoryInfo "succeeds" but leaves
+# WorkingSetSize at 0, since its own return value was never checked
+# either). Both bugs are fixed together: declare real types, and raise
+# on a false return instead of trusting a zero-initialized struct.
+_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_psapi = ctypes.WinDLL("psapi", use_last_error=True)
+_kernel32.GetCurrentProcess.restype = wt.HANDLE
+_psapi.GetProcessMemoryInfo.argtypes = [wt.HANDLE, ctypes.POINTER(_ProcessMemoryCounters), wt.DWORD]
+_psapi.GetProcessMemoryInfo.restype = wt.BOOL
+
+def _rss_bytes():
+    counters = _ProcessMemoryCounters()
+    counters.cb = ctypes.sizeof(_ProcessMemoryCounters)
+    ok = _psapi.GetProcessMemoryInfo(_kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb)
+    if not ok:
+        raise ctypes.WinError(ctypes.get_last_error())
+    return counters.WorkingSetSize
+
+pipeline_path, sample_path, n_repeats, project_root = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+sys.path.insert(0, project_root)  # some candidates (e.g. p6_5_winsorized) unpickle a
+                                   # scripts.train class (_Winsorizer) -- needs the
+                                   # project root importable, same as train.py's own setup.
+pipeline = joblib.load(pipeline_path)
+sample = joblib.load(sample_path)
+pipeline.predict(sample)  # one warm-up call, excluded from the timing
+
+t0 = time.perf_counter()
+for _ in range(n_repeats):
+    pipeline.predict(sample)
+predict_seconds = (time.perf_counter() - t0) / n_repeats
+
+print(json.dumps({"rss_bytes": _rss_bytes(), "predict_seconds": predict_seconds}))
+"""
+
+
+def measure_rss_and_predict_time(pipeline: Pipeline, sample: pd.DataFrame, tmp_dir: Path, n_repeats: int = 100) -> dict:
+    """Persists `pipeline` and a single-row `sample` (one API request's
+    worth of input -- prediction latency is a per-request concern, not
+    a batch-throughput one), then spawns a clean subprocess that loads
+    only what this specific model needs and reports RSS + average
+    single-row predict() time over n_repeats calls."""
+    if sys.platform != "win32":
+        raise NotImplementedError("RSS measurement uses ctypes/psapi and is Windows-only (D19's documented platform gap)")
+
+    pipeline_path = tmp_dir / "candidate_pipeline.joblib"
+    sample_path = tmp_dir / "candidate_sample.joblib"
+    script_path = tmp_dir / "_measure_rss.py"
+    joblib.dump(pipeline, pipeline_path)
+    joblib.dump(sample, sample_path)
+    script_path.write_text(_RSS_MEASUREMENT_SCRIPT, encoding="utf-8")
+
+    project_root = Path(__file__).resolve().parent.parent
+    result = subprocess.run(
+        [sys.executable, str(script_path), str(pipeline_path), str(sample_path), str(n_repeats), str(project_root)],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"RSS measurement subprocess failed for {pipeline_path.name}:\n{result.stderr}")
+    return json.loads(result.stdout)
+
+
+def lock_winner(task: str, df: pd.DataFrame, results: dict, tmp_dir: Path) -> dict:
+    """Orchestrates checkpoint 10 for one task: find the One-SE
+    eligible set (step ד'), measure RSS + prediction time for EVERY
+    eligible candidate BEFORE the tie-break (D19, criterion 6 -- not
+    only for whichever pair turns out tied), then lock the winner
+    (step ה'). For P6, `results` must already be p6_deployable_results'
+    output (vetoed variants removed, step ג')."""
+    primary_metric, higher_is_better = PRIMARY_METRIC[task], HIGHER_IS_BETTER[task]
+    eligible = eligible_candidates(results, primary_metric, higher_is_better)
+
+    rss_bytes, predict_seconds = {}, {}
+    for name in eligible:
+        pipeline = build_fitted_candidate(task, name, results, df)
+        sample = build_task_train_frame(df, task).iloc[[0]]
+        measured = measure_rss_and_predict_time(pipeline, sample, tmp_dir)
+        rss_bytes[name] = measured["rss_bytes"]
+        predict_seconds[name] = measured["predict_seconds"]
+
+    winner = select_winner(eligible, primary_metric, rss_bytes, predict_seconds)
+    return {
+        "eligible": sorted(eligible),
+        "rss_bytes": rss_bytes,
+        "predict_seconds": predict_seconds,
+        "winner": winner,
+    }
+
+
 def read_metrics_json(path: Path) -> dict:
     """Whatever tasks have been written so far -- {} if the file
     doesn't exist yet (checkpoint 6 is the first task to write it)."""
@@ -1134,6 +1374,25 @@ def write_metrics_json(all_results: dict, path: Path) -> None:
 
 
 if __name__ == "__main__":
+    # Running this file directly (python scripts/train.py) makes every
+    # class/function defined in it carry __module__="__main__" -- a
+    # Pipeline built here pickles a reference to "__main__._Winsorizer"
+    # etc., which a DIFFERENT process's own __main__ (checkpoint 10's
+    # RSS-measurement subprocess; later, phase 9's serving process
+    # loading the deployed .joblib) cannot resolve (verified empirically
+    # -- AttributeError/PicklingError on the two module-level helpers
+    # that ever get pickled: _add_budget_tier, _Winsorizer). Fixed by
+    # re-importing this same file under its real dotted name (the
+    # sys.path insert above already makes "scripts" importable) and
+    # rebinding those two names in THIS module's globals to that copy
+    # -- build_preprocessing_steps/build_fitted_candidate look them up
+    # from globals() at call time, so every Pipeline built from here on
+    # picks up the properly-named versions transparently.
+    import importlib
+    _real_module = importlib.import_module("scripts.train")
+    _add_budget_tier = _real_module._add_budget_tier
+    _Winsorizer = _real_module._Winsorizer
+
     df = load_and_verify_csv(Path(__file__).resolve().parent.parent / "funnel_marketing_data.csv")
     for task in ("P2", "P3", "P4", "P6"):
         parts = split_task(df, task)
@@ -1230,6 +1489,21 @@ if __name__ == "__main__":
               f"delta_abs_bias={[round(d, 2) for d in g['delta_abs_bias_per_fold']]} "
               f"vetoed={g['veto']['vetoed']}")
 
+    print("--- checkpoint 10: RSS + predict time for One-SE-eligible candidates -> lock the winner ---")
+    p6_deployable = p6_deployable_results(p6_results, p6_guardrail)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        selections = {
+            "P2": lock_winner("P2", df, p2_results, tmp_dir),
+            "P3": lock_winner("P3", df, p3_results, tmp_dir),
+            "P4": lock_winner("P4", df, p4_results, tmp_dir),
+            "P6": lock_winner("P6", df, p6_deployable, tmp_dir),
+        }
+    for task, sel in selections.items():
+        rss_mb = {n: round(b / 1_048_576, 2) for n, b in sel["rss_bytes"].items()}
+        ms = {n: round(s * 1000, 4) for n, s in sel["predict_seconds"].items()}
+        print(f"{task} eligible={sel['eligible']} rss_MB={rss_mb} predict_ms={ms} winner={sel['winner']}")
+
     metrics_path = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
     all_metrics = read_metrics_json(metrics_path)
     all_metrics["P2"] = p2_results
@@ -1239,5 +1513,11 @@ if __name__ == "__main__":
     all_metrics["P4"] = p4_results
     all_metrics["P6"] = p6_results
     all_metrics["P6_guardrail"] = p6_guardrail
+    # Only the deterministic decision (eligible set + winner) goes into
+    # metrics.json -- rss_bytes/predict_seconds are volatile
+    # machine-dependent measurements and belong in run_metadata.json
+    # (D14, checkpoint 15), not here.
+    for task, sel in selections.items():
+        all_metrics[f"{task}_selection"] = {"eligible": sel["eligible"], "winner": sel["winner"]}
     write_metrics_json(all_metrics, metrics_path)
     print(f"wrote {metrics_path}")
