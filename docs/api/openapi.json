@@ -1,0 +1,1633 @@
+{
+  "components": {
+    "schemas": {
+      "BudgetAllocation": {
+        "additionalProperties": false,
+        "properties": {
+          "ad_budget": {
+            "exclusiveMinimum": 0.0,
+            "title": "Ad Budget",
+            "type": "integer"
+          },
+          "count": {
+            "exclusiveMinimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "sample_size": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sample Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ad_budget",
+          "count",
+          "sample_size"
+        ],
+        "title": "BudgetAllocation",
+        "type": "object"
+      },
+      "BudgetSimulation": {
+        "additionalProperties": false,
+        "properties": {
+          "bootstrap_percentiles": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "const": 2.5,
+                "type": "number"
+              },
+              {
+                "const": 97.5,
+                "type": "number"
+              }
+            ],
+            "title": "Bootstrap Percentiles",
+            "type": "array"
+          },
+          "interval_method": {
+            "const": "bootstrap_percentile",
+            "title": "Interval Method",
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/RegressionMetrics"
+          },
+          "model_algorithm": {
+            "minLength": 1,
+            "title": "Model Algorithm",
+            "type": "string"
+          },
+          "model_version": {
+            "minLength": 1,
+            "title": "Model Version",
+            "type": "string"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyResult"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "Strategies",
+            "type": "array"
+          },
+          "top_two_overlap": {
+            "title": "Top Two Overlap",
+            "type": "boolean"
+          },
+          "total_budget": {
+            "const": 50000,
+            "title": "Total Budget",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_budget",
+          "interval_method",
+          "bootstrap_percentiles",
+          "top_two_overlap",
+          "strategies",
+          "model_version",
+          "model_algorithm",
+          "metrics"
+        ],
+        "title": "BudgetSimulation",
+        "type": "object"
+      },
+      "BudgetTiersResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "tiers": {
+            "items": {
+              "$ref": "#/components/schemas/TierRow"
+            },
+            "maxItems": 4,
+            "title": "Tiers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tiers"
+        ],
+        "title": "BudgetTiersResponse",
+        "type": "object"
+      },
+      "CallsBucket": {
+        "additionalProperties": false,
+        "properties": {
+          "calls": {
+            "minimum": 0.0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "n": {
+            "exclusiveMinimum": 0.0,
+            "title": "N",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "calls",
+          "n"
+        ],
+        "title": "CallsBucket",
+        "type": "object"
+      },
+      "CallsDistribution": {
+        "additionalProperties": false,
+        "properties": {
+          "distribution": {
+            "items": {
+              "$ref": "#/components/schemas/CallsBucket"
+            },
+            "minItems": 1,
+            "title": "Distribution",
+            "type": "array"
+          },
+          "population_n": {
+            "exclusiveMinimum": 0.0,
+            "title": "Population N",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "population_n",
+          "distribution"
+        ],
+        "title": "CallsDistribution",
+        "type": "object"
+      },
+      "CallsPart": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CallsDistribution"
+          },
+          "status": {
+            "const": "available",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "data"
+        ],
+        "title": "CallsPart",
+        "type": "object"
+      },
+      "ClassificationMetrics": {
+        "additionalProperties": false,
+        "description": "P3 and P4. log_loss is bounded below by 0 and deliberately not\nbounded above.",
+        "properties": {
+          "cv": {
+            "$ref": "#/components/schemas/_CvClassification"
+          },
+          "holdout": {
+            "$ref": "#/components/schemas/_HoldoutClassification"
+          }
+        },
+        "required": [
+          "cv",
+          "holdout"
+        ],
+        "title": "ClassificationMetrics",
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "additionalProperties": false,
+        "description": "401 / 403 / 500 / 503.",
+        "properties": {
+          "detail": {
+            "minLength": 1,
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      },
+      "FollowupResponse": {
+        "additionalProperties": false,
+        "description": "Neither of the 14 contract fields -- this is insight aggregation,\nnot a prediction (D4).",
+        "properties": {
+          "calls_to_closed": {
+            "discriminator": {
+              "mapping": {
+                "available": "#/components/schemas/CallsPart",
+                "unavailable": "#/components/schemas/PartUnavailable"
+              },
+              "propertyName": "status"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CallsPart"
+              },
+              {
+                "$ref": "#/components/schemas/PartUnavailable"
+              }
+            ],
+            "title": "Calls To Closed"
+          },
+          "stages": {
+            "discriminator": {
+              "mapping": {
+                "available": "#/components/schemas/StagesPart",
+                "unavailable": "#/components/schemas/PartUnavailable"
+              },
+              "propertyName": "status"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StagesPart"
+              },
+              {
+                "$ref": "#/components/schemas/PartUnavailable"
+              }
+            ],
+            "title": "Stages"
+          }
+        },
+        "required": [
+          "stages",
+          "calls_to_closed"
+        ],
+        "title": "FollowupResponse",
+        "type": "object"
+      },
+      "FunnelInput": {
+        "additionalProperties": false,
+        "description": "The 13 model-input features, all strict int, all >= 0. Model-level\nstrict (ConfigDict) is correct here since every field is int -- see\nD.0b.",
+        "properties": {
+          "ad_budget": {
+            "minimum": 0.0,
+            "title": "Ad Budget",
+            "type": "integer"
+          },
+          "calls_to_closed": {
+            "minimum": 0.0,
+            "title": "Calls To Closed",
+            "type": "integer"
+          },
+          "calls_to_not_closed": {
+            "minimum": 0.0,
+            "title": "Calls To Not Closed",
+            "type": "integer"
+          },
+          "closed": {
+            "minimum": 0.0,
+            "title": "Closed",
+            "type": "integer"
+          },
+          "customer_acquisition_cost": {
+            "minimum": 0.0,
+            "title": "Customer Acquisition Cost",
+            "type": "integer"
+          },
+          "followup_1": {
+            "minimum": 0.0,
+            "title": "Followup 1",
+            "type": "integer"
+          },
+          "followup_2": {
+            "minimum": 0.0,
+            "title": "Followup 2",
+            "type": "integer"
+          },
+          "followup_3": {
+            "minimum": 0.0,
+            "title": "Followup 3",
+            "type": "integer"
+          },
+          "followup_4": {
+            "minimum": 0.0,
+            "title": "Followup 4",
+            "type": "integer"
+          },
+          "followup_5": {
+            "minimum": 0.0,
+            "title": "Followup 5",
+            "type": "integer"
+          },
+          "leads_answered": {
+            "minimum": 0.0,
+            "title": "Leads Answered",
+            "type": "integer"
+          },
+          "not_closed": {
+            "minimum": 0.0,
+            "title": "Not Closed",
+            "type": "integer"
+          },
+          "num_leads": {
+            "minimum": 0.0,
+            "title": "Num Leads",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ad_budget",
+          "num_leads",
+          "leads_answered",
+          "followup_1",
+          "followup_2",
+          "followup_3",
+          "followup_4",
+          "followup_5",
+          "not_closed",
+          "closed",
+          "calls_to_closed",
+          "calls_to_not_closed",
+          "customer_acquisition_cost"
+        ],
+        "title": "FunnelInput",
+        "type": "object"
+      },
+      "FunnelStage": {
+        "additionalProperties": false,
+        "properties": {
+          "drop_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drop Rate"
+          },
+          "from_leads": {
+            "minimum": 0.0,
+            "title": "From Leads",
+            "type": "integer"
+          },
+          "stage": {
+            "enum": [
+              "followup_1",
+              "followup_2",
+              "followup_3",
+              "followup_4",
+              "followup_5"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "stage_order": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Stage Order",
+            "type": "integer"
+          },
+          "to_leads": {
+            "minimum": 0.0,
+            "title": "To Leads",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stage_order",
+          "stage",
+          "from_leads",
+          "to_leads",
+          "drop_rate"
+        ],
+        "title": "FunnelStage",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "additionalProperties": false,
+        "description": "422 only.",
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationErrorItem"
+            },
+            "minItems": 1,
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IntervalDetails": {
+        "additionalProperties": false,
+        "description": "P2's conformal-coverage detail block -- a sub-model of\nLtvPrediction only (D7), not RegressionMetrics, which is shared with\nP6 and has no measured coverage of its own.",
+        "properties": {
+          "measured_coverage": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Measured Coverage",
+            "type": "number"
+          },
+          "nominal_coverage": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Nominal Coverage",
+            "type": "number"
+          }
+        },
+        "required": [
+          "nominal_coverage",
+          "measured_coverage"
+        ],
+        "title": "IntervalDetails",
+        "type": "object"
+      },
+      "LtvPrediction": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_level": {
+            "anyOf": [
+              {
+                "const": "low",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Level"
+          },
+          "in_training_domain": {
+            "title": "In Training Domain",
+            "type": "boolean"
+          },
+          "interval_details": {
+            "$ref": "#/components/schemas/IntervalDetails"
+          },
+          "interval_method": {
+            "const": "split_conformal",
+            "title": "Interval Method",
+            "type": "string"
+          },
+          "lower_bound": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower Bound"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/RegressionMetrics"
+          },
+          "model_algorithm": {
+            "minLength": 1,
+            "title": "Model Algorithm",
+            "type": "string"
+          },
+          "model_version": {
+            "minLength": 1,
+            "title": "Model Version",
+            "type": "string"
+          },
+          "point_estimate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Point Estimate"
+          },
+          "upper_bound": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper Bound"
+          },
+          "warnings": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "ood_feature_out_of_range": "#/components/schemas/OODWarning",
+                  "unobserved_budget_level": "#/components/schemas/UnobservedBudgetWarning"
+                },
+                "propertyName": "code"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/OODWarning"
+                },
+                {
+                  "$ref": "#/components/schemas/UnobservedBudgetWarning"
+                }
+              ]
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "point_estimate",
+          "lower_bound",
+          "upper_bound",
+          "interval_method",
+          "interval_details",
+          "evidence_level",
+          "in_training_domain",
+          "warnings",
+          "model_version",
+          "model_algorithm",
+          "metrics"
+        ],
+        "title": "LtvPrediction",
+        "type": "object"
+      },
+      "OODWarning": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "const": "ood_feature_out_of_range",
+            "title": "Code",
+            "type": "string"
+          },
+          "feature": {
+            "enum": [
+              "ad_budget",
+              "num_leads",
+              "leads_answered",
+              "followup_1",
+              "followup_2",
+              "followup_3",
+              "followup_4",
+              "followup_5",
+              "not_closed",
+              "closed",
+              "calls_to_closed",
+              "calls_to_not_closed",
+              "customer_acquisition_cost"
+            ],
+            "title": "Feature",
+            "type": "string"
+          },
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "message": {
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "feature",
+          "value",
+          "min",
+          "max"
+        ],
+        "title": "OODWarning",
+        "type": "object"
+      },
+      "PartError": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "reason_code": {
+            "enum": [
+              "data_unavailable",
+              "aggregation_mismatch"
+            ],
+            "title": "Reason Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason_code",
+          "message"
+        ],
+        "title": "PartError",
+        "type": "object"
+      },
+      "PartUnavailable": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/PartError"
+          },
+          "status": {
+            "const": "unavailable",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "error"
+        ],
+        "title": "PartUnavailable",
+        "type": "object"
+      },
+      "PropensityPrediction": {
+        "additionalProperties": false,
+        "properties": {
+          "base_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Base Rate",
+            "type": "number"
+          },
+          "calibration_method": {
+            "const": "sigmoid",
+            "title": "Calibration Method",
+            "type": "string"
+          },
+          "calibration_status": {
+            "enum": [
+              "calibrated",
+              "uncalibrated"
+            ],
+            "title": "Calibration Status",
+            "type": "string"
+          },
+          "event_probability": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Probability"
+          },
+          "evidence_level": {
+            "anyOf": [
+              {
+                "const": "low",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Level"
+          },
+          "in_training_domain": {
+            "title": "In Training Domain",
+            "type": "boolean"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/ClassificationMetrics"
+          },
+          "model_algorithm": {
+            "minLength": 1,
+            "title": "Model Algorithm",
+            "type": "string"
+          },
+          "model_version": {
+            "minLength": 1,
+            "title": "Model Version",
+            "type": "string"
+          },
+          "propensity_band": {
+            "anyOf": [
+              {
+                "enum": [
+                  "below_base",
+                  "near_base",
+                  "above_base"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Propensity Band"
+          },
+          "warnings": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "ood_feature_out_of_range": "#/components/schemas/OODWarning",
+                  "unobserved_budget_level": "#/components/schemas/UnobservedBudgetWarning"
+                },
+                "propertyName": "code"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/OODWarning"
+                },
+                {
+                  "$ref": "#/components/schemas/UnobservedBudgetWarning"
+                }
+              ]
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "event_probability",
+          "base_rate",
+          "propensity_band",
+          "evidence_level",
+          "in_training_domain",
+          "warnings",
+          "model_version",
+          "model_algorithm",
+          "calibration_status",
+          "calibration_method",
+          "metrics"
+        ],
+        "title": "PropensityPrediction",
+        "type": "object"
+      },
+      "RegressionMetrics": {
+        "additionalProperties": false,
+        "description": "P2 and P6. r2 is bounded above by 1 and deliberately NOT bounded\nbelow -- a negative R2 (worse than the mean predictor) is a\nlegitimate value.",
+        "properties": {
+          "cv": {
+            "$ref": "#/components/schemas/_CvRegression"
+          },
+          "holdout": {
+            "$ref": "#/components/schemas/_HoldoutRegression"
+          }
+        },
+        "required": [
+          "cv",
+          "holdout"
+        ],
+        "title": "RegressionMetrics",
+        "type": "object"
+      },
+      "StagesPart": {
+        "additionalProperties": false,
+        "description": "A specialized AvailablePart[list[FunnelStage]] carrying the\nlist-level invariants (D.8g rules 16, 18) that the generic base\ncannot express: exactly 5 rows, in the fixed stage_order/stage\nsequence, chained to_leads[i] == from_leads[i+1] -- both mirror\nfollowup_insight's five fixed `union all` branches exactly.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/FunnelStage"
+            },
+            "maxItems": 5,
+            "minItems": 5,
+            "title": "Data",
+            "type": "array"
+          },
+          "status": {
+            "const": "available",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "data"
+        ],
+        "title": "StagesPart",
+        "type": "object"
+      },
+      "StrategyResult": {
+        "additionalProperties": false,
+        "properties": {
+          "allocations": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetAllocation"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Allocations",
+            "type": "array"
+          },
+          "bootstrap_iterations": {
+            "exclusiveMinimum": 0.0,
+            "title": "Bootstrap Iterations",
+            "type": "integer"
+          },
+          "evidence_level": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Evidence Level",
+            "type": "string"
+          },
+          "in_training_domain": {
+            "const": true,
+            "title": "In Training Domain",
+            "type": "boolean"
+          },
+          "lower_bound": {
+            "minimum": 0.0,
+            "title": "Lower Bound",
+            "type": "number"
+          },
+          "point_estimate": {
+            "minimum": 0.0,
+            "title": "Point Estimate",
+            "type": "number"
+          },
+          "rank": {
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Rank",
+            "type": "integer"
+          },
+          "strategy_id": {
+            "enum": [
+              "2x20000_1x10000",
+              "10x5000",
+              "25x2000",
+              "100x500"
+            ],
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "upper_bound": {
+            "minimum": 0.0,
+            "title": "Upper Bound",
+            "type": "number"
+          },
+          "warnings": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "ood_feature_out_of_range": "#/components/schemas/OODWarning",
+                  "unobserved_budget_level": "#/components/schemas/UnobservedBudgetWarning"
+                },
+                "propertyName": "code"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/OODWarning"
+                },
+                {
+                  "$ref": "#/components/schemas/UnobservedBudgetWarning"
+                }
+              ]
+            },
+            "maxItems": 0,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "rank",
+          "allocations",
+          "point_estimate",
+          "lower_bound",
+          "upper_bound",
+          "bootstrap_iterations",
+          "evidence_level",
+          "in_training_domain",
+          "warnings"
+        ],
+        "title": "StrategyResult",
+        "type": "object"
+      },
+      "TierRow": {
+        "additionalProperties": false,
+        "properties": {
+          "budget_tier": {
+            "anyOf": [
+              {
+                "enum": [
+                  "Low",
+                  "Mid",
+                  "High"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Tier"
+          },
+          "conversion_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversion Rate"
+          },
+          "n_records": {
+            "exclusiveMinimum": 0.0,
+            "title": "N Records",
+            "type": "integer"
+          },
+          "tier_order": {
+            "anyOf": [
+              {
+                "enum": [
+                  1,
+                  2,
+                  3
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier Order"
+          }
+        },
+        "required": [
+          "tier_order",
+          "budget_tier",
+          "n_records",
+          "conversion_rate"
+        ],
+        "title": "TierRow",
+        "type": "object"
+      },
+      "UnobservedBudgetWarning": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "const": "unobserved_budget_level",
+            "title": "Code",
+            "type": "string"
+          },
+          "feature": {
+            "const": "ad_budget",
+            "title": "Feature",
+            "type": "string"
+          },
+          "message": {
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "value": {
+            "exclusiveMinimum": 0.0,
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "feature",
+          "value"
+        ],
+        "title": "UnobservedBudgetWarning",
+        "type": "object"
+      },
+      "ValidationErrorItem": {
+        "additionalProperties": false,
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "minItems": 1,
+            "title": "Loc",
+            "type": "array"
+          },
+          "msg": {
+            "minLength": 1,
+            "title": "Msg",
+            "type": "string"
+          },
+          "type": {
+            "minLength": 1,
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationErrorItem",
+        "type": "object"
+      },
+      "_CvClassification": {
+        "additionalProperties": false,
+        "properties": {
+          "mean_brier": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Mean Brier",
+            "type": "number"
+          },
+          "mean_log_loss": {
+            "minimum": 0.0,
+            "title": "Mean Log Loss",
+            "type": "number"
+          },
+          "mean_pr_auc": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Mean Pr Auc",
+            "type": "number"
+          },
+          "mean_roc_auc": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Mean Roc Auc",
+            "type": "number"
+          }
+        },
+        "required": [
+          "mean_roc_auc",
+          "mean_pr_auc",
+          "mean_brier",
+          "mean_log_loss"
+        ],
+        "title": "_CvClassification",
+        "type": "object"
+      },
+      "_CvRegression": {
+        "additionalProperties": false,
+        "properties": {
+          "mean_mae": {
+            "minimum": 0.0,
+            "title": "Mean Mae",
+            "type": "number"
+          },
+          "mean_r2": {
+            "maximum": 1.0,
+            "title": "Mean R2",
+            "type": "number"
+          },
+          "mean_rmse": {
+            "minimum": 0.0,
+            "title": "Mean Rmse",
+            "type": "number"
+          }
+        },
+        "required": [
+          "mean_mae",
+          "mean_rmse",
+          "mean_r2"
+        ],
+        "title": "_CvRegression",
+        "type": "object"
+      },
+      "_HoldoutClassification": {
+        "additionalProperties": false,
+        "properties": {
+          "brier": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Brier",
+            "type": "number"
+          },
+          "log_loss": {
+            "minimum": 0.0,
+            "title": "Log Loss",
+            "type": "number"
+          },
+          "pr_auc": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Pr Auc",
+            "type": "number"
+          },
+          "roc_auc": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Roc Auc",
+            "type": "number"
+          }
+        },
+        "required": [
+          "roc_auc",
+          "pr_auc",
+          "brier",
+          "log_loss"
+        ],
+        "title": "_HoldoutClassification",
+        "type": "object"
+      },
+      "_HoldoutRegression": {
+        "additionalProperties": false,
+        "properties": {
+          "mae": {
+            "minimum": 0.0,
+            "title": "Mae",
+            "type": "number"
+          },
+          "r2": {
+            "maximum": 1.0,
+            "title": "R2",
+            "type": "number"
+          },
+          "rmse": {
+            "minimum": 0.0,
+            "title": "Rmse",
+            "type": "number"
+          }
+        },
+        "required": [
+          "mae",
+          "rmse",
+          "r2"
+        ],
+        "title": "_HoldoutRegression",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "FunnelIQ API contract",
+    "version": "phase-8"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/insights/budget-tiers": {
+      "get": {
+        "operationId": "insights_budget_tiers_api_insights_budget_tiers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetTiersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Insights Budget Tiers"
+      }
+    },
+    "/api/insights/followup": {
+      "get": {
+        "operationId": "insights_followup_api_insights_followup_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowupResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Insights Followup"
+      }
+    },
+    "/api/predict/ltv": {
+      "post": {
+        "operationId": "predict_ltv_api_predict_ltv_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FunnelInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LtvPrediction"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Predict Ltv"
+      }
+    },
+    "/api/predict/referral": {
+      "post": {
+        "operationId": "predict_referral_api_predict_referral_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FunnelInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PropensityPrediction"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Predict Referral"
+      }
+    },
+    "/api/predict/upsell": {
+      "post": {
+        "operationId": "predict_upsell_api_predict_upsell_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FunnelInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PropensityPrediction"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Predict Upsell"
+      }
+    },
+    "/api/simulate/budget": {
+      "get": {
+        "operationId": "simulate_budget_api_simulate_budget_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetSimulation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Simulate Budget"
+      }
+    }
+  }
+}
