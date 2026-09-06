@@ -36,7 +36,16 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.features import DERIVED_FROM_PROFILE, FEATURES, TARGET, budget_tier  # noqa: E402
+from app.features import (  # noqa: E402
+    DERIVED_FROM_PROFILE,
+    DROPPED_COLLINEAR,
+    FEATURES,
+    MODEL_INPUT_FEATURES,
+    STRATEGY_ALLOCATIONS,
+    TARGET,
+    budget_tier,
+    model_feature_columns,
+)
 from scripts.load_data import EXPECTED_COLUMNS, load_and_verify_csv  # noqa: E402
 # Imported as a module, not `from ... import EXPECTED_SHA256` -- checkpoint
 # 15's .meta.json reads load_data_module.EXPECTED_SHA256 at call time so
@@ -161,19 +170,13 @@ def p4_sensitivity_population(df: pd.DataFrame, p4_holdout_ids: pd.Series) -> pd
 # D3, D4, D5, D6).
 # ---------------------------------------------------------------------------
 
-# Dropped inside every Pipeline (D4): leads_not_answered = num_leads -
-# leads_answered exactly, so at most two of the three collinear columns
-# ever enter a model. num_leads + leads_answered are kept; answer_rate
-# is never added, for either model.
-DROPPED_COLLINEAR = "leads_not_answered"
-
-
-def model_feature_columns(task: str) -> list[str]:
-    """FEATURES[task] minus the dropped collinear column (D4) -- the
-    raw columns every model for this task actually sees. Zero missing
-    values among any task's features on the real data (D5, measured in
-    PHASE6.md §ב) -- no imputer anywhere in the Pipeline."""
-    return [c for c in FEATURES[task] if c != DROPPED_COLLINEAR]
+# DROPPED_COLLINEAR and model_feature_columns() moved to app/features.py
+# in phase 8 (docs/planning/PHASE8.md § ו.1) -- app/schemas.py needs a
+# real feature list without importing this module's xgboost/lightgbm/
+# catboost dependencies. Imported above; re-exported under these same
+# names so tr.DROPPED_COLLINEAR and tr.model_feature_columns keep working
+# for every existing caller in this file and in tests/test_train.py.
+# Zero behavior change, zero retraining.
 
 
 def build_task_train_frame(df: pd.DataFrame, task: str) -> pd.DataFrame:
@@ -1478,16 +1481,11 @@ BOOTSTRAP_B = 1000
 # convention extended to the Bootstrap).
 BOOTSTRAP_SEED = 47
 
-# SPEC's four locked spending strategies -- (ad_budget level, count of
-# allocations at that level) pairs. Every strategy must sum to exactly
-# 50,000 (criterion 11) -- asserted by strategy_totals(), not just
-# claimed here.
-STRATEGY_ALLOCATIONS = {
-    "2x20000_1x10000": [(20000, 2), (10000, 1)],
-    "10x5000": [(5000, 10)],
-    "25x2000": [(2000, 25)],
-    "100x500": [(500, 100)],
-}
+# STRATEGY_ALLOCATIONS moved to app/features.py in phase 8
+# (docs/planning/PHASE8.md § ו.2) -- app/schemas.py's ד.8ב invariant 10
+# needs it without importing this module. Imported above; every strategy
+# must still sum to exactly 50,000 (criterion 11) -- asserted by
+# strategy_totals() below, not just claimed here.
 STRATEGY_LEVELS = sorted({level for allocs in STRATEGY_ALLOCATIONS.values() for level, _ in allocs})
 
 

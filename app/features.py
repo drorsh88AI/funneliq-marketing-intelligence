@@ -69,6 +69,23 @@ EXCLUDED = {
 # phase-6 Pipeline-build decision, not made or implemented here.
 COLLINEAR_TRIO = ("num_leads", "leads_answered", "leads_not_answered")
 
+# Moved here from scripts/train.py (PHASE6.md checkpoint 4, D4) in phase 8
+# (docs/planning/PHASE8.md § ו.1) -- app/schemas.py needs a real model-input
+# feature list without pulling in scripts.train's xgboost/lightgbm/catboost
+# imports. Pure transfer: same value, same logic, zero behavior change.
+# leads_not_answered = num_leads - leads_answered exactly (perfect
+# collinearity), so at most two of the three COLLINEAR_TRIO columns ever
+# enter a model; num_leads + leads_answered are kept.
+DROPPED_COLLINEAR = "leads_not_answered"
+
+
+def model_feature_columns(task: str) -> list[str]:
+    """FEATURES[task] minus the dropped collinear column -- the raw
+    columns every model for this task actually sees. scripts/train.py
+    imports this (and re-exports it as tr.model_feature_columns) instead
+    of defining it a second time."""
+    return [c for c in FEATURES[task] if c != DROPPED_COLLINEAR]
+
 
 def _feature_list(task: str) -> list[str]:
     """Every raw column that is neither the task's target nor excluded --
@@ -82,6 +99,14 @@ def _feature_list(task: str) -> list[str]:
 
 
 FEATURES = {task: _feature_list(task) for task in TARGET}
+
+# Phase 8 (docs/planning/PHASE8.md § ו.1) -- the exact model-input columns
+# for each task's request/response contract, in order, with the collinear
+# column already dropped. app/schemas.py's FunnelInput is checked against
+# MODEL_INPUT_FEATURES["P2"]/["P3"]/["P4"] (13 identical names, same
+# order); ["P6"] has 14 (purchased included) and is NOT a user-request
+# schema -- P6's simulator takes no request body at all (D10).
+MODEL_INPUT_FEATURES = {task: model_feature_columns(task) for task in TARGET}
 
 # P6 only. The decisive availability test at P6's snapshot (budget
 # allocation moment) is "ad_budget בלבד" (§ נקודות חיזוי) -- computed as
@@ -113,6 +138,24 @@ def column_status(column: str, task: str) -> str:
     if column in DERIVED_FROM_PROFILE.get(task, ()):
         return "Derived"
     return "Feature"
+
+
+# ---------------------------------------------------------------------------
+# P6 budget-simulator strategy composition (SPEC's four locked spending
+# strategies). Moved here from scripts/train.py (PHASE6.md checkpoint 12,
+# D8) in phase 8 (docs/planning/PHASE8.md § ו.2) -- app/schemas.py's
+# ד.8ב invariant 10 (allocations must match STRATEGY_ALLOCATIONS[strategy_id]
+# exactly, in order) needs this without importing scripts.train. Pure
+# transfer: same value, zero behavior change. Every strategy must sum to
+# exactly 50,000 (checked in scripts/train.py's strategy_totals(), not
+# re-asserted here -- one checker, not two).
+# ---------------------------------------------------------------------------
+STRATEGY_ALLOCATIONS = {
+    "2x20000_1x10000": [(20000, 2), (10000, 1)],
+    "10x5000": [(5000, 10)],
+    "25x2000": [(2000, 25)],
+    "100x500": [(500, 100)],
+}
 
 
 # ---------------------------------------------------------------------------
