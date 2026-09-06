@@ -487,6 +487,18 @@ def test_group7a_funnel_input_rejects_string_bool_float_and_extra_field():
         FunnelInput(**_valid_funnel_input(), extra_field=1)
 
 
+# For from_leads/to_leads/population_n, True and 1.0 must be rejected for
+# being the wrong TYPE, not incidentally rejected by an unrelated row/list
+# invariant (rules 17/19/20) that a coerced value would also happen to
+# violate. Each dedicated fixture below is built so that IF strict were
+# ever weakened to plain int, True->1 and 1.0->1.0 would coerce to the
+# exact value already in the fixture and every other invariant would
+# still hold -- so pytest.raises(ValidationError) can only fire here
+# because of the strict-type check itself.
+_FROM_LEADS_SAFE_ROW = {"stage_order": 1, "stage": "followup_1", "from_leads": 1, "to_leads": 1, "drop_rate": 0.0}
+_TO_LEADS_SAFE_ROW = {"stage_order": 1, "stage": "followup_1", "from_leads": 5, "to_leads": 1, "drop_rate": 0.8}
+_POPULATION_N_SAFE_ROW = {"population_n": 1, "distribution": [{"calls": 0, "n": 1}]}
+
 _STRICT_INT_CASES = [
     (StrategyResult, _valid_strategy("100x500", rank=1), "rank"),
     (StrategyResult, _valid_strategy("100x500", rank=1), "bootstrap_iterations"),
@@ -494,9 +506,9 @@ _STRICT_INT_CASES = [
     (BudgetAllocation, {"ad_budget": 500, "count": 100, "sample_size": 92}, "count"),
     (BudgetAllocation, {"ad_budget": 500, "count": 100, "sample_size": 92}, "sample_size"),
     (FunnelStage, _valid_stage_rows()[0], "stage_order"),
-    (FunnelStage, _valid_stage_rows()[0], "from_leads"),
-    (FunnelStage, _valid_stage_rows()[0], "to_leads"),
-    (CallsDistribution, _valid_calls_distribution(), "population_n"),
+    (FunnelStage, _FROM_LEADS_SAFE_ROW, "from_leads"),
+    (FunnelStage, _TO_LEADS_SAFE_ROW, "to_leads"),
+    (CallsDistribution, _POPULATION_N_SAFE_ROW, "population_n"),
     (CallsBucket, {"calls": 1, "n": 3}, "calls"),
     (CallsBucket, {"calls": 1, "n": 3}, "n"),
     (TierRow, _valid_tier_rows()[0], "n_records"),
@@ -522,19 +534,41 @@ def test_group7a_loc_int_member_rejects_bool_and_float():
     ValidationErrorItem(loc=["body", 0], msg="m", type="t")  # sanity
 
 
+def test_group7a_ood_warning_feature_is_locked_to_the_13_input_features():
+    feature_schema = COMPONENT_SCHEMAS["OODWarning"]["properties"]["feature"]
+    assert set(feature_schema["enum"]) == set(MODEL_INPUT_FEATURES["P2"])
+    with pytest.raises(ValidationError):
+        OODWarning(**_ood_warning(feature="not_a_real_feature"))
+
+
 def test_group7a_strict_bool_fields_reject_int_and_string_truthy_values():
     for bad in (1, 0, "true", "yes"):
         with pytest.raises(ValidationError):
             LtvPrediction(**_valid_ltv(in_training_domain=bad))
         with pytest.raises(ValidationError):
+            PropensityPrediction(**_valid_propensity(in_training_domain=bad))
+        with pytest.raises(ValidationError):
             BudgetSimulation(**_valid_budget_simulation(top_two_overlap=bad))
 
 
 def test_group7a_contract_models_reject_inf_and_nan():
-    with pytest.raises(ValidationError):
-        LtvPrediction(**_valid_ltv(point_estimate=math.inf))
-    with pytest.raises(ValidationError):
-        LtvPrediction(**_valid_ltv(point_estimate=math.nan))
+    # Sampled across several models/fields (top-level float, nested-block
+    # float, and a differently-typed model) rather than a single field --
+    # allow_inf_nan=False lives on ContractModel, and any field on any
+    # contract model bypassing that base would otherwise go undetected.
+    for bad in (math.inf, math.nan):
+        with pytest.raises(ValidationError):
+            LtvPrediction(**_valid_ltv(point_estimate=bad))
+        with pytest.raises(ValidationError):
+            PropensityPrediction(**_valid_propensity(event_probability=bad))
+        with pytest.raises(ValidationError):
+            StrategyResult(**_valid_strategy("100x500", rank=1, point_estimate=bad))
+        with pytest.raises(ValidationError):
+            TierRow(tier_order=1, budget_tier="Low", n_records=10, conversion_rate=bad)
+        nested_metrics = _valid_regression_metrics()
+        nested_metrics["cv"]["mean_mae"] = bad
+        with pytest.raises(ValidationError):
+            LtvPrediction(**_valid_ltv(metrics=nested_metrics))
 
 
 # =============================================================================
@@ -551,11 +585,20 @@ def test_group7b_every_schema_forbids_extra_and_has_no_defaults():
             assert "default" not in prop_schema, f"{name}.{prop_name} must not declare a default"
 
 
-def test_group7b_required_is_exact_and_includes_nullable_fields():
+def test_group7b_required_is_exact_for_every_object_schema():
+    for name, schema in COMPONENT_SCHEMAS.items():
+        if schema.get("type") != "object":
+            continue
+        assert set(schema.get("required", [])) == set(schema.get("properties", {}).keys()), name
+
+
+def test_group7b_nullable_fields_are_still_required_not_omittable():
+    # "| null" means the VALUE null is allowed, never that the key may be
+    # absent (D.0b) -- point_estimate/evidence_level are both nullable and
+    # both required.
     ltv = COMPONENT_SCHEMAS["LtvPrediction"]
-    assert set(ltv["required"]) == set(ltv["properties"].keys())
-    assert "point_estimate" in ltv["required"]  # nullable, still required
-    assert "evidence_level" in ltv["required"]  # nullable, still required
+    assert "point_estimate" in ltv["required"]
+    assert "evidence_level" in ltv["required"]
 
 
 def test_group7b_http_validation_error_detail_has_min_items_one():
@@ -578,6 +621,7 @@ def test_group8a_ltv_prediction_fields_nullable_model_details_are_not():
 
 def test_group8a_propensity_prediction_fields_nullable_model_details_are_not():
     props = COMPONENT_SCHEMAS["PropensityPrediction"]["properties"]
+    assert "null" in {b.get("type") for b in props["event_probability"]["anyOf"]}
     assert "null" in {b.get("type") for b in props["propensity_band"]["anyOf"]}
     for stable_field in ("base_rate", "calibration_status", "calibration_method", "model_version", "model_algorithm", "metrics"):
         assert "anyOf" not in props[stable_field]
@@ -713,6 +757,20 @@ def test_group8b_d8c_rule14_evidence_level_must_match_min_sample_size():
         StrategyResult(**_valid_strategy("100x500", rank=1, sample_size=250, evidence_level="low"))
 
 
+def test_group8b_d8c_rule14_uses_min_not_max_across_differently_sized_allocations():
+    # "2x20000_1x10000" has two allocations -- give them deliberately
+    # different sample sizes (300 -> high, 40 -> low) so a mutant that
+    # used max()/first()/last() instead of min() would accept "high" here
+    # and this test would catch it.
+    mixed_allocations = [
+        {"ad_budget": 20000, "count": 2, "sample_size": 300},
+        {"ad_budget": 10000, "count": 1, "sample_size": 40},
+    ]
+    with pytest.raises(ValidationError):
+        StrategyResult(**_valid_strategy("2x20000_1x10000", rank=1, allocations=mixed_allocations, evidence_level="high"))
+    StrategyResult(**_valid_strategy("2x20000_1x10000", rank=1, allocations=mixed_allocations, evidence_level="low"))
+
+
 def test_group8b_d8c_rule15_ood_warning_bounds_and_value_position():
     with pytest.raises(ValidationError):
         OODWarning(**_ood_warning(value=25.0, lo=0.0, hi=50.0))  # value inside [min, max]
@@ -813,6 +871,17 @@ def test_group9_model_input_features_matches_meta_json_feature_columns(task):
 
 def test_group9_expected_field_counts():
     assert [len(MODEL_INPUT_FEATURES[t]) for t in ("P2", "P3", "P4", "P6")] == [13, 13, 13, 14]
+
+
+def test_group9_funnel_input_fields_match_model_input_features_p2_p3_p4_in_order():
+    # D.1/ו.1: FunnelInput's 13 fields ARE MODEL_INPUT_FEATURES["P2"], and
+    # P2/P3/P4 are the same 13 names in the same order -- not merely equal
+    # counts. list(FunnelInput.model_fields) preserves declaration order.
+    funnel_input_fields = list(FunnelInput.model_fields.keys())
+    assert funnel_input_fields == MODEL_INPUT_FEATURES["P2"]
+    assert funnel_input_fields == MODEL_INPUT_FEATURES["P3"]
+    assert funnel_input_fields == MODEL_INPUT_FEATURES["P4"]
+    assert MODEL_INPUT_FEATURES["P2"] == MODEL_INPUT_FEATURES["P3"] == MODEL_INPUT_FEATURES["P4"]
 
 
 # =============================================================================
