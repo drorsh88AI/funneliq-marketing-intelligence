@@ -16,7 +16,7 @@
 | **Overview** | — | המרה לפי טייר תקציב · ניווט לשלושת המסכים | `GET /api/insights/budget-tiers` |
 | **טופס החיזוי** | 1 · 2 · 3 | 13 שדות + prefill → שלושה פאנלי תוצאה (P2 · P3 · P4) | `POST /api/predict/{ltv,upsell,referral}` · prefill מ-`funnel_records` |
 | **Follow-up** | 5 | נשירה fu1→fu5 · התפלגות `calls_to_closed` · המלצת מדיניות | `GET /api/insights/followup` |
-| **Budget Simulator** | 4 | ארבע אסטרטגיות ל-₪50,000, מדורגות, עם טווחים | `POST /api/simulate/budget` |
+| **Budget Simulator** | 4 | ארבע אסטרטגיות ל-₪50,000, מדורגות, עם טווחים | `GET /api/simulate/budget` |
 
 `Overview` הוא הבית של חבילה 1 — בלעדיו ל-`GET /api/insights/budget-tiers`
 אין מסך.
@@ -490,7 +490,7 @@ SVG סטטיים ב-`docs/` שאינם חלק מה-static של האפליקצי�
 | רכיב | מקור |
 |---|---|
 | שלושת פאנלי החיזוי | `POST /api/predict/{ltv,upsell,referral}` |
-| הסימולטור | `POST /api/simulate/budget` ← `models/P6_simulation.json` (מחושב offline) |
+| הסימולטור | `GET /api/simulate/budget` ← `models/P6_simulation.json` (מחושב offline) |
 | Follow-up — נשירה | `GET /api/insights/followup` ← view `followup_insight` |
 | Follow-up — `calls_to_closed` | אותו endpoint, **מצטבר בצד השרת** מ-`funnel_records` עם JWT המשתמש, `purchased = 1` (§7.1) |
 | טיירי תקציב | `GET /api/insights/budget-tiers` ← view `budget_tier_insight` |
