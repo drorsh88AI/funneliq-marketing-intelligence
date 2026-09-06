@@ -893,8 +893,8 @@ const PHASES = [
     items:[
       {t:"checkpoint 1 — ענף feat/api-contract מ-main מסונכרן", s:"done", u:"2026-09-06 18:25",
         e:"בוצע אחרי הוראת ביצוע מפורשת של המשתמש (06.09.2026). git checkout -b feat/api-contract מ-main (6edd67e, זהה ל-origin/main). הענף נשא את שינויי התכנון הלא-מקומיטים (ROADMAP.html, PHASE7.md, PHASE8.md חדש) שנכתבו על main בזמן התכנון."},
-      {t:"checkpoint 2 — העברה אטומית: app/features.py ו-scripts/train.py באותו שינוי, ואז pytest", s:"not_started",
-        e:"טרם בוצע. DROPPED_COLLINEAR, model_feature_columns() ו-STRATEGY_ALLOCATIONS עוברים ל-app/features.py; MODEL_INPUT_FEATURES נחשף לארבע המשימות; scripts/train.py מייבא ומייצא-מחדש באותו commit. ⚠ שני הקבצים חייבים להשתנות יחד — בין שינוי אחד לשני הקוד שבור או שיש שני מקורות אמת. FEATURES עצמה אינה משתנה. קריטריון: 307/307 ממשיכות לעבור, כולל tests/test_train.py:269 שניגש ל-tr.DROPPED_COLLINEAR."},
+      {t:"checkpoint 2 — העברה אטומית: app/features.py ו-scripts/train.py באותו שינוי, ואז pytest", s:"done", u:"2026-09-06 18:40",
+        e:"DROPPED_COLLINEAR, model_feature_columns() ו-STRATEGY_ALLOCATIONS הועברו ל-app/features.py לצד COLLINEAR_TRIO; MODEL_INPUT_FEATURES נחשף לארבע המשימות (P2/P3/P4=13 שדות זהים ובאותו סדר, P6=14 כולל purchased, אומת ידנית). scripts/train.py מייבא את שלושתם וקורא להם tr.DROPPED_COLLINEAR/tr.model_feature_columns/tr.STRATEGY_ALLOCATIONS כרגיל — re-export דרך from-import רגיל, אין __all__ מיוחד. STRATEGY_LEVELS נשאר נגזר מקומית ב-train.py מהקבוע המיובא. pytest -q: 307/307 עברו, זהה לבייסליין לפני השינוי — אפס שינוי התנהגות מאומת."},
       {t:"checkpoint 3 — app/schemas.py: חמש משפחות התגובה, FunnelInput וקטלוג רכיבי המשנה, כולל ContractModel והטיפוסים StrictInt/StrictBool פר-שדה, ושלוש קבוצות האינווריאנטים (ד.8, ד.8ב, ד.8ג)", s:"not_started",
         e:"טרם בוצע. אין מודל-על עם 14 שדות nullable; extra=forbid, allow_inf_nan=False, strict לכל שדה int ולכל שדה bool, וכל שדה בסכמה הוא required כולל שדות nullable — בלי default."},
       {t:"checkpoint 4 — scripts/export_openapi.py: אפליקציית FastAPI מבודדת בתוך הסקריפט, שישה routes בחתימה נעולה, ייצוא דטרמיניסטי", s:"not_started",
