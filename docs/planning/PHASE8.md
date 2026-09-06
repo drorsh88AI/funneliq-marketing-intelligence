@@ -1356,11 +1356,20 @@ Supabase. כולם דורשים ארטיפקט או רשת ⇒ **פאזה 9**.
 
 ✅ **המשתמש אישר במפורש את תכנון פאזה 8** (06.09.2026). `planning_status`
 עודכן ל-`approved_for_execution`.
-⚠ **אישור תכנון אינו הוראת ביצוע.** ⛔ אין לפתוח ענף, אין commit ואין
-לכתוב תוצרי קוד (`app/schemas.py`, `scripts/export_openapi.py`,
+⚠ **תצלום היסטורי — רגע אישור התכנון (06.09.2026), לפני הוראת ביצוע:**
+אישור תכנון אינו הוראת ביצוע. ⛔ אין לפתוח ענף, אין commit ואין לכתוב
+תוצרי קוד (`app/schemas.py`, `scripts/export_openapi.py`,
 `docs/api/openapi.json`, `tests/test_api_contract.py`) עד להוראת ביצוע
-נפרדת ומפורשת של המשתמש. `planning_status: approved_for_execution` ·
+נפרדת ומפורשת של המשתמש. באותו רגע: `planning_status: approved_for_execution` ·
 `execution_status: not_started`.
+
+✅ **מעמד נוכחי (06.09.2026, לאחר הוראת ביצוע נפרדת):** הביצוע הושלם
+במלואו — שמונת ה-checkpoints, כולל ביקורת Codex (שני סבבים על
+`tests/test_api_contract.py` בלבד, ללא ממצא בסכמות עצמן) וסריקת secrets
+על היסטוריית הענף, שניהם עברו נקי. `PR #20` (`main ← feat/api-contract`)
+נפתח לאחר אישור מפורש, ומוזג ל-`main` לאחר אישור מפורש נפרד נוסף —
+merge commit `5e93bf7`. `pytest -q` ישירות על `main`: 420/420.
+`execution_status: done`.
 
 ### סבבי ביקורת המסמכים
 
@@ -1576,5 +1585,11 @@ endpoints, מהן ~210 היסטוריית ביקורת. הוחלט **לא** לה
 למוסכמת הנתיבים של עצמה, ולא הגדירה דרך אילו מנגנונים הסריקה יורדת ·
 ספירת הסבבים נעצרה ב-7 בעוד תועדו 8.
 
-⚠ **אישור תכנון אינו הוראת ביצוע.** `execution_status` נשאר `not_started`;
-אין ענף `feat/api-contract`, אין commit ואין PR עד להוראה נפרדת ומפורשת.
+⚠ **תצלום היסטורי — רגע אישור התכנון (06.09.2026), לפני הוראת ביצוע:**
+אישור תכנון אינו הוראת ביצוע. באותו רגע `execution_status` היה
+`not_started`; לא היה ענף `feat/api-contract`, לא commit ולא PR, עד
+להוראה נפרדת ומפורשת.
+
+✅ **מעמד נוכחי (06.09.2026):** הביצוע הושלם, ביקורת Codex וסריקת secrets
+עברו ללא ממצא בסכמות, `PR #20` נפתח ומוזג ל-`main` (merge commit
+`5e93bf7`) לאחר אישורים מפורשים נפרדים לכל שלב. `execution_status: done`.
