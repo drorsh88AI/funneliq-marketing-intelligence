@@ -25,6 +25,7 @@ from app.schemas import (
     BudgetTiersResponse,
     CallsBucket,
     CallsDistribution,
+    ContractModel,
     ErrorDetail,
     FollowupResponse,
     FunnelInput,
@@ -551,11 +552,40 @@ def test_group7a_strict_bool_fields_reject_int_and_string_truthy_values():
             BudgetSimulation(**_valid_budget_simulation(top_two_overlap=bad))
 
 
+def _all_contract_model_subclasses() -> list[type]:
+    """Every ContractModel subclass, direct or indirect -- including
+    private helper models (_CvRegression etc.) and pydantic's own
+    auto-generated parametrizations of the generic AvailablePart[T]."""
+    seen: set[type] = set()
+    stack = [ContractModel]
+    result = []
+    while stack:
+        for sub in stack.pop().__subclasses__():
+            if sub not in seen:
+                seen.add(sub)
+                result.append(sub)
+                stack.append(sub)
+    return result
+
+
+_CONTRACT_MODEL_SUBCLASSES = _all_contract_model_subclasses()
+
+
+def test_group7a_every_contract_model_declares_allow_inf_nan_false():
+    # The declarative half of the inf/nan commitment: every model in the
+    # contract must actually carry the policy, not just the handful of
+    # fields spot-checked below. Catches a model that redefines
+    # model_config and loses the inherited allow_inf_nan=False, which the
+    # per-field behavioral tests alone would only catch field-by-field.
+    assert len(_CONTRACT_MODEL_SUBCLASSES) >= 25  # sanity: the walk actually found the contract's models
+    for model_cls in _CONTRACT_MODEL_SUBCLASSES:
+        assert model_cls.model_config.get("allow_inf_nan") is False, model_cls.__name__
+
+
 def test_group7a_contract_models_reject_inf_and_nan():
     # Sampled across several models/fields (top-level float, nested-block
-    # float, and a differently-typed model) rather than a single field --
-    # allow_inf_nan=False lives on ContractModel, and any field on any
-    # contract model bypassing that base would otherwise go undetected.
+    # float, and a differently-typed model) -- the declarative check above
+    # covers every model's config; this checks the policy actually bites.
     for bad in (math.inf, math.nan):
         with pytest.raises(ValidationError):
             LtvPrediction(**_valid_ltv(point_estimate=bad))
@@ -569,6 +599,23 @@ def test_group7a_contract_models_reject_inf_and_nan():
         nested_metrics["cv"]["mean_mae"] = bad
         with pytest.raises(ValidationError):
             LtvPrediction(**_valid_ltv(metrics=nested_metrics))
+
+
+def test_group7a_inf_rejected_on_one_sided_or_unbounded_fields():
+    # A one-sided ge=/le= bound does NOT reject the infinity on its open
+    # side (inf >= 0 is True; -inf <= 1 is True) -- only allow_inf_nan
+    # actually blocks it. These are the fields where a bound alone would
+    # give a false sense of safety.
+    with pytest.raises(ValidationError):
+        OODWarning(**_ood_warning(value=math.inf))  # `value: float`, no bound at all
+    with pytest.raises(ValidationError):
+        UnobservedBudgetWarning(**_unobserved_warning(value=math.inf))  # gt=0 only; inf > 0 is True
+    with pytest.raises(ValidationError):
+        # r2: Field(le=1), no lower bound -- -inf <= 1 is True.
+        LtvPrediction(**_valid_ltv(metrics={**_valid_regression_metrics(), "holdout": {"mae": 1.0, "rmse": 1.0, "r2": -math.inf}}))
+    with pytest.raises(ValidationError):
+        # mean_log_loss: Field(ge=0), no upper bound -- inf >= 0 is True.
+        PropensityPrediction(**_valid_propensity(metrics={**_valid_classification_metrics(), "cv": {**_valid_classification_metrics()["cv"], "mean_log_loss": math.inf}}))
 
 
 # =============================================================================
@@ -757,18 +804,28 @@ def test_group8b_d8c_rule14_evidence_level_must_match_min_sample_size():
         StrategyResult(**_valid_strategy("100x500", rank=1, sample_size=250, evidence_level="low"))
 
 
-def test_group8b_d8c_rule14_uses_min_not_max_across_differently_sized_allocations():
-    # "2x20000_1x10000" has two allocations -- give them deliberately
-    # different sample sizes (300 -> high, 40 -> low) so a mutant that
-    # used max()/first()/last() instead of min() would accept "high" here
-    # and this test would catch it.
-    mixed_allocations = [
+def test_group8b_d8c_rule14_uses_min_not_first_last_or_max():
+    # Two allocation orderings, deliberately placing the smaller
+    # sample_size (40 -> low) at a DIFFERENT position than the larger one
+    # (300 -> high) each time, so min() is the only reduction that gives
+    # the same right answer in both:
+    #   min_last:  [300, 40]  -- min coincides with last(), not with first()
+    #   min_first: [40, 300]  -- min coincides with first(), not with last()
+    # max() is wrong in both (it always picks 300 -> "high"). A mutant
+    # using first(), last(), or max() instead of min() fails at least one
+    # of the two cases below.
+    min_last = [
         {"ad_budget": 20000, "count": 2, "sample_size": 300},
         {"ad_budget": 10000, "count": 1, "sample_size": 40},
     ]
-    with pytest.raises(ValidationError):
-        StrategyResult(**_valid_strategy("2x20000_1x10000", rank=1, allocations=mixed_allocations, evidence_level="high"))
-    StrategyResult(**_valid_strategy("2x20000_1x10000", rank=1, allocations=mixed_allocations, evidence_level="low"))
+    min_first = [
+        {"ad_budget": 10000, "count": 1, "sample_size": 40},
+        {"ad_budget": 20000, "count": 2, "sample_size": 300},
+    ]
+    for allocations in (min_last, min_first):
+        with pytest.raises(ValidationError):
+            StrategyResult(**_valid_strategy("2x20000_1x10000", rank=1, allocations=allocations, evidence_level="high"))
+        StrategyResult(**_valid_strategy("2x20000_1x10000", rank=1, allocations=allocations, evidence_level="low"))
 
 
 def test_group8b_d8c_rule15_ood_warning_bounds_and_value_position():
