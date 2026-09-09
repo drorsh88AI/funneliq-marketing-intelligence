@@ -233,7 +233,7 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 | 0 | `main` נקי → יצירת `feat/api` → שלב 0 (PHASE9.md חדש, SPEC.md D20, ROADMAP.html, REQUIREMENTS.md) | ✅ done ⚠ **בוצע שלא לפי הסדר** — ראו הערה למטה | `93c4faa`, `5dad544` |
 | 1 | D21 (`column_status`) + D13 (`app/inference.py`) | ✅ done | `82eda3c`, `4b391f2`; 448→453 |
 | 2 | `HTTPBearer` + `access_token` (D5/D6) | ✅ done | `6622b84`; 453→460 |
-| 3 | `app/artifacts.py` — loader + D17 | ✅ done; ולידציית meta הושלמה ל-`alpha`/`conformal_quantile`/`base_rate`/`calibration_status`/`calibration_method`, ואחריה — בסבב ביקורת שני — גם למבנה הפנימי של `metrics[task][algo]`, כל בלוק `*_holdout`, `P6_strategy_ranking.ranked`, `P6_simulation[sid].levels`, ו-`ood_bounds[col].min/max` (D17 completeness, שני סבבי ביקורת קוד לפני checkpoint 11) | `9977589`; 460→526 · `9b91d0c`; →716 · `e6659eb`; →743 |
+| 3 | `app/artifacts.py` — loader + D17 | ✅ done; ולידציית meta הושלמה בשלושה סבבי ביקורת: (1) `alpha`/`conformal_quantile`/`base_rate`/`calibration_status`/`calibration_method` כמפתחות קיימים; (2) המבנה הפנימי של `metrics[task][algo]`, כל בלוק `*_holdout`, `P6_strategy_ranking.ranked`, `P6_simulation[sid].levels`, ו-`ood_bounds[col].min/max`; (3) **חוזה הערכים עצמו** — finite (דוחה NaN/±inf), טווחי `Field(ge=.../le=...)` הזהים ל-`app/schemas.py`, וערכי Literal נעולים (`interval_method`, `calibration_method`, `calibration_status` פר-משימה) | `9977589`; 460→526 · `9b91d0c`; →716 · `e6659eb`; →743 · `a072f74`; →771 |
 | 4 | routers + שלושת ה-handlers (D7) | ✅ done | `262b694`; 526→533 |
 | 5 | `ltv`/`upsell`/`referral` | ✅ done | `46c62fe`; 533→582 |
 | 6 | `super-customer` | ✅ done | `7eac95e`; 582→594 |
@@ -264,12 +264,30 @@ substring בלבד, לא את הכיוון/NULL-position בפועל. שלושת�
 דורש ראיה שנבדקה ברמת המבנה הפנימי הנצרך בפועל, לא רק שקיים commit
 ו-pytest ירוק.**
 
-**743/743 בדיקות ירוקות** (מבסיס 448; 695 עד סוף checkpoint 10; +21
-מ-`9b91d0c`; +27 מ-`e6659eb`). כל commit רץ מול `pytest -q` מלא לפני
-ואחרי. חמשת הארטיפקטים ללא שינוי לאורך כל הביצוע (SHA-256 נבדק בקריטריון
-31); `models/` לא נגע בו גם בשני תיקוני ביקורת הקוד. `main` לא נגע בו —
-כל ה-commits על
-`feat/api` בלבד.
+⚠ **סבב ביקורת שלישי (`a072f74`):** המשתמש מצא ש-`e6659eb` בדק presence
+וטיפוס בלבד, לא **חוזה הערכים**: `mean_roc_auc=2`, `P6.lower > upper`,
+`calibration_status="anything"`, NaN/inf בגבולות OOD — כולם היו עוברים
+startup ונכשלים רק בזמן בקשה. תוקן: `_is_number` דוחה NaN/±inf (נקודת
+מינוף יחידה שמשדרגת את כל הבדיקות הקיימות); טווחי `metrics[task][algo]`
+ו-`*_holdout` זהים ל-`Field(ge=.../le=...)` ב-`app/schemas.py`; ערכי
+Literal נעולים (`interval_method`, `calibration_method`,
+`calibration_status` פר-משימה, כולל ש-P4S ⛔ אינו מקבל `"uncalibrated"`
+בעוד P3/P4 כן); `ranked` נבדק כרשימת מחרוזות **לפני** `set()`; P6
+`point/lower/upper` finite ו-`lower<=upper`.
+⚠ **כמעט-תקלה שנתפסה עצמאית תוך כדי:** הניסיון הראשון לתקן את ה-docstring
+של `ClassificationMetrics` (בקשה מפורשת של המשתמש) **שבר את
+`test_group1_reexport_matches_locked_artifact`** — docstring של מחלקת
+Pydantic נפלט מילולית ל-`description` ב-`docs/api/openapi.json`, **החוזה
+הנעול** שאסור לשנות בשום שלב. `pytest -q` המלא תפס את זה מיד; התיקון
+הוחזר, וההבהרה על P4S עברה להערת מקור מעל המחלקה במקום לתוך ה-docstring
+עצמו — משיג את אותה מטרה בלי לגעת בחוזה הנעול.
+
+**771/771 בדיקות ירוקות** (מבסיס 448; 695 עד סוף checkpoint 10; +21
+מ-`9b91d0c`; +27 מ-`e6659eb`; +28 מ-`a072f74`). כל commit רץ מול
+`pytest -q` מלא לפני ואחרי. חמשת הארטיפקטים ללא שינוי לאורך כל הביצוע
+(SHA-256 נבדק בקריטריון 31); `models/` **וגם `docs/api/openapi.json`**
+לא נגעו בהם בשלושת תיקוני ביקורת הקוד. `main` לא נגע בו — כל ה-commits
+על `feat/api` בלבד.
 
 ⚠ **ק' 72/73/75 (ראיה חיה)** דורשות deploy אמיתי ל-Render עם משתמשי
 `demo-northbound`/`demo-noorg`. אלה חלק מ-checkpoint 11 ומחייבות את
