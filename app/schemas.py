@@ -63,9 +63,16 @@ def _evidence_level_from_n(n: int) -> Literal["high", "medium", "low"]:
     return "low"
 
 
-def _propensity_band(event_probability: float, base_rate: float) -> Literal["below_base", "near_base", "above_base"]:
+def propensity_band_for(event_probability: float, base_rate: float) -> Literal["below_base", "near_base", "above_base"]:
     """IA.md §4's three thresholds, always against the exact base_rate
-    from meta.json, never the rounded display value (D.3)."""
+    from meta.json, never the rounded display value (D.3).
+
+    Public (not _propensity_band) since phase 9 (PHASE9.md D14): the
+    predict routes (app/predict.py) call this SAME function to compute
+    the propensity_band they put in the response, rather than
+    re-implementing the 0.9x/1.1x thresholds a second time -- the
+    invariant check below then just confirms the two agree, instead of
+    being the only place the formula exists."""
     if event_probability < 0.9 * base_rate:
         return "below_base"
     if event_probability > 1.1 * base_rate:
@@ -379,7 +386,7 @@ class PropensityPrediction(ContractModel):
         # applied to event_probability/base_rate, checked only when both
         # are populated.
         if self.event_probability is not None and self.propensity_band is not None:
-            expected = _propensity_band(self.event_probability, self.base_rate)
+            expected = propensity_band_for(self.event_probability, self.base_rate)
             if expected != self.propensity_band:
                 raise ValueError(
                     f"propensity_band={self.propensity_band!r} is inconsistent with "
@@ -425,7 +432,7 @@ class SuperCustomerPrediction(ContractModel):
             evidence_level=self.evidence_level,
         )
         if self.event_probability is not None and self.propensity_band is not None:
-            expected = _propensity_band(self.event_probability, self.base_rate)
+            expected = propensity_band_for(self.event_probability, self.base_rate)
             if expected != self.propensity_band:
                 raise ValueError(
                     f"propensity_band={self.propensity_band!r} is inconsistent with "
