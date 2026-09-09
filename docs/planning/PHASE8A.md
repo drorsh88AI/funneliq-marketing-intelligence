@@ -4,14 +4,15 @@
 כחלק מ"תוכנית היישור לבריף" (ר' `docs/planning/codex-review.md`). כל שלב
 נבדק בהרצה בסביבת הפרויקט לפני שנכתב — אין הכרעה כאן שמבוססת על הנחה בלתי
 מאומתת. **✅ המשתמש אישר במפורש את התכנון והורה על ביצוע (09.09.2026)** ⇒
-`planning_status: approved_for_execution`. **checkpoints 1–7 בוצעו ואומתו
-בפועל (09.09.2026); checkpoint 8 (ארטיפקט) ממתין לבנייה מחדש בשל ממצא
-provenance — ר' שורת checkpoint 8 למטה; checkpoint 11 ממתין לביקורת Codex
-ולפעולות Git עצמן** — `execution_status: awaiting_approval` — ענף
-`feat/super-customer` נפתח מ-`main`, כל הקוד/הבדיקות קיימים בעץ העבודה
-המקומי; **אין commit, push, PR או merge** עד הוראה נפרדת ומפורשת נוספת של
-המשתמש. ⚠ **אין לטעון שכל 11 ה-checkpoints הושלמו** — ר' תיקון 09.09.2026
-בעקבות ביקורת Codex סבב 2.
+`planning_status: approved_for_execution`. **checkpoints 1–8 בוצעו ואומתו
+בפועל, כולל תיקון provenance (09.09.2026, ר' checkpoint 8 למטה — commit
+`18bdf4e` לקוד/בדיקות/חוזה/תיעוד, ואז `--run-p4s` נקי מאותו HEAD בדיוק);
+checkpoint 11 ממתין לפתיחת PR, CI, ביקורת Codex סופית, ואישורי מיזוג/סגירה
+נפרדים** — `execution_status: awaiting_approval` — ענף `feat/super-customer`
+מכיל commit אחד (`18bdf4e`, קוד+בדיקות+חוזה+תיעוד בלבד) ואת ארטיפקטי P4S
+כשינויים לא-מקומיטים, לביקורת לפני commit נפרד; **אין push, PR או merge**
+עד הוראה נפרדת ומפורשת נוספת של המשתמש. ⚠ **אין לטעון שכל 11 ה-checkpoints
+הושלמו** — checkpoint 11 עצמו פתוח.
 
 ---
 
@@ -323,7 +324,7 @@ python scripts/train.py --run-p4s
 | 5 | CV + בחירה — ⛔ **בלי Holdout** | ✅ בוצע 09.09.2026 — `catboost` (candidate, mean ROC-AUC=0.7835) ו-`logistic` (baseline, mean ROC-AUC=0.7924) הורצו; `eligible=["logistic"]` (catboost מחוץ ל-One-SE של logistic), **winner=logistic** — `metrics.json.P4S`, `metrics.json.P4S_selection` |
 | 6 | כיול `sigmoid` על סט הכיול | ✅ בוצע 09.09.2026 — `calibration_status=calibrated`, `calibration_method=sigmoid` — `metrics.json.P4S_calibration`; ⚠ ר' סיכון R1 (85 חיוביים בסט הכיול) |
 | 7 | **פתיחת Holdout יחידה** — מדדים, עקומת כיול, פילוח `budget_tier`, **הכל כאן** | ✅ בוצע 09.09.2026 — n=633, ROC-AUC=0.8187, PR-AUC=0.3779, Brier=0.1126, log_loss=0.3277; Accuracy/Precision/Recall/F1 בסף 0.5 = 0.8325/0/0/0 (**צפוי, ר' R8** — 106/633=16.7% חיוביים); Dummy-on-Holdout: accuracy=0.8325, brier=0.1675; פילוח `budget_tier`: Mid (n=328) ROC-AUC=0.5696 PR-AUC=0.3779, Low/High (n=116/189) — AUC=`null` (מחלקה יחידה) — `metrics.json.P4S_holdout` |
-| 8 | ארטיפקטים, metadata, checksum | ⚠ **ארטיפקט זמני, לא לפריסה — ממתין לבנייה מחדש (ממצא Codex, ר' PHASE6.md:814–818, אותה מלכודת provenance בדיוק)**: `models/P4S.joblib`/`P4S.meta.json` נבנו הרצה 09.09.2026 בעוד `model_version` מצביע ל-`09aa052` — commit שאינו מכיל את קוד P4S (טרם בוצע commit כלל, לפי איסור ההוראה). קובצי ה-.joblib/.meta.json הנוכחיים **מוכיחים שהצינור עובד מקצה לקצה** (שימשו לאימות checksum/טעינה/חיזוי) אך **אינם הארטיפקט הסופי**. הסדר הנכון לאחר אישור commit נפרד: (1) commit קוד+בדיקות בלבד → (2) `git status` נקי → (3) `python scripts/train.py --run-p4s` מחדש מה-HEAD הנקי → (4) אימות ש-`model_version`/ `git_sha` בארטיפקט החדש מצביעים בדיוק לאותו HEAD → (5) commit נפרד לארטיפקטים+ראיות. ⛔ לא בוצע commit כעת, לא זויף SHA, לא הורץ שוב. |
+| 8 | ארטיפקטים, metadata, checksum | ✅ **provenance תוקן ואומת 09.09.2026**: commit `18bdf4e` (קוד+בדיקות+חוזה+תיעוד בלבד, ללא תוצרי אימון) → `git status --short` ריק אומת → `python scripts/train.py --run-p4s` הורץ מחדש מ-`18bdf4e` הנקי → `models/P4S.meta.json.model_version = "P4S-logistic-20260909-18bdf4e"` — ה-SHA המוטבע **תואם בדיוק** ל-HEAD בזמן הבנייה. תוצאות זהות ביט-לביט לריצה הזמנית הקודמת (דטרמיניזם מאומת: ROC-AUC=0.8187050230926212, PR-AUC=0.37789662094554244, Brier=0.11263749662023682, sha256 של ה-`.joblib`=`27b39407…` זהה). `pytest -q`: 448/448. אפס רגרסיה ב-P2/P3/P4/P6 (checksums זהים, אפס מפתחות `metrics.json` ישנים השתנו, רק 4 מפתחות `P4S*` נוספו). |
 | 9 | `app/schemas.py`: `EarlyFunnelInput`, `SuperCustomerPrediction`, `SuperCustomerOODWarning` | ✅ בוצע 09.09.2026 — `tests/test_schemas_p4s.py` (8 בדיקות): `isinstance(w, OODWarning)`, דחיית feature זר, `TypeError` על union מעורב, כללי עסק, דחיית `calibration_status="uncalibrated"` |
 | 10 | ייצוא `docs/api/openapi.json` מחדש עם שבעה נתיבים | ✅ בוצע 09.09.2026 — `app/api_contract.py` נוצר; `tests/test_api_contract_p4s.py` (5 בדיקות, מול fixture קפוא של הקובץ הישן): ששת הנתיבים/`securitySchemes`/כל סכמת רכיב ישנה — זהים בתים; **ממצא חדש**: `tests/test_api_contract.py`'s `test_group2_exactly_six_business_routes_with_locked_methods` הניח בדיוק 6 נתיבים — עודכן להכיר בנתיב השביעי האדיטיבי (ר' דוח הביקורת) |
 | 11 | סגירה | ⏸ **נעצר לפני PR/מיזוג לפי ההוראה המפורשת** — `pytest -q`: 448/448 עברו (430 שהיו + 18 חדשות: 8 ב-`test_schemas_p4s.py`, 5 ב-`test_api_contract_p4s.py`, 5 ב-`test_train.py`); אפס רגרסיה ב-P2/P3/P4/P6 (SHA-256 של כל ארבעת ה-`*.joblib`/`*.meta.json` + `P6_simulation.json`/`run_metadata.json` זהים בתים; מפתחות `metrics.json` הישנים ללא שינוי, רק 4 מפתחות `P4S*` נוספו); `git diff --check` נקי (מלבד אזהרת LF/CRLF שגרתית); ⛔ אין commit, branch push, PR או merge — ממתין לביקורת Codex ואישור המשתמש הנפרד |

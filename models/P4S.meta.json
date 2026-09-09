@@ -1,0 +1,76 @@
+{
+  "algo": "logistic",
+  "artifact_role": "evaluation",
+  "base_rate": 0.1672,
+  "calibration_method": "sigmoid",
+  "calibration_status": "calibrated",
+  "checksums": {
+    "artifact_sha256": "27b39407dfb9bc2357be73748703f0c9f096b8fb2468173519dca2a4f7c7ebef",
+    "source_csv_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa"
+  },
+  "cv_folds": 5,
+  "feature_columns": [
+    "ad_budget",
+    "num_leads",
+    "leads_answered",
+    "followup_1"
+  ],
+  "feature_dtypes": {
+    "ad_budget": "int64",
+    "followup_1": "int64",
+    "leads_answered": "int64",
+    "num_leads": "int64"
+  },
+  "fit_sources": {
+    "calibrator": "calibration",
+    "model": "train",
+    "ood_bounds": "train"
+  },
+  "model_version": "P4S-logistic-20260909-18bdf4e",
+  "observed_ad_budget_values": [
+    500.0,
+    800.0,
+    1000.0,
+    1500.0,
+    2000.0,
+    2500.0,
+    3000.0,
+    4000.0,
+    5000.0,
+    6000.0,
+    7000.0,
+    8000.0,
+    10000.0,
+    12000.0,
+    15000.0,
+    20000.0
+  ],
+  "ood_bounds": {
+    "ad_budget": {
+      "max": 20000.0,
+      "min": 500.0
+    },
+    "followup_1": {
+      "max": 66.0,
+      "min": 3.0
+    },
+    "leads_answered": {
+      "max": 84.0,
+      "min": 5.0
+    },
+    "num_leads": {
+      "max": 139.0,
+      "min": 11.0
+    }
+  },
+  "population_n": {
+    "calibration": 506,
+    "holdout": 633,
+    "train": 2024
+  },
+  "seed": 48,
+  "snapshot": "post_followup_1",
+  "target": "super_customer",
+  "task": "P4S",
+  "training_date": "20260909"
+}
