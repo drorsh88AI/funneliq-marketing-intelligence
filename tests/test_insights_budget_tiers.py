@@ -64,7 +64,11 @@ def test_rejects_wrong_organization(make_authed_client):
 def test_query_sends_explicit_order_by_tier_order(authed_client):
     """D12/criterion 71: `.order` explicit in the query itself, not just
     correct final output -- inspects the actual request URL rather than
-    trusting response.data, which a mock can get right by coincidence."""
+    trusting response.data, which a mock can get right by coincidence.
+    Asserts the full query-parameter value (ascending, NULL last), not a
+    loose substring match that would also pass for a descending or
+    NULL-first order -- postgrest's own wire format for
+    .order("tier_order", nullsfirst=False)."""
     seen_urls = []
 
     def handler(request):
@@ -74,7 +78,9 @@ def test_query_sends_explicit_order_by_tier_order(authed_client):
     app.dependency_overrides[get_user_client] = _override_with(handler)
     authed_client.get(PATH)
     assert len(seen_urls) == 1
-    assert "order=tier_order" in seen_urls[0]
+    from urllib.parse import parse_qs, urlsplit
+    query = parse_qs(urlsplit(seen_urls[0]).query)
+    assert query["order"] == ["tier_order.asc.nullslast"]
 
 
 _REAL_TIERS = [

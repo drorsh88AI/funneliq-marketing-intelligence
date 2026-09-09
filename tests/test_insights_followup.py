@@ -107,7 +107,9 @@ def test_stages_query_sends_explicit_order_by_stage_order(authed_client):
     """D12/criterion 71: `.order` explicit on the followup_insight query
     itself -- inspects the actual request URL, not just that the final
     response ends up sorted (which the route's own Python-side sort
-    would guarantee either way)."""
+    would guarantee either way). Asserts the full query-parameter value
+    (ascending), not a loose substring that would also pass for a
+    descending order -- postgrest's wire format for .order("stage_order")."""
     seen_urls = []
 
     def stages_response(request):
@@ -118,7 +120,9 @@ def test_stages_query_sends_explicit_order_by_stage_order(authed_client):
     app.dependency_overrides[get_user_client] = _override(handler)
     authed_client.get(PATH)
     assert len(seen_urls) == 1
-    assert "order=stage_order" in seen_urls[0]
+    from urllib.parse import parse_qs, urlsplit
+    query = parse_qs(urlsplit(seen_urls[0]).query)
+    assert query["order"] == ["stage_order.asc"]
 
 
 def test_stages_are_sorted_even_when_returned_shuffled(authed_client):

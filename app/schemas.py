@@ -11,9 +11,11 @@ imports it to produce docs/api/openapi.json. This module never imports
 FROM app.main or the routers (the dependency direction is one-way).
 
 Seven business endpoints (added `POST /api/predict/super-customer` in
-8A), five response families, no "one model with N nullable fields" (D4)
--- a field that is not relevant to a task's schema does not appear in
-that schema at all, rather than appearing as null.
+8A), six response families -- LtvPrediction, PropensityPrediction (shared
+by upsell/referral), SuperCustomerPrediction, BudgetSimulation,
+FollowupResponse, BudgetTiersResponse -- no "one model with N nullable
+fields" (D4): a field that is not relevant to a task's schema does not
+appear in that schema at all, rather than appearing as null.
 """
 from __future__ import annotations
 

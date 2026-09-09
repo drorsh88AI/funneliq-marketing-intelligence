@@ -206,6 +206,23 @@ def test_ood_bounds_missing_a_feature_is_fail_fast():
         art._validate_meta("P2", meta, _real_metrics())
 
 
+def test_ood_bounds_non_numeric_min_is_fail_fast():
+    """app/inference.py's out_of_range_features reads bounds[col]['min']/
+    ['max'] directly -- a present key with the wrong shape must fail at
+    startup, not TypeError on the first request that touches it."""
+    meta = _real_meta("P2")
+    meta["ood_bounds"]["ad_budget"]["min"] = "0"
+    with pytest.raises(art.ArtifactStartupError, match="ood_bounds"):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
+def test_ood_bounds_min_greater_than_max_is_fail_fast():
+    meta = _real_meta("P2")
+    meta["ood_bounds"]["ad_budget"]["min"] = 999999
+    with pytest.raises(art.ArtifactStartupError, match="ood_bounds"):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
 # ---------------------------------------------------------------------------
 # D17 completeness -- app/predict.py reads meta["alpha"]/meta["base_rate"]/
 # etc. directly (grep-verified), but these were never in _COMMON_META_KEYS
@@ -275,6 +292,120 @@ def test_model_version_empty_string_is_fail_fast():
     meta["model_version"] = ""
     with pytest.raises(art.ArtifactStartupError, match="model_version"):
         art._validate_meta("P6", meta, _real_metrics())
+
+
+# ---------------------------------------------------------------------------
+# D17 completeness, round 2: internal structure of metrics.json and
+# P6_simulation.json -- not just top-level key presence -- since
+# app/predict.py reads metrics[task][algo]'s CV fields, each *_holdout
+# block, P6_strategy_ranking's internals, and P6_simulation[sid]["levels"]
+# directly. A malformed one previously passed startup validation and
+# would only have surfaced as a bare KeyError/TypeError/ValueError on the
+# first request that actually needed it.
+# ---------------------------------------------------------------------------
+
+_TASK_ALGO = {"P2": "catboost", "P3": "xgboost", "P4": "logistic", "P4S": "logistic", "P6": "linear"}
+
+
+@pytest.mark.parametrize("task,key", [
+    ("P2", "mean_mae"), ("P2", "mean_rmse"), ("P2", "mean_r2"),
+    ("P3", "mean_roc_auc"), ("P3", "mean_pr_auc"), ("P3", "mean_brier"), ("P3", "mean_log_loss"),
+])
+def test_metrics_cv_missing_a_consumed_key_is_fail_fast(task, key):
+    meta = _real_meta(task)
+    metrics = _real_metrics()
+    del metrics[task][_TASK_ALGO[task]][key]
+    with pytest.raises(art.ArtifactStartupError, match=key):
+        art._validate_meta(task, meta, metrics)
+
+
+def test_metrics_cv_non_numeric_value_is_fail_fast():
+    meta = _real_meta("P2")
+    metrics = _real_metrics()
+    metrics["P2"]["catboost"]["mean_mae"] = "not a number"
+    with pytest.raises(art.ArtifactStartupError, match="mean_mae"):
+        art._validate_meta("P2", meta, metrics)
+
+
+@pytest.mark.parametrize("task,key", [
+    ("P2", "mae"), ("P2", "rmse"), ("P2", "r2"),
+    ("P3", "roc_auc"), ("P3", "pr_auc"), ("P3", "brier"), ("P3", "log_loss"),
+])
+def test_metrics_holdout_missing_a_consumed_key_is_fail_fast(task, key):
+    metrics = _real_metrics()
+    del metrics[f"{task}_holdout"][key]
+    with pytest.raises(art.ArtifactStartupError, match=key):
+        art._validate_metrics(metrics)
+
+
+def test_p2_holdout_missing_conformal_coverage_is_fail_fast():
+    """app/predict.py's predict_ltv reads this specifically (not part of
+    the generic regression holdout keys shared with P6)."""
+    metrics = _real_metrics()
+    del metrics["P2_holdout"]["conformal_coverage"]
+    with pytest.raises(art.ArtifactStartupError, match="conformal_coverage"):
+        art._validate_metrics(metrics)
+
+
+def test_strategy_ranking_missing_a_strategy_id_is_fail_fast():
+    """app/predict.py's simulate_budget does ranked.index(strategy_id) for
+    every id in STRATEGY_ALLOCATIONS -- one absent from `ranked` raises
+    ValueError at request time, not fail-fast at boot."""
+    metrics = _real_metrics()
+    metrics["P6_strategy_ranking"]["ranked"].remove("100x500")
+    with pytest.raises(art.ArtifactStartupError, match="ranked"):
+        art._validate_metrics(metrics)
+
+
+def test_strategy_ranking_duplicate_id_is_fail_fast():
+    metrics = _real_metrics()
+    ranked = metrics["P6_strategy_ranking"]["ranked"]
+    ranked[-1] = ranked[0]  # duplicate, and now missing one real id
+    with pytest.raises(art.ArtifactStartupError, match="ranked"):
+        art._validate_metrics(metrics)
+
+
+def test_strategy_ranking_top_two_overlap_wrong_type_is_fail_fast():
+    metrics = _real_metrics()
+    metrics["P6_strategy_ranking"]["top_two_overlap"] = "yes"
+    with pytest.raises(art.ArtifactStartupError, match="top_two_overlap"):
+        art._validate_metrics(metrics)
+
+
+def _real_simulation() -> dict:
+    return json.loads((REAL_MODELS_DIR / "P6_simulation.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("field", ["point", "lower", "upper"])
+def test_simulation_entry_non_numeric_field_is_fail_fast(field):
+    sim = _real_simulation()
+    sim["10x5000"][field] = "not a number"
+    with pytest.raises(art.ArtifactStartupError, match="10x5000"):
+        art._validate_simulation(sim)
+
+
+def test_simulation_entry_n_bootstrap_used_wrong_type_is_fail_fast():
+    sim = _real_simulation()
+    sim["10x5000"]["n_bootstrap_used"] = 0
+    with pytest.raises(art.ArtifactStartupError, match="n_bootstrap_used"):
+        art._validate_simulation(sim)
+
+
+def test_simulation_entry_missing_a_budget_level_is_fail_fast():
+    """app/predict.py reads levels[str(ad_budget)]["n"] for every
+    (ad_budget, count) pair in STRATEGY_ALLOCATIONS[strategy_id] -- a
+    missing budget level raises KeyError at request time, not fail-fast."""
+    sim = _real_simulation()
+    del sim["10x5000"]["levels"]["5000"]
+    with pytest.raises(art.ArtifactStartupError, match="levels"):
+        art._validate_simulation(sim)
+
+
+def test_simulation_entry_level_n_non_positive_is_fail_fast():
+    sim = _real_simulation()
+    sim["10x5000"]["levels"]["5000"]["n"] = 0
+    with pytest.raises(art.ArtifactStartupError, match="levels"):
+        art._validate_simulation(sim)
 
 
 # ---------------------------------------------------------------------------

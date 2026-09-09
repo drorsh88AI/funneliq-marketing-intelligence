@@ -65,6 +65,33 @@ _SUPPORTED_DTYPES = {"int64"}
 _P2_ONLY_META_KEYS = {"alpha", "conformal_quantile", "interval_method"}
 _CLASSIFIER_META_KEYS = {"base_rate", "calibration_status", "calibration_method"}
 
+# D17 completeness, round 2: metrics.json's and P6_simulation.json's
+# INTERNAL structure (not just top-level key presence) is what
+# app/predict.py actually reads a request at a time -- metrics[task][algo]
+# (_regression_metrics/_classification_metrics), the *_holdout blocks,
+# P6_strategy_ranking["ranked"] (indexed per strategy_id), and
+# P6_simulation[sid]["levels"][str(ad_budget)]["n"]. None of these were
+# schema-checked before; a bad one surfaced as a bare KeyError/TypeError
+# on the first request that needed it, not fail-fast at boot.
+_REGRESSION_CV_KEYS = {"mean_mae", "mean_rmse", "mean_r2"}
+_REGRESSION_HOLDOUT_KEYS = {"mae", "rmse", "r2"}
+_CLASSIFIER_CV_KEYS = {"mean_roc_auc", "mean_pr_auc", "mean_brier", "mean_log_loss"}
+_CLASSIFIER_HOLDOUT_KEYS = {"roc_auc", "pr_auc", "brier", "log_loss"}
+
+
+def _is_number(value: Any) -> bool:
+    """int/float, excluding bool (bool is an int subclass in Python)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _require_numeric_subkeys(container: Any, keys: set, path: Path, label: str) -> None:
+    if not isinstance(container, dict) or not keys <= container.keys():
+        missing = keys - set(container if isinstance(container, dict) else {})
+        raise ArtifactStartupError(f"{path}: {label} missing required key(s): {sorted(missing)}")
+    bad = {k for k in keys if not _is_number(container[k])}
+    if bad:
+        raise ArtifactStartupError(f"{path}: {label} has non-numeric value(s) for: {sorted(bad)}")
+
 
 class ArtifactStartupError(RuntimeError):
     """A static asset (JSON) is missing, malformed, or fails schema
@@ -117,21 +144,19 @@ def _validate_meta(task: str, meta: Any, metrics: dict) -> None:
         raise ArtifactStartupError(f"{path}: model_version must be a non-empty string")
 
     observed_values = meta["observed_ad_budget_values"]
-    if not isinstance(observed_values, list) or not all(
-        isinstance(v, (int, float)) and not isinstance(v, bool) for v in observed_values
-    ):
+    if not isinstance(observed_values, list) or not all(_is_number(v) for v in observed_values):
         raise ArtifactStartupError(f"{path}: observed_ad_budget_values must be a list of numbers")
 
     if task == "P2":
         alpha = meta["alpha"]
-        if not isinstance(alpha, (int, float)) or isinstance(alpha, bool) or not (0 < alpha < 1):
+        if not _is_number(alpha) or not (0 < alpha < 1):
             raise ArtifactStartupError(f"{path}: alpha must be a number in (0, 1)")
         quantile = meta["conformal_quantile"]
-        if not isinstance(quantile, (int, float)) or isinstance(quantile, bool) or quantile < 0:
+        if not _is_number(quantile) or quantile < 0:
             raise ArtifactStartupError(f"{path}: conformal_quantile must be a non-negative number")
     elif task in CLASSIFIER_TASKS:
         base_rate = meta["base_rate"]
-        if not isinstance(base_rate, (int, float)) or isinstance(base_rate, bool) or not (0 <= base_rate <= 1):
+        if not _is_number(base_rate) or not (0 <= base_rate <= 1):
             raise ArtifactStartupError(f"{path}: base_rate must be a number in [0, 1]")
         for key in ("calibration_status", "calibration_method"):
             value = meta[key]
@@ -159,12 +184,26 @@ def _validate_meta(task: str, meta: Any, metrics: dict) -> None:
     if not isinstance(ood_bounds, dict) or not set(feature_columns) <= set(ood_bounds):
         missing_bounds = set(feature_columns) - set(ood_bounds if isinstance(ood_bounds, dict) else {})
         raise ArtifactStartupError(f"{path}: ood_bounds missing feature(s): {sorted(missing_bounds)}")
+    # app/inference.py's out_of_range_features reads bounds[col]["min"]/["max"]
+    # directly for every feature_columns entry -- validate the shape it
+    # actually needs, not just that a key named `col` exists.
+    for col in feature_columns:
+        bound = ood_bounds[col]
+        if not isinstance(bound, dict) or not _is_number(bound.get("min")) or not _is_number(bound.get("max")):
+            raise ArtifactStartupError(f"{path}: ood_bounds[{col!r}] must be an object with numeric 'min' and 'max'")
+        if bound["min"] > bound["max"]:
+            raise ArtifactStartupError(f"{path}: ood_bounds[{col!r}].min must be <= max")
 
     algo = meta["algo"]
     if task not in metrics or algo not in metrics.get(task, {}):
         raise ArtifactStartupError(
             f"{path}: algo={algo!r} is not a key in metrics[{task!r}]"
         )
+    # app/predict.py's _regression_metrics/_classification_metrics read
+    # metrics[task][algo]'s CV fields directly, keyed by the SAME algo this
+    # just validated -- can only be checked here, after algo is known.
+    cv_keys = _CLASSIFIER_CV_KEYS if task in CLASSIFIER_TASKS else _REGRESSION_CV_KEYS
+    _require_numeric_subkeys(metrics[task][algo], cv_keys, path, f"metrics[{task!r}][{algo!r}]")
 
 
 def _validate_metrics(metrics: Any) -> None:
@@ -175,6 +214,16 @@ def _validate_metrics(metrics: Any) -> None:
             raise ArtifactStartupError(f"{_METRICS_PATH}: missing required key: {task!r}")
         if f"{task}_holdout" not in metrics:
             raise ArtifactStartupError(f"{_METRICS_PATH}: missing required key: {task + '_holdout'!r}")
+        # app/predict.py's _regression_metrics/_classification_metrics read
+        # these holdout fields directly -- doesn't depend on `algo`
+        # (the winning model is already baked into *_holdout), unlike the
+        # per-algo CV check in _validate_meta below.
+        holdout_keys = _CLASSIFIER_HOLDOUT_KEYS if task in CLASSIFIER_TASKS else _REGRESSION_HOLDOUT_KEYS
+        _require_numeric_subkeys(metrics[f"{task}_holdout"], holdout_keys, _METRICS_PATH, f"{task}_holdout")
+    # P2's LtvPrediction.interval_details also reads conformal_coverage
+    # off P2_holdout specifically (app/predict.py predict_ltv).
+    _require_numeric_subkeys(metrics["P2_holdout"], {"conformal_coverage"}, _METRICS_PATH, "P2_holdout")
+
     if "P6_strategy_ranking" not in metrics:
         raise ArtifactStartupError(f"{_METRICS_PATH}: missing required key: 'P6_strategy_ranking'")
     ranking = metrics["P6_strategy_ranking"]
@@ -182,12 +231,25 @@ def _validate_metrics(metrics: Any) -> None:
         raise ArtifactStartupError(
             f"{_METRICS_PATH}: P6_strategy_ranking must contain 'ranked' and 'top_two_overlap'"
         )
+    # app/predict.py's simulate_budget does ranked.index(strategy_id) for
+    # EVERY strategy_id in STRATEGY_ALLOCATIONS -- a ranking missing one,
+    # or carrying a duplicate/unknown id, raises ValueError at request
+    # time (an id absent from `ranked`) or silently mis-ranks (a dup).
+    ranked = ranking["ranked"]
+    expected_ids = set(STRATEGY_ALLOCATIONS)
+    if not isinstance(ranked, list) or set(ranked) != expected_ids or len(ranked) != len(expected_ids):
+        raise ArtifactStartupError(
+            f"{_METRICS_PATH}: P6_strategy_ranking.ranked must be exactly "
+            f"{sorted(expected_ids)}, no duplicates and no gaps -- got {ranked!r}"
+        )
+    if not isinstance(ranking["top_two_overlap"], bool):
+        raise ArtifactStartupError(f"{_METRICS_PATH}: P6_strategy_ranking.top_two_overlap must be a bool")
 
 
 def _validate_simulation(simulation: Any) -> None:
     if not isinstance(simulation, dict):
         raise ArtifactStartupError(f"{_SIMULATION_PATH}: top-level JSON must be an object")
-    for strategy_id in STRATEGY_ALLOCATIONS:
+    for strategy_id, pairs in STRATEGY_ALLOCATIONS.items():
         if strategy_id not in simulation:
             raise ArtifactStartupError(f"{_SIMULATION_PATH}: missing required key: {strategy_id!r}")
         entry = simulation[strategy_id]
@@ -197,6 +259,28 @@ def _validate_simulation(simulation: Any) -> None:
                 f"{_SIMULATION_PATH}: {strategy_id!r} missing required key(s): "
                 f"{sorted(required - entry.keys()) if isinstance(entry, dict) else sorted(required)}"
             )
+        # app/predict.py's simulate_budget reads point/lower/upper and
+        # n_bootstrap_used straight into StrategyResult fields, and
+        # levels[str(ad_budget)]["n"] for every allocation -- validate the
+        # exact shape it consumes, not just that the top-level keys exist.
+        _require_numeric_subkeys(entry, {"point", "lower", "upper"}, _SIMULATION_PATH, f"{strategy_id!r}")
+        n_bootstrap = entry["n_bootstrap_used"]
+        if not isinstance(n_bootstrap, int) or isinstance(n_bootstrap, bool) or n_bootstrap <= 0:
+            raise ArtifactStartupError(f"{_SIMULATION_PATH}: {strategy_id!r}.n_bootstrap_used must be a positive int")
+
+        levels = entry["levels"]
+        expected_budgets = {str(ad_budget) for ad_budget, _count in pairs}
+        if not isinstance(levels, dict) or not expected_budgets <= levels.keys():
+            missing_levels = expected_budgets - set(levels if isinstance(levels, dict) else {})
+            raise ArtifactStartupError(
+                f"{_SIMULATION_PATH}: {strategy_id!r}.levels missing budget level(s): {sorted(missing_levels)}"
+            )
+        for budget in expected_budgets:
+            n = levels[budget].get("n") if isinstance(levels[budget], dict) else None
+            if not isinstance(n, int) or isinstance(n, bool) or n <= 0:
+                raise ArtifactStartupError(
+                    f"{_SIMULATION_PATH}: {strategy_id!r}.levels[{budget!r}].n must be a positive int"
+                )
 
 
 def load_static_assets() -> dict:
