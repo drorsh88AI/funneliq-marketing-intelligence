@@ -222,8 +222,15 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 
 ## 4. Checkpoints — סטטוס וראיה
 
+⚠ **precondition נעול לכל checkpoint, מעכשיו ואילך:** לפני תחילת checkpoint
+`N`, checkpoint `N-1` חייב להיות מסומן `done` **עם commit/ראיה רשומים
+בטבלה** — לא מספיק שבוצע "בזיכרון" בלי שורה כאן. checkpoint 0 (יצירת
+הענף + שלב 0) הוא ה-precondition המפורש של checkpoint 1: אין קוד API
+לפני שלושת קבצי התיעוד מחויבים בגיט.
+
 | # | תוכן | סטטוס | ראיה |
 |---|---|---|---|
+| 0 | `main` נקי → יצירת `feat/api` → שלב 0 (PHASE9.md חדש, SPEC.md D20, ROADMAP.html, REQUIREMENTS.md) | ✅ done ⚠ **בוצע שלא לפי הסדר** — ראו הערה למטה | `93c4faa`, `5dad544` |
 | 1 | D21 (`column_status`) + D13 (`app/inference.py`) | ✅ done | `82eda3c`, `4b391f2`; 448→453 |
 | 2 | `HTTPBearer` + `access_token` (D5/D6) | ✅ done | `6622b84`; 453→460 |
 | 3 | `app/artifacts.py` — loader + D17 | ✅ done | `9977589`; 460→526 |
@@ -235,6 +242,15 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 | 9 | `followup` — עימוד + קדימות | ✅ done (ק' 73 חסר — ראיה חיה) | `8361a05`; 653→669 |
 | 10 | HTTP מלא + projection | ✅ done | `168100e`; 669→695 |
 | 11 | סגירה: ביקורת → PR → CI → מיזוג → auto-deploy → ראיה חיה (ק' 72–73, 75) → סגירה | ⏳ ממתין לאישור נפרד לכל תת-שלב | — |
+
+⚠ **checkpoint 0 בוצע שלא לפי הסדר, בפועל, לא רק לפי התיעוד:** `main` נקי
+ויצירת `feat/api` בוצעו נכון לפני D21 — אך שלב 0 עצמו (`93c4faa`,
+`5dad544`) נכתב **אחרי** checkpoint 10 (`168100e`), לא לפניו כפי שהתכנון
+המאושר דרש. עשרה checkpoints של קוד רצו בלי `PHASE9.md` קנוני קיים
+בגיט, בלי תיקון D20 ב-`SPEC.md`, ובלי `ROADMAP.html`/`REQUIREMENTS.md`
+מסונכרנים — התיקון הרטרואקטיבי סוגר את פער התיעוד, **אינו** הופך את
+סדר הביצוע המקורי לתקין, והוא שנחשף רק כשהמשתמש בדק את המצב, לא
+כתוצאה מבדיקה עצמית שהופעלה כאן.
 
 **695/695 בדיקות ירוקות** (מבסיס 448). כל commit רץ מול `pytest -q` מלא
 לפני ואחרי. חמשת הארטיפקטים ללא שינוי לאורך כל הביצוע (SHA-256 נבדק
