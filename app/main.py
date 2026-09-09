@@ -5,17 +5,33 @@ in phase 9, behind Depends(current_user) from app.auth.
 """
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from app.artifacts import get_assets
 from app.auth import router as auth_router
 
 load_dotenv()  # no-op if .env doesn't exist (CI, Render -- env vars set directly)
 
-app = FastAPI(title="FunnelIQ API", version="0.4.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """PHASE9.md D2: forces the seven static JSON assets to load and
+    schema-validate BEFORE the app starts accepting requests. get_assets()
+    is itself lazy/idempotent (app.artifacts) -- this call just makes sure
+    it happens here, eagerly, so a broken asset raises ArtifactStartupError
+    and aborts startup (uvicorn never binds the port; Render's health check
+    never passes; the previous deploy stays live) instead of surfacing as
+    a per-request 500 on whichever request happens to hit it first."""
+    get_assets()
+    yield
+
+
+app = FastAPI(title="FunnelIQ API", version="0.4.0", lifespan=lifespan)
 
 
 @app.get("/health")

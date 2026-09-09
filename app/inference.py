@@ -20,6 +20,10 @@ from __future__ import annotations
 
 import math
 
+import pandas as pd
+
+from app.artifacts import get_artifact
+
 
 def _require_finite_scalar(value: float, name: str) -> float:
     """Guards a scalar input (point estimates, quantiles) against NaN/±inf
@@ -39,3 +43,55 @@ def conformal_interval(point_estimate: float, q: float) -> tuple[float, float]:
     point_estimate = _require_finite_scalar(point_estimate, "point_estimate")
     q = _require_finite_scalar(q, "q")
     return max(0.0, point_estimate - q), point_estimate + q
+
+
+def out_of_range_features(meta: dict, values: dict) -> list[str]:
+    """PHASE9.md D9: every feature in meta["feature_columns"] whose input
+    value falls outside meta["ood_bounds"][feature] -- empty list means
+    fully in-domain. Iterates feature_columns (not ood_bounds.keys()) so
+    the order of a non-empty result is deterministic and matches the
+    request schema's field order."""
+    bounds = meta["ood_bounds"]
+    return [
+        col
+        for col in meta["feature_columns"]
+        if not (bounds[col]["min"] <= values[col] <= bounds[col]["max"])
+    ]
+
+
+def build_input_frame(meta: dict, values: dict) -> pd.DataFrame:
+    """PHASE9.md D17/criterion 74: the one-row DataFrame passed to
+    predict()/predict_proba() -- built from EXACTLY meta["feature_columns"]
+    (as both the column set and the order) and cast per
+    meta["feature_dtypes"], never a DataFrame inferred structurally from
+    the request body. A dtype the artifact's own meta declares that pandas
+    can't satisfy raises ValueError -- callers map that to 500 (D17), not
+    a silently-wrong dtype."""
+    columns = meta["feature_columns"]
+    dtypes = meta["feature_dtypes"]
+    frame = pd.DataFrame([{col: values[col] for col in columns}], columns=columns)
+    try:
+        for col in columns:
+            frame[col] = frame[col].astype(dtypes[col])
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"failed to cast column {col!r} to dtype {dtypes[col]!r}: {e}") from e
+    return frame
+
+
+def predict_if_in_domain(task: str, meta: dict, values: dict, *, method: str = "predict"):
+    """PHASE9.md D9: OOD short-circuits BEFORE the artifact is ever
+    touched -- if any feature is out of range, returns (out_of_range,
+    None) without calling get_artifact at all (criterion 44). Otherwise
+    loads (or reuses) the cached artifact, builds the input frame per
+    build_input_frame(), calls `.predict()` or `.predict_proba()` per
+    `method`, and returns ([], raw_result). Task-agnostic and
+    schema-agnostic on purpose -- the predict/insights routes wrap this
+    with their own response-schema construction (warnings, evidence_level,
+    etc.), never reimplementing the OOD gate or the DataFrame contract."""
+    out_of_range = out_of_range_features(meta, values)
+    if out_of_range:
+        return out_of_range, None
+    artifact = get_artifact(task)
+    frame = build_input_frame(meta, values)
+    result = getattr(artifact, method)(frame)
+    return [], result
