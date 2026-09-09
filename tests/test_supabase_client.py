@@ -284,6 +284,52 @@ def test_secret_key_is_never_read_in_app_source():
 
 
 # ---------------------------------------------------------------------------
+# fetch_all_rows -- the shared pagination mechanics checkpoint 9's
+# calls_to_closed distribution builds on (IA.md §7.1).
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_all_rows_pages_through_more_than_one_thousand_rows():
+    total = 3163
+    pages_seen = []
+
+    def handler(request):
+        offset = int(dict(p.split("=") for p in str(request.url).split("?")[1].split("&"))["offset"])
+        pages_seen.append(offset)
+        page = min(1000, total - offset)
+        data = [{"calls_to_closed": 1} for _ in range(page)]
+        return httpx.Response(200, json=data, headers={"content-range": f"{offset}-{offset+page-1}/{total}"})
+
+    client = _mock_client(handler)
+    rows = sc.fetch_all_rows(client, "funnel_records", "calls_to_closed", filters={"purchased": 1})
+    assert len(rows) == total
+    assert pages_seen == [0, 1000, 2000, 3000]
+
+
+def test_fetch_all_rows_stops_on_a_short_page():
+    def handler(request):
+        return httpx.Response(200, json=[{"x": 1}] * 5, headers={"content-range": "0-4/5"})
+
+    client = _mock_client(handler)
+    rows = sc.fetch_all_rows(client, "funnel_records", "x")
+    assert len(rows) == 5
+
+
+def test_fetch_all_rows_applies_filters_and_order():
+    captured = {}
+
+    def handler(request):
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json=[], headers={"content-range": "*/0"})
+
+    client = _mock_client(handler)
+    sc.fetch_all_rows(client, "funnel_records", "calls_to_closed", filters={"purchased": 1}, order_col="source_row_id")
+    assert "purchased=eq.1" in captured["url"]
+    assert "order=source_row_id.asc" in captured["url"]
+    assert "select=calls_to_closed" in captured["url"]
+
+
+# ---------------------------------------------------------------------------
 # Criteria 68-69 -- the independent count query's exact shape.
 # ---------------------------------------------------------------------------
 

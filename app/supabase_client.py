@@ -27,10 +27,10 @@ from supabase import Client, ClientOptions, create_client
 
 from app.auth import access_token
 
-# D19: no retry layer of our own (postgrest's own built-in retry --
-# GET/HEAD only, on 503/520 -- is left alone, see app.supabase_client's
-# docstring on _postgrest_retry_disabled below); a fixed request timeout
-# instead. Phase 12 measures the real latency and tunes this.
+# D19: no retry layer of our own -- postgrest's own built-in retry
+# (GET/HEAD only, on 503/520) is disabled per-query via .retry(False),
+# not overridden here; a fixed request timeout instead. Phase 12 measures
+# the real latency and tunes this.
 POSTGREST_CLIENT_TIMEOUT_SECONDS = 10
 
 
@@ -49,6 +49,40 @@ def _build_client(token: str) -> Client:
         postgrest_client_timeout=POSTGREST_CLIENT_TIMEOUT_SECONDS,
     )
     return create_client(url, key, options=options)
+
+
+def fetch_all_rows(
+    client: Client, table: str, columns: str, *, filters: dict | None = None,
+    order_col: str = "source_row_id", page_size: int = 1000,
+) -> list[dict]:
+    """IA.md §7.1: pages through PostgREST's default 1000-row cap --
+    `.order(order_col)` for a stable sequence (without it, paginated
+    `.range()` calls can skip or duplicate rows) and `.range()` in a loop
+    until a page comes back shorter than page_size. This is the SAME
+    mechanics `scripts/verify_data_contract.py:fetch_all_rows` already
+    implements for its own full-table, no-filter, no-retry-control use
+    case (phase 3) -- adopted and adapted here (columns/filters/D19's
+    .retry(False)), not reinvented from scratch, and never called as
+    scripts/verify_data_contract.py's own version unchanged, which would
+    fetch all 20 columns with no `purchased` filter.
+
+    ⛔ Every caller needing more than one page (checkpoint 9's
+    calls_to_closed distribution) MUST go through this, not a second
+    ad-hoc loop -- that duplication is exactly what IA.md §7.1 forbids."""
+    filters = filters or {}
+    rows: list[dict] = []
+    offset = 0
+    while True:
+        query = client.table(table).select(columns).order(order_col)
+        for key, value in filters.items():
+            query = query.eq(key, value)
+        response = query.range(offset, offset + page_size - 1).retry(False).execute()
+        batch = response.data
+        rows.extend(batch)
+        if len(batch) < page_size:
+            break
+        offset += page_size
+    return rows
 
 
 def independent_purchased_count(client: Client) -> int:
