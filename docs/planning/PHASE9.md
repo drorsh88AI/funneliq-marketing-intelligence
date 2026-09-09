@@ -241,7 +241,7 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 | 8 | `simulate/budget` + `budget-tiers` | ✅ done (ק' 72 חסר — ראיה חיה); `.order("tier_order", nullsfirst=False)` מפורש נוסף בביקורת קוד, והבדיקה חוזקה מ-substring לערך המדויק `tier_order.asc.nullslast` | `b2a38a9`; 632→653 · `9b91d0c` · `e6659eb` |
 | 9 | `followup` — עימוד + קדימות | ✅ done (ק' 73 חסר — ראיה חיה); `.order("stage_order")` מפורש נוסף בביקורת קוד, והבדיקה חוזקה לערך המדויק `stage_order.asc` | `8361a05`; 653→669 · `9b91d0c` · `e6659eb` |
 | 10 | HTTP מלא + projection | ✅ done | `168100e`; 669→695 |
-| 11 | סגירה: ביקורת ✅ → סריקת סודות מקומית ✅ → push ✅ → PR ✅ → CI ⏳ → מיזוג ⏳ (אישור נפרד) → auto-deploy ⏳ → ראיה חיה (ק' 72–73, 75) ⏳ → סגירה ⏳ (אישור נפרד) | 🔄 בביצוע | push+PR: [PR #24](https://github.com/drorsh88AI/funneliq-marketing-intelligence/pull/24), `feat/api`→`main`, 21 commits |
+| 11 | סגירה: ביקורת ✅ → סריקת סודות מקומית ✅ → push ✅ → PR ✅ → CI ⏳ (נכשל פעם אחת, תוקן, ממתין לריצה חוזרת) → מיזוג ⏳ (אישור נפרד) → auto-deploy ⏳ → ראיה חיה (ק' 72–73, 75) ⏳ → סגירה ⏳ (אישור נפרד) | 🔄 בביצוע | [PR #24](https://github.com/drorsh88AI/funneliq-marketing-intelligence/pull/24), `feat/api`→`main`, 23 commits; ראו הערת CI למטה |
 
 ⚠ **checkpoint 0 בוצע שלא לפי הסדר, בפועל, לא רק לפי התיעוד:** `main` נקי
 ויצירת `feat/api` בוצעו נכון לפני D21 — אך שלב 0 עצמו (`93c4faa`,
@@ -288,6 +288,28 @@ Pydantic נפלט מילולית ל-`description` ב-`docs/api/openapi.json`, **
 (SHA-256 נבדק בקריטריון 31); `models/` **וגם `docs/api/openapi.json`**
 לא נגעו בהם בשלושת תיקוני ביקורת הקוד. `main` לא נגע בו — כל ה-commits
 על `feat/api` בלבד.
+
+⚠ **CI על PR #24 נכשל בריצה ראשונה, בשני ה-jobs זהה** —
+`tests/test_artifacts.py::test_import_app_inference_has_no_file_io_side_effect`
+(קריטריון 45): `import app.inference` בתת-תהליך נקי על CI (Ubuntu,
+Python 3.12.14) ביצע קריאת `open()` **אחת**, בעוד מקומית (Windows,
+771/771 כולל הבדיקה הזו) — אפס. נשלל: אי-התאמת גרסאות (`requirements.txt`
+נעול לזהה למותקן מקומית), `load_dotenv()` ב-`scripts/load_data.py`
+(נקרא בתוך פונקציה בלבד, לא ברמת מודול), ושחזור מקומי עם `HOME`/
+`XDG_CACHE_HOME` טריים (עדיין אפס). **תוקן ב-`c5b1ebe`**: `import pandas`
+הועבר לתוך `build_input_frame`, ו-`from app.artifacts import
+get_artifact` הועבר לתוך `predict_if_in_domain` — `app.inference`
+כעת ללא ייבוא חיצוני כלשהו ברמת המודול (רק `math`), כך שסיבת ה-`open()`
+המדויקת (כנראה תופעת לוואי חד-פעמית של pandas/numpy על Linux טרי) הופכת
+לבלתי-רלוונטית: היא כבר לא יכולה לקרות מ-`import app.inference` בלבד.
+שלוש בדיקות ב-`tests/test_inference.py` שעשו monkeypatch על
+`app.inference.get_artifact` עודכנו לתקוף את `app.artifacts.get_artifact`
+(שם ה-import המקומי אכן פותר את השם). בדיקת קריטריון 45 עצמה שומרת על
+**אותו תנאי הצלחה בדיוק** (`calls == {'open': 0, 'json.load': 0}`) אך
+כעת אוספת stack מצומצם לכל קריאה, שיוצג בהודעת הכשל אם זה יישנה —
+בלי צורך ב-commit אבחוני נפרד. `771/771` מקומית; `models/` ו-
+`docs/api/openapi.json` לא נגעו בהם. נדחף לאותו PR #24; ⏳ ממתין לריצת CI
+חוזרת.
 
 ⚠ **ק' 72/73/75 (ראיה חיה)** דורשות deploy אמיתי ל-Render עם משתמשי
 `demo-northbound`/`demo-noorg`. אלה חלק מ-checkpoint 11 ומחייבות את
