@@ -328,11 +328,14 @@ def test_group1_reexport_matches_locked_artifact():
 
 
 def test_group2_exactly_six_business_routes_with_locked_methods():
+    """Phase 8A added one additive 7th route (PHASE8A.md D20,
+    tests/test_api_contract_p4s.py covers it) -- this still locks the
+    original six exactly, plus asserts no OTHER untracked route exists."""
     actual = set()
     for path, methods in SCHEMA["paths"].items():
         for method in methods:
             actual.add((method, path))
-    assert actual == BUSINESS_ROUTES.keys()
+    assert actual == BUSINESS_ROUTES.keys() | {("post", "/api/predict/super-customer")}
 
 
 @pytest.mark.parametrize("method_path", sorted(BUSINESS_ROUTES))

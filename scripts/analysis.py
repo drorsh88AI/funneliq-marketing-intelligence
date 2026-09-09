@@ -51,7 +51,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.features import budget_tier  # noqa: E402
+from app.features import budget_tier, super_customer_label  # noqa: E402
 from scripts.data_contract import (  # noqa: E402
     EXPECTED_COLUMNS,
     NOT_NULL_INT_COLUMNS,
@@ -195,7 +195,9 @@ def super_customer_profile(df: pd.DataFrame) -> dict:
     ltv_months>=34 (SPEC's stated top-quartile threshold). report_only
     -- descriptive, never touches any modeling decision."""
     purchased = df[df["purchased"] == 1]
-    is_super = (purchased["referred"] == "Yes") & (purchased["upsell"] == 1) & (purchased["ltv_months"] >= 34)
+    # PHASE8A.md D2 -- single source of truth for the formula; do not
+    # recompute the three conditions here a second time.
+    is_super = super_customer_label(purchased)
     super_customers = purchased[is_super]
 
     # SPEC's "31.1% זול יותר" compares against the population CAC (all

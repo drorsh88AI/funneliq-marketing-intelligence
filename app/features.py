@@ -31,6 +31,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pandas as pd
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scripts.load_data import EXPECTED_COLUMNS  # noqa: E402
 
@@ -47,11 +49,25 @@ from scripts.load_data import EXPECTED_COLUMNS  # noqa: E402
 # filter), where `purchased` varies and is NOT excluded.
 # ---------------------------------------------------------------------------
 
+# The four original tasks -- FEATURES/MODEL_INPUT_FEATURES below are
+# derived generically for exactly these, via _feature_list()'s "every
+# column not excluded" rule. P4S (added in phase 8A) does NOT fit that
+# rule -- it uses a curated 4-column subset, not "everything left over"
+# -- so it is deliberately excluded from this tuple and assigned its
+# FEATURES/MODEL_INPUT_FEATURES entries by hand, below.
+_ORIGINAL_TASKS = ("P2", "P3", "P4", "P6")
+
 TARGET = {
     "P2": "ltv_months",
     "P3": "upsell",
     "P4": "referred",
     "P6": "cumulative_profit",
+    # P4S (phase 8A, docs/planning/PHASE8A.md D1): a LOGICAL identifier,
+    # NOT a raw CSV column -- there is no `super_customer` column. Every
+    # access to this task's target values must go through
+    # target_values() below; df["super_customer"] does not exist and
+    # raises KeyError.
+    "P4S": "super_customer",
 }
 
 EXCLUDED = {
@@ -59,7 +75,43 @@ EXCLUDED = {
     "P3": {"cumulative_profit", "referred", "ltv_months", "purchased"},
     "P4": {"cumulative_profit", "upsell", "ltv_months", "purchased"},
     "P6": {"ltv_months", "upsell", "referred"},
+    # P4S (PHASE8A.md D1/D3): the three label components (referred,
+    # upsell, ltv_months) -- excluded so a leakage check on this task
+    # correctly flags them -- plus cumulative_profit (leakage) and
+    # purchased (constant in this purchased=1 population, same
+    # reasoning as P2/P3/P4). Used by column_status(); FEATURES["P4S"]
+    # is NOT derived from this via _feature_list() -- see below.
+    "P4S": {"referred", "upsell", "ltv_months", "cumulative_profit", "purchased"},
 }
+
+
+def super_customer_label(df: pd.DataFrame) -> pd.Series:
+    """P4S's synthetic target (PHASE8A.md D2): a super-customer is a
+    purchased customer who was referred, upsold, and stayed >= 34
+    months (SPEC's locked threshold). Pure -- does not mutate `df`.
+    This is the SINGLE mechanical source of truth for the formula:
+    scripts/analysis.py's super_customer_profile() consumes this exact
+    function rather than recomputing the three conditions a second
+    time. Makes no population assumption itself (callers restrict to
+    purchased=1 first if that's what they want) -- defined for any row
+    that has the three columns."""
+    return (df["referred"] == "Yes") & (df["upsell"] == 1) & (df["ltv_months"] >= 34)
+
+
+def target_values(df: pd.DataFrame, task: str) -> pd.Series:
+    """The task's target values as a Series aligned to df: df[TARGET[task]]
+    for the four original tasks (a real CSV column), and
+    super_customer_label(df).astype(int) for P4S (TARGET["P4S"] is a
+    logical id, not a column -- D1). Every generic, task-parameterized
+    access to target values (in this module and in scripts/train.py)
+    must go through this function; nothing may read
+    df[TARGET["P4S"]] directly, since that column does not exist.
+    Task-specific functions that already hardcode a real task's own
+    literal target column (e.g. scripts/train.py's train_p2/p3/p4/p6)
+    are unaffected -- they never call this."""
+    if task == "P4S":
+        return super_customer_label(df).astype(int)
+    return df[TARGET[task]]
 
 # The three-way collinear group SPEC.md flags for in-Pipeline reduction
 # ("שתיים בלבד... בתוך ה-Pipeline") -- leads_not_answered = num_leads -
@@ -98,7 +150,7 @@ def _feature_list(task: str) -> list[str]:
     return [c for c in EXPECTED_COLUMNS if c not in drop]
 
 
-FEATURES = {task: _feature_list(task) for task in TARGET}
+FEATURES = {task: _feature_list(task) for task in _ORIGINAL_TASKS}
 
 # Phase 8 (docs/planning/PHASE8.md § ו.1) -- the exact model-input columns
 # for each task's request/response contract, in order, with the collinear
@@ -106,7 +158,24 @@ FEATURES = {task: _feature_list(task) for task in TARGET}
 # MODEL_INPUT_FEATURES["P2"]/["P3"]/["P4"] (13 identical names, same
 # order); ["P6"] has 14 (purchased included) and is NOT a user-request
 # schema -- P6's simulator takes no request body at all (D10).
-MODEL_INPUT_FEATURES = {task: model_feature_columns(task) for task in TARGET}
+MODEL_INPUT_FEATURES = {task: model_feature_columns(task) for task in _ORIGINAL_TASKS}
+
+# D17's "early funnel data" experiment (P4, research_only) AND P4S's
+# actual served feature set (phase 8A). Moved here from
+# scripts/train.py:1919 (PHASE8A.md D6) -- pure transfer, same value,
+# zero behavior change; scripts/train.py re-exports this same name so
+# train_p4_early_funnel keeps working unmodified.
+EARLY_FUNNEL_FEATURES = ["ad_budget", "num_leads", "leads_answered", "followup_1"]
+
+# P4S (phase 8A): a curated 4-feature subset, not "everything not
+# excluded" like P2/P3/P4/P6 -- _feature_list()'s generic derivation
+# does not apply here, by design (PHASE8A.md D3). None of these four
+# is DROPPED_COLLINEAR ("leads_not_answered"), so model_feature_columns
+# returns them unchanged; still routed through it for the same
+# guarantee every other task gets (a future DROPPED_COLLINEAR change
+# would apply here too, automatically).
+FEATURES["P4S"] = list(EARLY_FUNNEL_FEATURES)
+MODEL_INPUT_FEATURES["P4S"] = model_feature_columns("P4S")
 
 # P6 only. The decisive availability test at P6's snapshot (budget
 # allocation moment) is "ad_budget בלבד" (§ נקודות חיזוי) -- computed as

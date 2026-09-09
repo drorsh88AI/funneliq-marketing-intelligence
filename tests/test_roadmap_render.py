@@ -58,3 +58,29 @@ def test_esc_helper_covers_the_four_characters_that_matter():
     fn = src[src.index("function esc(s)"):src.index("function itemText")]
     for ch in ("&", "<", ">", '"'):
         assert f"'{ch}'" in fn, ch
+
+
+def test_filter_all_button_count_is_derived_not_hardcoded():
+    """The "הכל (N)" filter button had its count hardcoded in the static
+    HTML and never touched by any script -- it went stale silently the
+    moment phase 8A was inserted (15 -> 16), the same class of bug as the
+    escaping regression above: a number that looks right until the data
+    it describes changes underneath it. Two-part check: the static markup
+    carries no digit (nothing left to go stale), and the render code
+    actually derives the count from PHASES.length, not a literal."""
+    src = _source()
+    button = re.search(
+        r'<button class="active" data-filter="all" id="filter-all-btn">([^<]*)</button>',
+        src,
+    )
+    assert button, "filter-all-btn markup not found -- did its id or structure change?"
+    assert not re.search(r"\d", button.group(1)), (
+        f"filter-all-btn's static HTML text still contains a digit "
+        f"({button.group(1)!r}) -- it must be label-only, filled in by "
+        f"JS from PHASES.length, or it will go stale the next time a "
+        f"phase is added"
+    )
+    assert "textContent = `הכל (${PHASES.length})`" in src, (
+        "no line derives filter-all-btn's text from PHASES.length -- the "
+        "count must never be reintroduced as a literal number in the script"
+    )

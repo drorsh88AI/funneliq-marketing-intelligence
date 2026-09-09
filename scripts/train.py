@@ -39,12 +39,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.features import (  # noqa: E402
     DERIVED_FROM_PROFILE,
     DROPPED_COLLINEAR,
+    EARLY_FUNNEL_FEATURES,
     FEATURES,
     MODEL_INPUT_FEATURES,
     STRATEGY_ALLOCATIONS,
     TARGET,
     budget_tier,
     model_feature_columns,
+    target_values,
 )
 from scripts.load_data import EXPECTED_COLUMNS, load_and_verify_csv  # noqa: E402
 # Imported as a module, not `from ... import EXPECTED_SHA256` -- checkpoint
@@ -100,11 +102,13 @@ from xgboost import XGBClassifier, XGBRegressor
 
 # One seed per task, documented up front, never chosen after looking at
 # a result (PHASE6.md D2).
-SEEDS = {"P2": 42, "P3": 43, "P4": 44, "P6": 45, "P4_sensitivity": 46}
+SEEDS = {"P2": 42, "P3": 43, "P4": 44, "P6": 45, "P4_sensitivity": 46, "P4S": 48}
+# 47 is BOOTSTRAP_SEED (below); 201-203 are ADDITIONAL_SEEDS -- 48 is the
+# next free seed (PHASE8A.md D3).
 
 # P3/P4 are classifiers and stratify their split by the target class;
-# P2/P6 are regressions and don't (PHASE6.md D2).
-STRATIFIED_TASKS = {"P3", "P4"}
+# P2/P6 are regressions and don't (PHASE6.md D2). P4S too (PHASE8A.md).
+STRATIFIED_TASKS = {"P3", "P4", "P4S"}
 
 
 def task_population(df: pd.DataFrame, task: str) -> pd.DataFrame:
@@ -112,8 +116,7 @@ def task_population(df: pd.DataFrame, task: str) -> pd.DataFrame:
     אוכלוסיות אימון): P2/P3/P4 restrict to purchased == 1 with a
     non-missing target; P6 uses the full population with a non-missing
     target and no purchased filter."""
-    target = TARGET[task]
-    pop = df[df[target].notna()]
+    pop = df[target_values(df, task).notna()]
     if task != "P6":
         pop = pop[pop["purchased"] == 1]
     return pop
@@ -127,9 +130,8 @@ def split_task(df: pd.DataFrame, task: str) -> dict[str, pd.Series]:
     Series per part so every downstream join is by id, never by
     positional index."""
     pop = task_population(df, task)
-    target = TARGET[task]
     seed = SEEDS[task]
-    stratify = pop[target] if task in STRATIFIED_TASKS else None
+    stratify = target_values(pop, task) if task in STRATIFIED_TASKS else None
 
     dev, holdout = train_test_split(
         pop, test_size=0.2, random_state=seed, stratify=stratify
@@ -137,7 +139,7 @@ def split_task(df: pd.DataFrame, task: str) -> dict[str, pd.Series]:
     if task == "P6":
         train, calibration = dev, None
     else:
-        stratify_dev = dev[target] if task in STRATIFIED_TASKS else None
+        stratify_dev = target_values(dev, task) if task in STRATIFIED_TASKS else None
         train, calibration = train_test_split(
             dev, test_size=0.2, random_state=seed, stratify=stratify_dev
         )
@@ -199,7 +201,7 @@ def build_folds(df: pd.DataFrame, task: str) -> list[tuple[np.ndarray, np.ndarra
     seed = SEEDS[task]
     if task in STRATIFIED_TASKS:
         splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
-        return list(splitter.split(train_df, train_df[TARGET[task]]))
+        return list(splitter.split(train_df, target_values(train_df, task)))
     splitter = KFold(n_splits=5, shuffle=True, random_state=seed)
     return list(splitter.split(train_df))
 
@@ -257,7 +259,7 @@ def build_preprocessing_steps(task: str, encode_budget_tier: bool, winsorize: bo
     if winsorize:
         steps.append(("winsorize", _Winsorizer(columns=numeric_cols)))
     column_transformers = [("numeric", "passthrough", numeric_cols)]
-    if task == "P4":
+    if task in ("P4", "P4S"):
         steps.append(("budget_tier", FunctionTransformer(_add_budget_tier)))
         encoder = OneHotEncoder(handle_unknown="ignore") if encode_budget_tier else "passthrough"
         column_transformers.append(("budget_tier", encoder, ["budget_tier"]))
@@ -990,6 +992,87 @@ def train_p4(df: pd.DataFrame) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Phase 8A checkpoint 5 -- P4S: search + Baselines (PHASE8A.md D7-D9).
+# ---------------------------------------------------------------------------
+
+# D9's primary/secondary metrics (ROC-AUC primary; PR-AUC, Brier
+# secondary) plus Accuracy/Precision/Recall/F1 at the fixed 0.5
+# threshold, report-only (same zero_division=0 fix as P3_SCORING).
+# log_loss is ALSO included even though D9's prose only names the four
+# metrics above it -- app/schemas.py's ClassificationMetrics (which
+# D20 says SuperCustomerPrediction.metrics reuses verbatim) requires
+# mean_log_loss/log_loss fields; D9 and D20 disagree here, and D20's
+# schema-reuse choice wins since the API contract can't emit a field
+# it doesn't have. lift_at_10 is excluded -- neither D9 nor the schema
+# asks for it.
+P4S_SCORING = {
+    "roc_auc": "roc_auc",
+    "pr_auc": "average_precision",
+    "accuracy": "accuracy",
+    "precision": make_scorer(precision_score, zero_division=0),
+    "recall": "recall",
+    "f1": "f1",
+    "brier": "neg_brier_score",
+    "log_loss": "neg_log_loss",
+}
+P4S_PRIMARY_METRIC = "roc_auc"
+P4S_NEGATED_SCORERS = {"brier", "log_loss"}
+
+
+def make_p4s_boosters() -> dict:
+    """P4S's one required booster (PHASE8A.md D7): CatBoost with
+    budget_tier as a native categorical feature, same shape as P4's
+    make_p4_boosters -- cat_features passed via fit_params, not the
+    constructor (same clone() hazard)."""
+    return {
+        "catboost": (
+            CatBoostClassifier(random_state=SEARCH_RANDOM_STATE, thread_count=SEARCH_N_JOBS, verbose=False),
+            catboost_param_distributions(),
+        ),
+    }
+
+
+def train_p4s(df: pd.DataFrame) -> dict:
+    """Phase 8A checkpoint 5: P4S's CatBoost candidate + two Baselines
+    (Dummy, Logistic), scored on the same 5 shared folds over P4S's
+    train set, on P4S_SCORING. No Holdout access here -- selection is
+    checkpoint 5, calibration is checkpoint 6, Holdout is checkpoint 7
+    (D11's single opening). No class_weight on either model (D8)."""
+    task = "P4S"
+    train_df = build_task_train_frame(df, task)
+    y = target_values(train_df, task)
+    folds = build_folds(df, task)
+    catboost_steps = build_preprocessing_steps(task, encode_budget_tier=False)
+    baseline_steps = build_preprocessing_steps(task, encode_budget_tier=True)
+    # budget_tier's fixed position in catboost_steps' output, right
+    # after the numeric columns -- same layout as P4 (train_p4 above).
+    cat_features_index = len(model_feature_columns(task))
+
+    results = {}
+    for name, (estimator, param_distributions) in make_p4s_boosters().items():
+        candidate = _search_candidate(
+            estimator, param_distributions, catboost_steps, train_df, y, folds,
+            P4S_SCORING, refit=P4S_PRIMARY_METRIC,
+            fit_params={"model__cat_features": [cat_features_index]},
+        )
+        results[name] = _metric_summary(
+            candidate["fold_scores"], "candidate", candidate["best_params"], negated_scorers=P4S_NEGATED_SCORERS,
+        )
+
+    baselines = {
+        "dummy": DummyClassifier(strategy="most_frequent"),
+        # max_iter=50000 -- same value as P4's own Baseline (D7: "לפי P4 שורה 982").
+        "logistic": LogisticRegression(max_iter=50000),
+    }
+    for name, estimator in baselines.items():
+        candidate = _baseline_candidate(estimator, baseline_steps, train_df, y, folds, P4S_SCORING)
+        role = "benchmark" if name == "dummy" else "baseline"
+        results[name] = _metric_summary(candidate["fold_scores"], role, negated_scorers=P4S_NEGATED_SCORERS)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Checkpoint 9 -- P6: search + the paired guardrail crossover (D7) +
 # veto activation.
 # ---------------------------------------------------------------------------
@@ -1160,8 +1243,8 @@ def train_p6_guardrail(df: pd.DataFrame, p6_results: dict) -> dict:
 # Holdout opens) -> tie-break -> locking the winner per task.
 # ---------------------------------------------------------------------------
 
-PRIMARY_METRIC = {"P2": "mae", "P3": "roc_auc", "P4": "roc_auc", "P6": "rmse"}
-HIGHER_IS_BETTER = {"P2": False, "P3": True, "P4": True, "P6": False}
+PRIMARY_METRIC = {"P2": "mae", "P3": "roc_auc", "P4": "roc_auc", "P6": "rmse", "P4S": "roc_auc"}
+HIGHER_IS_BETTER = {"P2": False, "P3": True, "P4": True, "P6": False, "P4S": True}
 
 
 def p6_deployable_results(p6_results: dict, p6_guardrail: dict) -> dict:
@@ -1231,7 +1314,7 @@ def build_fitted_candidate(task: str, name: str, results: dict, df: pd.DataFrame
     since every other caller relies on it."""
     if train_df is None:
         train_df = build_task_train_frame(df, task)
-    target = train_df[TARGET[task]]
+    target = target_values(train_df, task)
     y = encode_referred_target(target) if task == "P4" else target
 
     def _with_winning_params(estimator):
@@ -1264,6 +1347,20 @@ def build_fitted_candidate(task: str, name: str, results: dict, df: pd.DataFrame
             pipeline.fit(train_df, y, model__cat_features=[cat_features_index])
             return pipeline
         # max_iter=50000 -- must match train_p4's own Baseline exactly (checkpoint 8).
+        steps = build_preprocessing_steps(task, encode_budget_tier=True)
+        pipeline = Pipeline(steps + [("model", LogisticRegression(max_iter=50000))])
+        pipeline.fit(train_df, y)
+        return pipeline
+
+    if task == "P4S":
+        if name == "catboost":
+            estimator = _with_winning_params(make_p4s_boosters()["catboost"][0])
+            steps = build_preprocessing_steps(task, encode_budget_tier=False)
+            cat_features_index = len(model_feature_columns(task))
+            pipeline = Pipeline(steps + [("model", estimator)])
+            pipeline.fit(train_df, y, model__cat_features=[cat_features_index])
+            return pipeline
+        # max_iter=50000 -- same value as P4's own Baseline (D7: "לפי P4 שורה 982").
         steps = build_preprocessing_steps(task, encode_budget_tier=True)
         pipeline = Pipeline(steps + [("model", LogisticRegression(max_iter=50000))])
         pipeline.fit(train_df, y)
@@ -1449,7 +1546,8 @@ def calibrate_task_winner(task: str, df: pd.DataFrame, results: dict, winner: st
     fields."""
     pipeline = build_fitted_candidate(task, winner, results, df)
     cal_df = build_task_calibration_frame(df, task)
-    y_cal = encode_referred_target(cal_df[TARGET[task]]) if task == "P4" else cal_df[TARGET[task]]
+    target = target_values(cal_df, task)
+    y_cal = encode_referred_target(target) if task == "P4" else target
     fit_result = fit_sigmoid_calibrator(pipeline, cal_df, y_cal)
     return {"winner": winner, **fit_result}
 
@@ -1914,9 +2012,10 @@ def train_p6_log1p_smearing(df: pd.DataFrame, p6_results: dict) -> dict:
     return _metric_summary(fold_scores, role="research_only", negated_scorers=set())
 
 
-# D17's "early funnel data" experiment: only signals available very
-# early in the funnel, before most follow-ups have happened.
-EARLY_FUNNEL_FEATURES = ["ad_budget", "num_leads", "leads_answered", "followup_1"]
+# EARLY_FUNNEL_FEATURES (D17's "early funnel data" experiment: only
+# signals available very early in the funnel) moved to app/features.py
+# in phase 8A (PHASE8A.md D6) -- also P4S's served feature set. Pure
+# transfer, same value, zero behavior change; imported at module top.
 
 
 def train_p4_early_funnel(df: pd.DataFrame) -> dict:
@@ -2247,6 +2346,79 @@ def holdout_evaluate_p6(df: pd.DataFrame, p6_results: dict, winner: str) -> dict
     }
 
 
+def holdout_evaluate_p4s(df: pd.DataFrame, p4s_results: dict, winner: str) -> dict:
+    """PHASE8A.md checkpoint 7 -- P4S's single Holdout opening.
+    Deliberately NOT reusing holdout_evaluate_p3_p4: P4S needs a
+    budget_tier breakdown with n/base_rate/Brier and a null-with-reason
+    ROC-AUC/PR-AUC when a tier has only one class (D17), plus a
+    separately-reported Dummy-on-Holdout baseline (D18) -- neither
+    exists in the P3/P4 function. Everything Holdout-dependent (point
+    metrics, the calibration curve, the tier breakdown) is computed
+    here, in this one opening (D11) -- nothing re-reads Holdout rows
+    afterward."""
+    task = "P4S"
+    holdout_df = _holdout_frame(df, task)
+    y_true = target_values(holdout_df, task).to_numpy()
+
+    cal_result = calibrate_task_winner(task, df, p4s_results, winner)
+    calibrator = cal_result["calibrator"]
+    if calibrator is None:
+        raise RuntimeError(
+            f"{task}: sigmoid calibration failed (status={cal_result['calibration_status']}) -- "
+            "cannot evaluate the calibrated system on the Holdout"
+        )
+    y_proba = calibrator.predict_proba(holdout_df)[:, 1]
+    y_pred_hard = (y_proba >= 0.5).astype(int)
+    curve = calibration_curve_data(y_true, y_proba)
+
+    # D18: the Dummy benchmark measured on THIS Holdout, reported
+    # separately from the ~83.28% population-level majority share
+    # (BASE_RATE["P4S"], not a Holdout result) -- two different questions.
+    train_df = build_task_train_frame(df, task)
+    y_train = target_values(train_df, task)
+    dummy = DummyClassifier(strategy="most_frequent").fit(train_df, y_train)
+    dummy_metrics = {
+        "accuracy": float(accuracy_score(y_true, dummy.predict(holdout_df))),
+        "brier": float(brier_score_loss(y_true, dummy.predict_proba(holdout_df)[:, 1])),
+    }
+
+    # D17: always n/base_rate/Brier per tier; AUC/PR-AUC null with an
+    # explicit reason when a tier has only one class.
+    tiers = holdout_df["ad_budget"].map(budget_tier)
+    budget_tier_breakdown = {}
+    for level in sorted(tiers.dropna().unique(), key=str):
+        mask = (tiers == level).to_numpy()
+        n = int(mask.sum())
+        if n == 0:
+            continue
+        tier_y_true, tier_y_proba = y_true[mask], y_proba[mask]
+        single_class = len(np.unique(tier_y_true)) < 2
+        budget_tier_breakdown[str(level)] = {
+            "n": n,
+            "base_rate": float(np.mean(tier_y_true)),
+            "brier": float(brier_score_loss(tier_y_true, tier_y_proba)),
+            "roc_auc": None if single_class else float(roc_auc_score(tier_y_true, tier_y_proba)),
+            "pr_auc": None if single_class else float(average_precision_score(tier_y_true, tier_y_proba)),
+            "reason": "single class in this tier -- AUC/PR-AUC undefined" if single_class else None,
+        }
+
+    return {
+        "winner": winner, "n_holdout": len(holdout_df),
+        "roc_auc": float(roc_auc_score(y_true, y_proba)),
+        "pr_auc": float(average_precision_score(y_true, y_proba)),
+        "brier": float(brier_score_loss(y_true, y_proba)),
+        "log_loss": float(log_loss(y_true, y_proba, labels=[0, 1])),
+        "accuracy": float(accuracy_score(y_true, y_pred_hard)),
+        "precision": float(precision_score(y_true, y_pred_hard, zero_division=0)),
+        "recall": float(recall_score(y_true, y_pred_hard, zero_division=0)),
+        "f1": float(f1_score(y_true, y_pred_hard, zero_division=0)),
+        "calibration_curve": curve,
+        "budget_tier": budget_tier_breakdown,
+        "dummy_holdout": dummy_metrics,
+        "majority_baseline_population_pct": 1.0 - BASE_RATE["P4S"],
+    }
+
+
 def p4_sensitivity_holdout_comparison(df: pd.DataFrame, p4_results: dict, winner: str) -> dict:
     """D18/S6/criterion 16: evaluates BOTH P4's primary model and the
     population-sensitivity model on the SAME 633 Holdout rows, within
@@ -2372,11 +2544,14 @@ def write_metrics_json(all_results: dict, path: Path) -> None:
 SNAPSHOT = {
     "P2": "end_of_campaign_cycle", "P3": "end_of_campaign_cycle",
     "P4": "end_of_campaign_cycle", "P6": "budget_allocation_moment",
+    "P4S": "post_followup_1",
 }
 # Population base rates (SPEC.md), report-only context carried onto the
 # artifact's own schema -- never the CV/Holdout denominator (D13/9א use
 # each evaluation set's own base_rate for Lift@10%, not this constant).
-BASE_RATE = {"P3": 0.4635, "P4": 0.4271}
+# P4S's 0.1672 is PHASE8A.md's verified population positive rate
+# (529/3163) -- D18's "83.28%" majority share is 1 - this value.
+BASE_RATE = {"P3": 0.4635, "P4": 0.4271, "P4S": 0.1672}
 # SPEC-locked OOD policy range for ad_budget -- NOT this split's observed
 # min/max, which must never decide the policy boundary (D15).
 AD_BUDGET_OOD_RANGE = (500.0, 20000.0)
@@ -2421,7 +2596,7 @@ def fit_sources_for_task(task: str) -> dict:
     sources = {"model": "train", "ood_bounds": "train"}
     if task == "P2":
         sources["conformal_quantile"] = "calibration"
-    elif task in ("P3", "P4"):
+    elif task in ("P3", "P4", "P4S"):
         sources["calibrator"] = "calibration"
     elif task == "P6":
         sources["bootstrap"] = "train"
@@ -2499,7 +2674,7 @@ def build_task_artifact(task: str, df: pd.DataFrame, metrics: dict, git_sha: str
     train_df = build_task_train_frame(df, task)
     parts = split_task(df, task)  # train/calibration row counts only -- required to fit the artifact anyway
 
-    if task in ("P3", "P4"):
+    if task in ("P3", "P4", "P4S"):
         cal = calibrate_task_winner(task, df, results, winner)
         if cal["calibration_status"] != "calibrated":
             raise RuntimeError(f"{task}: cannot build a deployable artifact -- calibration failed ({cal.get('error')})")
@@ -2535,7 +2710,7 @@ def build_task_artifact(task: str, df: pd.DataFrame, metrics: dict, git_sha: str
         meta["interval_method"] = "split_conformal"
         meta["conformal_quantile"] = conf["q"]
         meta["alpha"] = conf["alpha"]
-    elif task in ("P3", "P4"):
+    elif task in ("P3", "P4", "P4S"):
         cal_meta = metrics[f"{task}_calibration"]
         meta["calibration_status"] = cal_meta["calibration_status"]
         meta["calibration_method"] = cal_meta["calibration_method"]
@@ -2584,6 +2759,41 @@ def build_all_artifacts(df: pd.DataFrame, metrics: dict, models_dir: Path) -> di
     return summary
 
 
+def build_p4s_artifact(df: pd.DataFrame, metrics: dict) -> tuple[object, dict]:
+    """PHASE8A.md checkpoint 8 / D13: P4S's own artifact -- reuses
+    build_task_artifact (already generic by task) rather than
+    duplicating it, but through this OWN wrapper, never through
+    build_all_artifacts, so P2/P3/P4/P6's artifact path is untouched.
+    observed_ad_budget is computed from P4S's OWN train frame only
+    (D13: "מ-P4S train בלבד"), never unioned with the other four tasks'."""
+    observed_ad_budget = observed_ad_budget_values([build_task_train_frame(df, "P4S")])
+    git_sha, training_date = git_sha7(), dt.date.today().strftime("%Y%m%d")
+    return build_task_artifact("P4S", df, metrics, git_sha, training_date, observed_ad_budget)
+
+
+def write_p4s_artifact(df: pd.DataFrame, metrics: dict, models_dir: Path) -> dict:
+    """Writes P4S.joblib + P4S.meta.json and measures the deployed
+    artifact's own RSS/predict time -- same shape as build_all_artifacts'
+    per-task body, kept as a SEPARATE function (not a 5th task folded
+    into that loop) so P2/P3/P4/P6's artifact-building path stays
+    provably untouched by phase 8A (PHASE8A.md's "אפס שינוי" bar)."""
+    models_dir.mkdir(parents=True, exist_ok=True)
+    artifact, meta = build_p4s_artifact(df, metrics)
+    joblib_path = models_dir / "P4S.joblib"
+    joblib.dump(artifact, joblib_path)
+    meta["checksums"]["artifact_sha256"] = _sha256_file(joblib_path)
+    write_metrics_json(meta, models_dir / "P4S.meta.json")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        sample = build_task_train_frame(df, "P4S").iloc[[0]]
+        measured = measure_rss_and_predict_time(artifact, sample, Path(tmp))
+    return {
+        "winner": meta["algo"], "model_version": meta["model_version"],
+        "artifact_sha256": meta["checksums"]["artifact_sha256"],
+        "rss_bytes": measured["rss_bytes"], "predict_seconds": measured["predict_seconds"],
+    }
+
+
 def _run_checkpoint_15() -> None:
     """checkpoint 15's entire scope. Invoked ONLY via `python
     scripts/train.py --build-artifacts` -- never touches Holdout (D22).
@@ -2627,6 +2837,76 @@ def _run_checkpoint_15() -> None:
               f"rss_MB={s['rss_bytes'] / 1_048_576:.2f} predict_ms={s['predict_seconds'] * 1000:.4f}")
 
 
+def p4s_missing_value_count(df: pd.DataFrame) -> int:
+    """PHASE8A.md D16/criterion 18: count of missing values across P4S's
+    3 label components (referred/upsell/ltv_months) + 4 features, over
+    the purchased=1 population -- task_population's own notna() filter
+    does NOT catch these for P4S, since target_values() computes the
+    label from a boolean expression that silently turns a NaN input
+    into False rather than propagating it (R13). Returns a count
+    (rather than asserting) so a NaN injected anywhere in those 7
+    columns is caught here, explicitly, before any split happens."""
+    pop = task_population(df, "P4S")
+    label_components = ["referred", "upsell", "ltv_months"]
+    return int(pop[label_components + FEATURES["P4S"]].isna().sum().sum())
+
+
+def _run_p4s() -> None:
+    """PHASE8A.md's entire isolated P4S pipeline (checkpoints 3, 5-8,
+    D21). Invoked ONLY via `python scripts/train.py --run-p4s` -- never
+    calls a P2/P3/P4/P6 training or Holdout function, and opens P4S's
+    own Holdout exactly once (D5, D11, criterion 24)."""
+    project_root = Path(__file__).resolve().parent.parent
+    df = load_and_verify_csv(project_root / "funnel_marketing_data.csv")
+
+    print("--- phase 8A checkpoint 3: P4S population + fail-fast missing check (D16) ---")
+    pop = task_population(df, "P4S")
+    n_missing = p4s_missing_value_count(df)
+    assert n_missing == 0, f"P4S: unexpected missing values across the 7 label/feature columns ({n_missing})"
+    parts = split_task(df, "P4S")
+    print(f"P4S: population={len(pop)} train={len(parts['train'])} "
+          f"calibration={len(parts['calibration'])} holdout={len(parts['holdout'])}")
+    all_ids = pd.concat([parts["train"], parts["calibration"], parts["holdout"]])
+    assert all_ids.is_unique, "P4S: overlapping source_row_id across parts"
+    folds = build_folds(df, "P4S")
+    assert len(folds) == 5
+
+    print("--- phase 8A checkpoint 5: P4S CV + selection (no Holdout access) ---")
+    p4s_results = train_p4s(df)
+    with tempfile.TemporaryDirectory() as tmp:
+        selection = lock_winner("P4S", df, p4s_results, Path(tmp))
+    winner = selection["winner"]
+    print(f"P4S eligible={selection['eligible']} winner={winner}")
+
+    print("--- phase 8A checkpoint 6: sigmoid calibration ---")
+    calibration = calibrate_task_winner("P4S", df, p4s_results, winner)
+    if calibration["calibration_status"] != "calibrated":
+        raise RuntimeError(
+            f"P4S: sigmoid calibration failed ({calibration.get('error')}) -- D10 forbids "
+            "an uncalibrated deployable artifact"
+        )
+    print(f"P4S calibration: status={calibration['calibration_status']} method={calibration['calibration_method']}")
+
+    print("--- phase 8A checkpoint 7: single Holdout opening ---")
+    holdout = holdout_evaluate_p4s(df, p4s_results, winner)
+    print(f"P4S Holdout: n={holdout['n_holdout']} ROC-AUC={holdout['roc_auc']:.4f} "
+          f"PR-AUC={holdout['pr_auc']:.4f} Brier={holdout['brier']:.4f}")
+
+    metrics_path = project_root / "models" / "metrics.json"
+    all_metrics = read_metrics_json(metrics_path)
+    all_metrics["P4S"] = p4s_results
+    all_metrics["P4S_selection"] = {"eligible": selection["eligible"], "winner": selection["winner"]}
+    all_metrics["P4S_calibration"] = {k: v for k, v in calibration.items() if k != "calibrator"}
+    all_metrics["P4S_holdout"] = holdout
+    write_metrics_json(all_metrics, metrics_path)
+    print(f"wrote {metrics_path}")
+
+    print("--- phase 8A checkpoint 8: artifact ---")
+    artifact_summary = write_p4s_artifact(df, all_metrics, project_root / "models")
+    print(f"P4S artifact: winner={artifact_summary['winner']} version={artifact_summary['model_version']} "
+          f"sha256={artifact_summary['artifact_sha256'][:12]}...")
+
+
 if __name__ == "__main__":
     # D22: --build-artifacts is checkpoint 15's ENTIRE, separate entry
     # point -- it must return before a single line of the full-pipeline
@@ -2639,6 +2919,13 @@ if __name__ == "__main__":
     _real_module = importlib.import_module("scripts.train")
     _add_budget_tier = _real_module._add_budget_tier
     _Winsorizer = _real_module._Winsorizer
+
+    if "--run-p4s" in sys.argv:
+        # PHASE8A.md D21: P4S's entire isolated entry point -- returns
+        # before the --build-artifacts check and the full P2/P3/P4/P6
+        # pipeline below, exactly like --build-artifacts does.
+        _run_p4s()
+        raise SystemExit(0)
 
     if "--build-artifacts" in sys.argv:
         _run_checkpoint_15()
