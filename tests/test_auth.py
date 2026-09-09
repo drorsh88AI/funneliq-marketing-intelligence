@@ -149,3 +149,67 @@ def test_me_with_northbound_organization_is_200(monkeypatch):
         "organization": "northbound",
         "role": "team_member",
     }
+
+
+# ---------------------------------------------------------------------------
+# PHASE9.md D6 -- the HTTPBearer switch. Two declared deltas from the old
+# Header(default=None) parameter, both covered here (criteria 11, 12), plus
+# the OpenAPI-level proof that a real security scheme is now emitted
+# (criteria 4, 8 rely on this same mechanism for the business routes).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("scheme", ["bearer", "BEARER", "Bearer", "bEaReR"])
+def test_case_insensitive_bearer_scheme_is_accepted(monkeypatch, scheme):
+    """Criterion 12 -- declared delta: FastAPI's HTTPBearer lowercases the
+    scheme before comparing, so "bearer"/"BEARER" now reach current_user
+    (and get evaluated on the token itself), where the old
+    `.startswith("Bearer ")` check would have rejected them as 401
+    regardless of the token's validity."""
+    monkeypatch.setattr(
+        auth,
+        "get_supabase",
+        lambda: _FakeClient(
+            user=_user({"organization": "northbound", "role": "team_member"})
+        ),
+    )
+    response = client.get("/api/me", headers={"Authorization": f"{scheme} whatever"})
+    assert response.status_code == 200
+
+
+def test_me_no_longer_carries_422_in_the_openapi_schema():
+    """Criterion 11 -- declared delta: a Header(...) parameter counts
+    toward FastAPI's request-validation surface (and gets a 422 response
+    entry); a security dependency (HTTPBearer) does not."""
+    schema = app.openapi()
+    assert sorted(schema["paths"]["/api/me"]["get"]["responses"]) == ["200"]
+
+
+def test_me_route_declares_a_real_security_scheme():
+    """The mechanism behind D6: /api/me (and every business route reusing
+    current_user/access_token) must emit `security` +
+    `components.securitySchemes.BearerAuth` in the live OpenAPI schema --
+    a bare Header param never did this (PHASE8.md D13's finding)."""
+    schema = app.openapi()
+    assert schema["paths"]["/api/me"]["get"]["security"] == [{"BearerAuth": []}]
+    assert schema["components"]["securitySchemes"] == {
+        "BearerAuth": {"type": "http", "scheme": "bearer"}
+    }
+
+
+def test_me_response_body_has_exactly_three_keys_never_the_token(monkeypatch):
+    """Criterion 13 -- current_user's return value must stay exactly
+    {email, organization, role}: no token/access_token/authorization key,
+    checked on the response's actual keys, not by eyeballing the fixture."""
+    monkeypatch.setattr(
+        auth,
+        "get_supabase",
+        lambda: _FakeClient(
+            user=_user({"organization": "northbound", "role": "team_member"})
+        ),
+    )
+    response = client.get("/api/me", headers={"Authorization": "Bearer secret-token-value"})
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body.keys()) == {"email", "organization", "role"}
+    assert "secret-token-value" not in response.text
