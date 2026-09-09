@@ -15,14 +15,16 @@ for nothing.
 ⛔ Do not add anything here that reads a file, loads an artifact, or
 otherwise has an import-time side effect -- PHASE9.md criterion 45 checks
 `import app.inference` makes zero calls to open/json.load/joblib.load.
+pandas and app.artifacts.get_artifact are imported LOCALLY inside the one
+function each actually needs (build_input_frame, predict_if_in_domain),
+never at module level -- a CI-only failure showed this module's import
+graph (pandas, and transitively app.artifacts -> app.features ->
+scripts.load_data) triggering one open() call on a fresh Linux process.
+Keep it that way; don't move either import back to the top.
 """
 from __future__ import annotations
 
 import math
-
-import pandas as pd
-
-from app.artifacts import get_artifact
 
 
 def _require_finite_scalar(value: float, name: str) -> float:
@@ -59,14 +61,23 @@ def out_of_range_features(meta: dict, values: dict) -> list[str]:
     ]
 
 
-def build_input_frame(meta: dict, values: dict) -> pd.DataFrame:
+def build_input_frame(meta: dict, values: dict) -> "pd.DataFrame":
     """PHASE9.md D17/criterion 74: the one-row DataFrame passed to
     predict()/predict_proba() -- built from EXACTLY meta["feature_columns"]
     (as both the column set and the order) and cast per
     meta["feature_dtypes"], never a DataFrame inferred structurally from
     the request body. A dtype the artifact's own meta declares that pandas
     can't satisfy raises ValueError -- callers map that to 500 (D17), not
-    a silently-wrong dtype."""
+    a silently-wrong dtype.
+
+    Imports pandas locally, not at module level (criterion 45): a CI-only
+    failure showed `import app.inference` triggering one open() call --
+    almost certainly pandas' own import-time behavior on a fresh Linux
+    process, not our code, but the fix that actually satisfies the
+    criterion is removing pandas from this module's import graph entirely,
+    not chasing which library line opened what."""
+    import pandas as pd
+
     columns = meta["feature_columns"]
     dtypes = meta["feature_dtypes"]
     frame = pd.DataFrame([{col: values[col] for col in columns}], columns=columns)
@@ -87,7 +98,14 @@ def predict_if_in_domain(task: str, meta: dict, values: dict, *, method: str = "
     `method`, and returns ([], raw_result). Task-agnostic and
     schema-agnostic on purpose -- the predict/insights routes wrap this
     with their own response-schema construction (warnings, evidence_level,
-    etc.), never reimplementing the OOD gate or the DataFrame contract."""
+    etc.), never reimplementing the OOD gate or the DataFrame contract.
+
+    Imports get_artifact locally, not at module level (criterion 45),
+    same reasoning as build_input_frame's local pandas import above --
+    app.artifacts (and its own import of app.features/scripts.load_data)
+    has no business being on app.inference's import graph at all."""
+    from app.artifacts import get_artifact
+
     out_of_range = out_of_range_features(meta, values)
     if out_of_range:
         return out_of_range, None

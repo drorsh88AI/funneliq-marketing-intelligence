@@ -814,12 +814,21 @@ def test_startup_and_p2_p3_do_not_pull_in_scripts_train_subprocess():
 
 
 def test_import_app_inference_has_no_file_io_side_effect():
+    """Pass condition is unchanged: calls == {'open': 0, 'json.load': 0}.
+    The spies additionally capture a trimmed stack per call so that IF
+    this ever fails again (e.g. a future import creeps back in), the
+    failure message names the exact call site instead of just a count --
+    this is what would have shown the caller of the CI-only open() call
+    this test caught, without a separate diagnostic-only commit."""
     code = (
-        "import builtins, json, sys\n"
+        "import builtins, json, sys, traceback\n"
         "calls = {'open': 0, 'json.load': 0}\n"
+        "details = []\n"
         "real_open, real_json_load = builtins.open, json.load\n"
         "def spy_open(*a, **kw):\n"
         "    calls['open'] += 1\n"
+        "    stack = ''.join(traceback.format_stack()[:-1][-6:])\n"
+        "    details.append(f'open(args={a!r}, kwargs={kw!r})\\n{stack}')\n"
         "    return real_open(*a, **kw)\n"
         "def spy_json_load(*a, **kw):\n"
         "    calls['json.load'] += 1\n"
@@ -827,7 +836,7 @@ def test_import_app_inference_has_no_file_io_side_effect():
         "builtins.open, json.load = spy_open, spy_json_load\n"
         "import app.inference\n"
         "builtins.open, json.load = real_open, real_json_load\n"
-        "assert calls == {'open': 0, 'json.load': 0}, calls\n"
+        "assert calls == {'open': 0, 'json.load': 0}, (calls, details)\n"
         "assert 'joblib' not in sys.modules, 'joblib must not load at import time'\n"
         "print('OK')\n"
     )

@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from app import inference as inf
+from app import artifacts, inference as inf
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REAL_MODELS_DIR = REPO_ROOT / "models"
@@ -95,7 +95,11 @@ class _SpyArtifact:
 def test_predict_if_in_domain_passes_the_exact_frame_to_predict(monkeypatch):
     meta = _real_meta("P2")
     spy = _SpyArtifact()
-    monkeypatch.setattr(inf, "get_artifact", lambda task: spy)
+    # get_artifact is imported LOCALLY inside predict_if_in_domain (criterion
+    # 45 -- app.inference must have zero import-time side effects), so it
+    # resolves from app.artifacts at call time, not from a module-level
+    # binding on inf -- patch it where it's actually looked up.
+    monkeypatch.setattr(artifacts, "get_artifact", lambda task: spy)
 
     out_of_range, result = inf.predict_if_in_domain("P2", meta, _P2_IN_DOMAIN_VALUES, method="predict")
 
@@ -111,7 +115,7 @@ def test_predict_if_in_domain_passes_the_exact_frame_to_predict(monkeypatch):
 def test_predict_if_in_domain_uses_predict_proba_when_asked(monkeypatch):
     meta = _real_meta("P3")
     spy = _SpyArtifact()
-    monkeypatch.setattr(inf, "get_artifact", lambda task: spy)
+    monkeypatch.setattr(artifacts, "get_artifact", lambda task: spy)
 
     values = dict(_P2_IN_DOMAIN_VALUES)  # P3 shares the same 13 input features
     out_of_range, result = inf.predict_if_in_domain("P3", meta, values, method="predict_proba")
@@ -149,7 +153,7 @@ def test_out_of_range_features_detects_multiple_violations_in_column_order():
 def test_predict_if_in_domain_never_calls_get_artifact_when_out_of_range(monkeypatch):
     meta = _real_meta("P2")
     calls = []
-    monkeypatch.setattr(inf, "get_artifact", lambda task: calls.append(task) or _SpyArtifact())
+    monkeypatch.setattr(artifacts, "get_artifact", lambda task: calls.append(task) or _SpyArtifact())
 
     values = dict(_P2_IN_DOMAIN_VALUES, ad_budget=25000)
     out_of_range, result = inf.predict_if_in_domain("P2", meta, values)
