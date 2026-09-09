@@ -53,9 +53,17 @@ _INPUT_FEATURE_NAMES = tuple(MODEL_INPUT_FEATURES["P2"])
 InputFeatureName = Literal[_INPUT_FEATURE_NAMES]
 
 
-def _evidence_level_from_n(n: int) -> Literal["high", "medium", "low"]:
+def evidence_level_from_n(n: int) -> Literal["high", "medium", "low"]:
     """D2's P6 thresholds -- a decision from phase 7, not a stored field
-    in any artifact. n>=200 high, 50<=n<200 medium, n<50 low."""
+    in any artifact. n>=200 high, 50<=n<200 medium, n<50 low.
+
+    Public (not _evidence_level_from_n) since phase 9 (PHASE9.md D14):
+    the simulate/budget route (app/predict.py) computes each strategy's
+    evidence_level with this SAME function, called through the module
+    (`schemas.evidence_level_from_n(...)`, never an imported-and-bound
+    local name) so a spy on app.schemas.evidence_level_from_n observes
+    BOTH the route's call and this class's own invariant check below --
+    proof they share one function, not two copies of the thresholds."""
     if n >= 200:
         return "high"
     if n >= 50:
@@ -487,7 +495,7 @@ class StrategyResult(ContractModel):
         # D.8g rule 14: evidence_level must match D2's thresholds applied
         # to the minimum sample_size across this strategy's allocations.
         min_n = min(allocation.sample_size for allocation in self.allocations)
-        expected = _evidence_level_from_n(min_n)
+        expected = evidence_level_from_n(min_n)
         if expected != self.evidence_level:
             raise ValueError(
                 f"evidence_level={self.evidence_level!r} is inconsistent with "

@@ -17,11 +17,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.api_contract import ERROR_RESPONSES
+from app import schemas
+from app.api_contract import ERROR_RESPONSES, ERROR_RESPONSES_NO_422
 from app.artifacts import get_assets
 from app.auth import bearer, current_user
+from app.features import STRATEGY_ALLOCATIONS
 from app.inference import out_of_range_features, predict_if_in_domain
 from app.schemas import (
+    BudgetAllocation,
+    BudgetSimulation,
     ClassificationMetrics,
     EarlyFunnelInput,
     FunnelInput,
@@ -30,6 +34,7 @@ from app.schemas import (
     OODWarning,
     PropensityPrediction,
     RegressionMetrics,
+    StrategyResult,
     SuperCustomerOODWarning,
     SuperCustomerPrediction,
     UnobservedBudgetWarning,
@@ -255,4 +260,58 @@ def predict_super_customer(
         calibration_status=meta["calibration_status"], calibration_method=meta["calibration_method"],
         metrics=metrics_block,
         target_definition=_P4S_TARGET_DEFINITION, population_definition=_P4S_POPULATION_DEFINITION,
+    )
+
+
+@router.get(
+    "/api/simulate/budget",
+    response_model=BudgetSimulation,
+    dependencies=[Depends(bearer)],
+    responses=ERROR_RESPONSES_NO_422,
+)
+def simulate_budget(user: dict = Depends(current_user)) -> BudgetSimulation:
+    """PHASE9.md D11: a pure lookup over P6_simulation.json + metrics.json
+    -- P6.joblib is never loaded (checked at runtime by tests via a
+    joblib.load spy). No request body (D10): the four strategies are
+    fixed, and every input feature except ad_budget is already baked
+    into the offline-computed bootstrap results this just reads back."""
+    assets = get_assets()
+    meta = assets["meta"]["P6"]
+    metrics = assets["metrics"]
+    simulation = assets["simulation"]
+    ranking = metrics["P6_strategy_ranking"]
+    ranked = ranking["ranked"]
+
+    strategies = []
+    for strategy_id, pairs in STRATEGY_ALLOCATIONS.items():
+        sim = simulation[strategy_id]
+        allocations = [
+            BudgetAllocation(
+                ad_budget=ad_budget, count=count,
+                sample_size=sim["levels"][str(ad_budget)]["n"],
+            )
+            for ad_budget, count in pairs
+        ]
+        min_n = min(allocation.sample_size for allocation in allocations)
+        strategies.append(
+            StrategyResult(
+                strategy_id=strategy_id,
+                rank=ranked.index(strategy_id) + 1,
+                allocations=allocations,
+                point_estimate=sim["point"], lower_bound=sim["lower"], upper_bound=sim["upper"],
+                bootstrap_iterations=sim["n_bootstrap_used"],
+                evidence_level=schemas.evidence_level_from_n(min_n),
+                in_training_domain=True, warnings=[],
+            )
+        )
+    strategies.sort(key=lambda s: s.rank)
+
+    return BudgetSimulation(
+        total_budget=50000,
+        interval_method="bootstrap_percentile",
+        bootstrap_percentiles=(2.5, 97.5),
+        top_two_overlap=ranking["top_two_overlap"],
+        strategies=strategies,
+        model_version=meta["model_version"], model_algorithm=meta["algo"],
+        metrics=_regression_metrics(metrics, "P6", meta["algo"]),
     )
