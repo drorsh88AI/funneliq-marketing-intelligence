@@ -1,16 +1,21 @@
-"""Phase 8 -- the locked API contract (docs/planning/PHASE8.md).
+"""Phase 8 (extended by PHASE8A.md D20 and PHASE9.md) -- the locked API
+contract (docs/planning/PHASE8.md).
 
 Pure Pydantic models: request/response shape, field types, nullability,
 and every cross-field invariant that is derivable from the payload alone
 (sections D1-D13, section D "סכמות מדויקות"). Zero I/O, zero model
-loading, zero Supabase calls -- phase 9 fills these schemas in with real
-predictions. scripts/export_openapi.py is the only other file that
-imports from here (to register the six locked routes and produce
-docs/api/openapi.json); app/main.py never imports this module (D1).
+loading, zero Supabase calls -- phase 9's routers (app/predict.py,
+app/insights.py) and app/main.py's exception handlers all import from
+here to serve real predictions; scripts/export_openapi.py separately
+imports it to produce docs/api/openapi.json. This module never imports
+FROM app.main or the routers (the dependency direction is one-way).
 
-Six business endpoints, five response families, no "one model with 14
-nullable fields" (D4) -- a field that is not relevant to a task's schema
-does not appear in that schema at all, rather than appearing as null.
+Seven business endpoints (added `POST /api/predict/super-customer` in
+8A), six response families -- LtvPrediction, PropensityPrediction (shared
+by upsell/referral), SuperCustomerPrediction, BudgetSimulation,
+FollowupResponse, BudgetTiersResponse -- no "one model with N nullable
+fields" (D4): a field that is not relevant to a task's schema does not
+appear in that schema at all, rather than appearing as null.
 """
 from __future__ import annotations
 
@@ -53,9 +58,17 @@ _INPUT_FEATURE_NAMES = tuple(MODEL_INPUT_FEATURES["P2"])
 InputFeatureName = Literal[_INPUT_FEATURE_NAMES]
 
 
-def _evidence_level_from_n(n: int) -> Literal["high", "medium", "low"]:
+def evidence_level_from_n(n: int) -> Literal["high", "medium", "low"]:
     """D2's P6 thresholds -- a decision from phase 7, not a stored field
-    in any artifact. n>=200 high, 50<=n<200 medium, n<50 low."""
+    in any artifact. n>=200 high, 50<=n<200 medium, n<50 low.
+
+    Public (not _evidence_level_from_n) since phase 9 (PHASE9.md D14):
+    the simulate/budget route (app/predict.py) computes each strategy's
+    evidence_level with this SAME function, called through the module
+    (`schemas.evidence_level_from_n(...)`, never an imported-and-bound
+    local name) so a spy on app.schemas.evidence_level_from_n observes
+    BOTH the route's call and this class's own invariant check below --
+    proof they share one function, not two copies of the thresholds."""
     if n >= 200:
         return "high"
     if n >= 50:
@@ -63,9 +76,16 @@ def _evidence_level_from_n(n: int) -> Literal["high", "medium", "low"]:
     return "low"
 
 
-def _propensity_band(event_probability: float, base_rate: float) -> Literal["below_base", "near_base", "above_base"]:
+def propensity_band_for(event_probability: float, base_rate: float) -> Literal["below_base", "near_base", "above_base"]:
     """IA.md §4's three thresholds, always against the exact base_rate
-    from meta.json, never the rounded display value (D.3)."""
+    from meta.json, never the rounded display value (D.3).
+
+    Public (not _propensity_band) since phase 9 (PHASE9.md D14): the
+    predict routes (app/predict.py) call this SAME function to compute
+    the propensity_band they put in the response, rather than
+    re-implementing the 0.9x/1.1x thresholds a second time -- the
+    invariant check below then just confirms the two agree, instead of
+    being the only place the formula exists."""
     if event_probability < 0.9 * base_rate:
         return "below_base"
     if event_probability > 1.1 * base_rate:
@@ -296,6 +316,11 @@ class _HoldoutClassification(ContractModel):
     log_loss: float = Field(ge=0)
 
 
+# Used by P3, P4, and P4S (PHASE8A.md D20) -- NOT stated in the class's
+# own docstring below: a Pydantic model's docstring is serialized
+# verbatim into docs/api/openapi.json's components.schemas description
+# field (D8's locked contract, never changed post-hoc), so this note
+# lives as a source comment instead of inside the docstring text.
 class ClassificationMetrics(ContractModel):
     """P3 and P4. log_loss is bounded below by 0 and deliberately not
     bounded above."""
@@ -379,7 +404,7 @@ class PropensityPrediction(ContractModel):
         # applied to event_probability/base_rate, checked only when both
         # are populated.
         if self.event_probability is not None and self.propensity_band is not None:
-            expected = _propensity_band(self.event_probability, self.base_rate)
+            expected = propensity_band_for(self.event_probability, self.base_rate)
             if expected != self.propensity_band:
                 raise ValueError(
                     f"propensity_band={self.propensity_band!r} is inconsistent with "
@@ -425,7 +450,7 @@ class SuperCustomerPrediction(ContractModel):
             evidence_level=self.evidence_level,
         )
         if self.event_probability is not None and self.propensity_band is not None:
-            expected = _propensity_band(self.event_probability, self.base_rate)
+            expected = propensity_band_for(self.event_probability, self.base_rate)
             if expected != self.propensity_band:
                 raise ValueError(
                     f"propensity_band={self.propensity_band!r} is inconsistent with "
@@ -480,7 +505,7 @@ class StrategyResult(ContractModel):
         # D.8g rule 14: evidence_level must match D2's thresholds applied
         # to the minimum sample_size across this strategy's allocations.
         min_n = min(allocation.sample_size for allocation in self.allocations)
-        expected = _evidence_level_from_n(min_n)
+        expected = evidence_level_from_n(min_n)
         if expected != self.evidence_level:
             raise ValueError(
                 f"evidence_level={self.evidence_level!r} is inconsistent with "

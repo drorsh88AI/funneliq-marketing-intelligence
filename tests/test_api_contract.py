@@ -67,42 +67,51 @@ GET_ROUTES = {(m, p) for (m, p) in BUSINESS_ROUTES if m == "get"}
 # =============================================================================
 
 
-def _walk(node: dict, prefix: str, seen_refs: frozenset, results: set) -> None:
+def _walk(node: dict, prefix: str, seen_refs: frozenset, results: set, component_schemas: dict = None) -> None:
+    component_schemas = COMPONENT_SCHEMAS if component_schemas is None else component_schemas
     if "$ref" in node:
         ref_name = node["$ref"].rsplit("/", 1)[-1]
         if ref_name in seen_refs:
             return  # cycle guard -- not exercised by this contract, kept for totality
-        _closure(ref_name, prefix, seen_refs, results)
+        _closure(ref_name, prefix, seen_refs, results, component_schemas)
         return
     branches = node.get("oneOf") or node.get("anyOf")
     if branches is not None:
         for branch in branches:
-            _walk(branch, prefix, seen_refs, results)
+            _walk(branch, prefix, seen_refs, results, component_schemas)
         return
     if "properties" in node:
         for prop_name, prop_schema in node["properties"].items():
             path = f"{prefix}.{prop_name}" if prefix else prop_name
             results.add(path)
-            _walk(prop_schema, path, seen_refs, results)
+            _walk(prop_schema, path, seen_refs, results, component_schemas)
         return
     if "items" in node:
         # A scalar-only array (e.g. bootstrap_percentiles' prefixItems) has
         # no "items" key at all and falls through to the leaf case below --
         # it is counted once, by its own property name, and never gets "[]".
-        _walk(node["items"], f"{prefix}[]", seen_refs, results)
+        _walk(node["items"], f"{prefix}[]", seen_refs, results, component_schemas)
         return
     # leaf: plain scalar, or a prefixItems-only tuple -- no named children.
 
 
-def _closure(schema_name: str, prefix: str, seen_refs: frozenset, results: set) -> None:
-    _walk(COMPONENT_SCHEMAS[schema_name], prefix, seen_refs | {schema_name}, results)
+def _closure(schema_name: str, prefix: str, seen_refs: frozenset, results: set, component_schemas: dict = None) -> None:
+    component_schemas = COMPONENT_SCHEMAS if component_schemas is None else component_schemas
+    _walk(component_schemas[schema_name], prefix, seen_refs | {schema_name}, results, component_schemas)
 
 
-def _root_closure(root_name: str) -> set[str]:
+def _root_closure(root_name: str, component_schemas: dict = None) -> set[str]:
     """Root-resolved closure for one of the eight named roots. The root's
-    own name is never part of any path (PHASE8.md ה.1 rule 6)."""
+    own name is never part of any path (PHASE8.md ה.1 rule 6).
+
+    component_schemas defaults to this module's own locked
+    docs/api/openapi.json (COMPONENT_SCHEMAS) -- every existing call site
+    below is unaffected. Phase 9's projection drift check
+    (tests/test_projection.py) passes the LIVE app's own
+    components.schemas instead, reusing this exact algorithm rather than
+    a second copy of it (PHASE9.md D8)."""
     results: set[str] = set()
-    _closure(root_name, "", frozenset(), results)
+    _closure(root_name, "", frozenset(), results, component_schemas)
     return results
 
 

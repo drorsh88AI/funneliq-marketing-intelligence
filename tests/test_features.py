@@ -1,8 +1,8 @@
 """Tests for app/features.py, and full parity against docs/feature_matrix.md
-(PHASE5.md checkpoint 6).
+(PHASE5.md checkpoint 6; P4S column added in phase 9, D21).
 
 The parity test PARSES the markdown table -- it does not just re-assert
-what the code already says. If a row's P2/P3/P4/P6 cell in the doc is
+what the code already says. If a row's P2/P3/P4/P6/P4S cell in the doc is
 edited without updating app/features.py (or vice versa), this test fails.
 """
 from __future__ import annotations
@@ -18,7 +18,13 @@ from scripts.load_data import EXPECTED_COLUMNS
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FEATURE_MATRIX_MD = REPO_ROOT / "docs" / "feature_matrix.md"
 
+# The four original tasks -- _feature_list()'s generic "19 minus target
+# minus excluded" rule holds for exactly these (PHASE9 D21). P4S is kept
+# out of this tuple on purpose: its invariants are different (a curated
+# 4-feature subset, no Target row in the 19-column table) and are tested
+# separately below, never folded into a loop over TASKS.
 TASKS = ("P2", "P3", "P4", "P6")
+ALL_TASKS = TASKS + ("P4S",)
 
 
 def _parse_table_text(text: str) -> dict[str, dict[str, str]]:
@@ -29,14 +35,14 @@ def _parse_table_text(text: str) -> dict[str, dict[str, str]]:
     than silently keeping the later row's values.
 
     Column layout (fixed, by construction of the doc):
-    | # | column | granularity | meaning | availability | P2 | P3 | P4 | P6 | note |
+    | # | column | granularity | meaning | availability | P2 | P3 | P4 | P6 | P4S | note |
     """
     parsed: dict[str, dict[str, str]] = {}
     for line in text.splitlines():
         if not line.startswith("| "):
             continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) != 10:
+        if len(cells) != 11:
             continue
         m = re.fullmatch(r"`(\w+)`", cells[1])
         if not m:
@@ -51,8 +57,8 @@ def _parse_table_text(text: str) -> dict[str, dict[str, str]]:
         # "**Target**" is legitimate emphasis for the target column in the
         # doc, not a different status token -- strip markdown bold before
         # comparing.
-        statuses = [c.strip("*").strip() for c in cells[5:9]]
-        parsed[column] = dict(zip(TASKS, statuses))
+        statuses = [c.strip("*").strip() for c in cells[5:10]]
+        parsed[column] = dict(zip(ALL_TASKS, statuses))
     return parsed
 
 
@@ -75,10 +81,13 @@ def test_feature_matrix_md_documents_every_source_column():
     )
 
 
-@pytest.mark.parametrize("task", TASKS)
+@pytest.mark.parametrize("task", ALL_TASKS)
 def test_feature_matrix_md_matches_code_for_every_column(task):
-    """Full parity, one column at a time: the doc's status cell and
-    app/features.py's column_status() must agree, for all 19 columns."""
+    """Full parity, one column at a time, for all five tasks including
+    P4S (PHASE9 D21): the doc's status cell and app/features.py's
+    column_status() must agree, for all 19 columns. column_status() is
+    the declared single source of parity -- this test checks the doc
+    against IT, never the other way around."""
     parsed = _parse_feature_matrix_table()
     mismatches = [
         (col, parsed[col][task], feat.column_status(col, task))
@@ -201,15 +210,85 @@ def test_features_is_exactly_feature_plus_derived_columns():
         assert set(feat.FEATURES[task]) == expected
 
 
+# ---------------------------------------------------------------------------
+# P4S (PHASE9 D21). column_status() gained a fifth branch: a column not in
+# FEATURES[task] now resolves to Excluded instead of defaulting to Feature.
+# For the four original tasks that branch is provably never reached (their
+# FEATURES[task] already IS "everything not target/excluded/derived" --
+# see test_feature_lists_are_the_19_columns_minus_target_and_excluded and
+# test_features_is_exactly_feature_plus_derived_columns above, both still
+# scoped to TASKS and still passing unmodified). P4S's own invariants are
+# different on purpose and live in their own tests, never folded into a
+# loop over TASKS.
+# ---------------------------------------------------------------------------
+
+
+def test_column_status_p4s_fix_is_a_no_op_for_the_four_original_tasks():
+    """Regression for the D21 fix (criterion 77): re-derive each of the
+    four original tasks' status from the OLD three-branch rule (target /
+    excluded / derived, else Feature -- no FEATURES-membership check) and
+    assert it agrees with the current column_status() for all 19 columns.
+    This fails if the fifth branch ever changes a single classification
+    for P2/P3/P4/P6."""
+
+    def _old_rule(column: str, task: str) -> str:
+        if column == feat.TARGET[task]:
+            return "Target"
+        if column in feat.EXCLUDED[task]:
+            return "Excluded"
+        if column in feat.DERIVED_FROM_PROFILE.get(task, ()):
+            return "Derived"
+        return "Feature"
+
+    for task in TASKS:
+        for column in EXPECTED_COLUMNS:
+            assert feat.column_status(column, task) == _old_rule(column, task), (
+                f"{task}/{column}: D21 fix must be a no-op for the four "
+                f"original tasks"
+            )
+
+
+def test_p4s_target_is_a_logical_id_not_a_csv_column():
+    """PHASE8A.md D1: TARGET["P4S"] = "super_customer" is a logical id,
+    not a raw CSV column -- so it must never appear among the 19 source
+    columns, and column_status() must never return "Target" for P4S over
+    any of them (no Target row for P4S in the 19-column table)."""
+    assert feat.TARGET["P4S"] not in EXPECTED_COLUMNS
+    for column in EXPECTED_COLUMNS:
+        assert feat.column_status(column, "P4S") != "Target"
+
+
+def test_p4s_has_exactly_four_features_fifteen_excluded_zero_derived():
+    """Criterion 78: P4S's invariants, locked and separate from the four
+    original tasks' "19 minus target minus excluded" rule -- P4S is a
+    curated 4-feature subset (PHASE8A.md D3), not everything left over."""
+    statuses = [feat.column_status(c, "P4S") for c in EXPECTED_COLUMNS]
+    assert statuses.count("Feature") == 4
+    assert statuses.count("Excluded") == 15
+    assert statuses.count("Derived") == 0
+    assert len(statuses) == 19
+
+    features = [c for c in EXPECTED_COLUMNS if feat.column_status(c, "P4S") == "Feature"]
+    assert features == feat.FEATURES["P4S"]
+
+
+def test_p4s_label_components_are_excluded_not_features():
+    """PHASE8A.md D1/D2: referred/upsell/ltv_months feed the synthetic
+    super_customer label -- they must be Excluded for P4S, never Feature,
+    regardless of the generic fallback rule."""
+    for column in ("referred", "upsell", "ltv_months"):
+        assert feat.column_status(column, "P4S") == "Excluded"
+
+
 def test_duplicate_column_row_in_the_matrix_raises_not_silently_overwritten():
     """Proof the parser's duplicate guard actually works, not just that it
     exists: a two-row fixture with the same column twice must raise --
     the second row must not silently win over dict-key collision."""
     header = (
-        "| # | עמודה | גרעיניות | משמעות | זמינות | P2 | P3 | P4 | P6 | הערה |"
+        "| # | עמודה | גרעיניות | משמעות | זמינות | P2 | P3 | P4 | P6 | P4S | הערה |"
     )
-    row_a = "| 1 | `ad_budget` | קמפיין | x | x | Feature | Feature | Feature | Feature | x |"
-    row_b = "| 2 | `ad_budget` | קמפיין | x | x | Excluded | Feature | Feature | Feature | x |"
+    row_a = "| 1 | `ad_budget` | קמפיין | x | x | Feature | Feature | Feature | Feature | Feature | x |"
+    row_b = "| 2 | `ad_budget` | קמפיין | x | x | Excluded | Feature | Feature | Feature | Feature | x |"
     with pytest.raises(ValueError, match="ad_budget"):
         _parse_table_text("\n".join([header, row_a, row_b]))
 

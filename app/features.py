@@ -199,14 +199,30 @@ def column_status(column: str, task: str) -> str:
     """One of "Target" / "Excluded" / "Derived" / "Feature" for a raw
     column in a given task -- the single function docs/feature_matrix.md's
     parity test and any future caller check against, instead of
-    re-deriving the four sets by hand."""
+    re-deriving the four sets by hand.
+
+    P9 D21 fix: the old fallback ("anything left over is Feature") is
+    correct for the four original tasks (FEATURES[task] IS "everything
+    not excluded" there -- see _feature_list()), but wrong for P4S,
+    whose FEATURES["P4S"] is a hand-curated 4-column subset, not "every
+    column minus target/excluded". Without an explicit Feature-membership
+    check, column_status("closed", "P4S") and 9 other columns outside
+    FEATURES["P4S"] were falling through to "Feature" by default. The
+    fifth branch below (present but never reached for the four original
+    tasks, where DERIVED_FROM_PROFILE/EXCLUDED/FEATURES already partition
+    all 19 columns) makes "not a feature" resolve to Excluded instead of
+    Feature -- correct for P4S's early-funnel snapshot, where a column
+    outside its 4-feature set isn't available at serving time, not a
+    leakage exclusion."""
     if column == TARGET[task]:
         return "Target"
     if column in EXCLUDED[task]:
         return "Excluded"
     if column in DERIVED_FROM_PROFILE.get(task, ()):
         return "Derived"
-    return "Feature"
+    if column in FEATURES[task]:
+        return "Feature"
+    return "Excluded"
 
 
 # ---------------------------------------------------------------------------
