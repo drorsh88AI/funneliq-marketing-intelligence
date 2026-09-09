@@ -233,13 +233,13 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 | 0 | `main` נקי → יצירת `feat/api` → שלב 0 (PHASE9.md חדש, SPEC.md D20, ROADMAP.html, REQUIREMENTS.md) | ✅ done ⚠ **בוצע שלא לפי הסדר** — ראו הערה למטה | `93c4faa`, `5dad544` |
 | 1 | D21 (`column_status`) + D13 (`app/inference.py`) | ✅ done | `82eda3c`, `4b391f2`; 448→453 |
 | 2 | `HTTPBearer` + `access_token` (D5/D6) | ✅ done | `6622b84`; 453→460 |
-| 3 | `app/artifacts.py` — loader + D17 | ✅ done | `9977589`; 460→526 |
+| 3 | `app/artifacts.py` — loader + D17 | ✅ done; ולידציית meta הושלמה ל-`alpha`/`conformal_quantile`/`base_rate`/`calibration_status`/`calibration_method` (D17 completeness, ביקורת קוד לפני checkpoint 11) | `9977589`; 460→526 · `9b91d0c`; →716 |
 | 4 | routers + שלושת ה-handlers (D7) | ✅ done | `262b694`; 526→533 |
 | 5 | `ltv`/`upsell`/`referral` | ✅ done | `46c62fe`; 533→582 |
 | 6 | `super-customer` | ✅ done | `7eac95e`; 582→594 |
-| 7 | `app/supabase_client.py` — לקוח, D16, D19 | ✅ done | `e8fc0a0`; 594→632 |
-| 8 | `simulate/budget` + `budget-tiers` | ✅ done (ק' 72 חסר — ראיה חיה) | `b2a38a9`; 632→653 |
-| 9 | `followup` — עימוד + קדימות | ✅ done (ק' 73 חסר — ראיה חיה) | `8361a05`; 653→669 |
+| 7 | `app/supabase_client.py` — לקוח, D16, D19 | ✅ done; `status_for_supabase_error` תוקן ל-`type(code) is int` (במקום `isinstance`), ביקורת קוד לפני checkpoint 11 | `e8fc0a0`; 594→632 · `9b91d0c` |
+| 8 | `simulate/budget` + `budget-tiers` | ✅ done (ק' 72 חסר — ראיה חיה); `.order("tier_order", nullsfirst=False)` מפורש נוסף בביקורת קוד | `b2a38a9`; 632→653 · `9b91d0c` |
+| 9 | `followup` — עימוד + קדימות | ✅ done (ק' 73 חסר — ראיה חיה); `.order("stage_order")` מפורש נוסף בביקורת קוד | `8361a05`; 653→669 · `9b91d0c` |
 | 10 | HTTP מלא + projection | ✅ done | `168100e`; 669→695 |
 | 11 | סגירה: ביקורת → PR → CI → מיזוג → auto-deploy → ראיה חיה (ק' 72–73, 75) → סגירה | ⏳ ממתין לאישור נפרד לכל תת-שלב | — |
 
@@ -252,9 +252,15 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 סדר הביצוע המקורי לתקין, והוא שנחשף רק כשהמשתמש בדק את המצב, לא
 כתוצאה מבדיקה עצמית שהופעלה כאן.
 
-**695/695 בדיקות ירוקות** (מבסיס 448). כל commit רץ מול `pytest -q` מלא
-לפני ואחרי. חמשת הארטיפקטים ללא שינוי לאורך כל הביצוע (SHA-256 נבדק
-בקריטריון 31). `main` לא נגע בו — כל 11 ה-commits על `feat/api` בלבד.
+**716/716 בדיקות ירוקות** (מבסיס 448; 695 עד סוף checkpoint 10, +21 מ-
+`9b91d0c` — ביקורת קוד עצמאית לפני checkpoint 11 שמצאה וסגרה ארבעה
+פערים: `.order()` מפורש בשתי שאילתות insights, `type(code) is int`
+במקום `isinstance`, השלמת ולידציית meta ל-`alpha`/`base_rate`/
+`calibration_status`/`calibration_method`, ותיקון docstring מיושן
+ב-`app/schemas.py`). כל commit רץ מול `pytest -q` מלא לפני ואחרי. חמשת
+הארטיפקטים ללא שינוי לאורך כל הביצוע (SHA-256 נבדק בקריטריון 31);
+`models/` לא נגע בו גם בתיקון הזה. `main` לא נגע בו — כל ה-commits על
+`feat/api` בלבד.
 
 ⚠ **ק' 72/73/75 (ראיה חיה)** דורשות deploy אמיתי ל-Render עם משתמשי
 `demo-northbound`/`demo-noorg`. אלה חלק מ-checkpoint 11 ומחייבות את
