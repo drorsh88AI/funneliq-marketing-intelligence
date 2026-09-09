@@ -233,13 +233,13 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 | 0 | `main` נקי → יצירת `feat/api` → שלב 0 (PHASE9.md חדש, SPEC.md D20, ROADMAP.html, REQUIREMENTS.md) | ✅ done ⚠ **בוצע שלא לפי הסדר** — ראו הערה למטה | `93c4faa`, `5dad544` |
 | 1 | D21 (`column_status`) + D13 (`app/inference.py`) | ✅ done | `82eda3c`, `4b391f2`; 448→453 |
 | 2 | `HTTPBearer` + `access_token` (D5/D6) | ✅ done | `6622b84`; 453→460 |
-| 3 | `app/artifacts.py` — loader + D17 | ✅ done; ולידציית meta הושלמה ל-`alpha`/`conformal_quantile`/`base_rate`/`calibration_status`/`calibration_method`, ואחריה — בסבב ביקורת שני — גם למבנה הפנימי של `metrics[task][algo]`, כל בלוק `*_holdout`, `P6_strategy_ranking.ranked`, `P6_simulation[sid].levels`, ו-`ood_bounds[col].min/max` (D17 completeness, שני סבבי ביקורת קוד לפני checkpoint 11) | `9977589`; 460→526 · `9b91d0c`; →716 · `68efc7a`; →743 |
+| 3 | `app/artifacts.py` — loader + D17 | ✅ done; ולידציית meta הושלמה ל-`alpha`/`conformal_quantile`/`base_rate`/`calibration_status`/`calibration_method`, ואחריה — בסבב ביקורת שני — גם למבנה הפנימי של `metrics[task][algo]`, כל בלוק `*_holdout`, `P6_strategy_ranking.ranked`, `P6_simulation[sid].levels`, ו-`ood_bounds[col].min/max` (D17 completeness, שני סבבי ביקורת קוד לפני checkpoint 11) | `9977589`; 460→526 · `9b91d0c`; →716 · `e6659eb`; →743 |
 | 4 | routers + שלושת ה-handlers (D7) | ✅ done | `262b694`; 526→533 |
 | 5 | `ltv`/`upsell`/`referral` | ✅ done | `46c62fe`; 533→582 |
 | 6 | `super-customer` | ✅ done | `7eac95e`; 582→594 |
 | 7 | `app/supabase_client.py` — לקוח, D16, D19 | ✅ done; `status_for_supabase_error` תוקן ל-`type(code) is int` (במקום `isinstance`), ביקורת קוד לפני checkpoint 11 | `e8fc0a0`; 594→632 · `9b91d0c` |
-| 8 | `simulate/budget` + `budget-tiers` | ✅ done (ק' 72 חסר — ראיה חיה); `.order("tier_order", nullsfirst=False)` מפורש נוסף בביקורת קוד, והבדיקה חוזקה מ-substring לערך המדויק `tier_order.asc.nullslast` | `b2a38a9`; 632→653 · `9b91d0c` · `68efc7a` |
-| 9 | `followup` — עימוד + קדימות | ✅ done (ק' 73 חסר — ראיה חיה); `.order("stage_order")` מפורש נוסף בביקורת קוד, והבדיקה חוזקה לערך המדויק `stage_order.asc` | `8361a05`; 653→669 · `9b91d0c` · `68efc7a` |
+| 8 | `simulate/budget` + `budget-tiers` | ✅ done (ק' 72 חסר — ראיה חיה); `.order("tier_order", nullsfirst=False)` מפורש נוסף בביקורת קוד, והבדיקה חוזקה מ-substring לערך המדויק `tier_order.asc.nullslast` | `b2a38a9`; 632→653 · `9b91d0c` · `e6659eb` |
+| 9 | `followup` — עימוד + קדימות | ✅ done (ק' 73 חסר — ראיה חיה); `.order("stage_order")` מפורש נוסף בביקורת קוד, והבדיקה חוזקה לערך המדויק `stage_order.asc` | `8361a05`; 653→669 · `9b91d0c` · `e6659eb` |
 | 10 | HTTP מלא + projection | ✅ done | `168100e`; 669→695 |
 | 11 | סגירה: ביקורת → PR → CI → מיזוג → auto-deploy → ראיה חיה (ק' 72–73, 75) → סגירה | ⏳ ממתין לאישור נפרד לכל תת-שלב | — |
 
@@ -259,13 +259,13 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 `metrics.json`/`P6_simulation.json`/`ood_bounds` שה-routes קוראים מהם
 בפועל; (ב) `app/schemas.py` תוקן ל"חמש response families" — **שגוי, יש
 שש**, טעות חדשה שאני הכנסתי באותו commit; (ג) בדיקות ה-`order` בדקו
-substring בלבד, לא את הכיוון/NULL-position בפועל. שלושתם נסגרו ב-`68efc7a`,
+substring בלבד, לא את הכיוון/NULL-position בפועל. שלושתם נסגרו ב-`e6659eb`,
 עם 27 בדיקות פרמטריות חדשות מול `models/` האמיתי. **הלקח החוזר: "תוקן"
 דורש ראיה שנבדקה ברמת המבנה הפנימי הנצרך בפועל, לא רק שקיים commit
 ו-pytest ירוק.**
 
 **743/743 בדיקות ירוקות** (מבסיס 448; 695 עד סוף checkpoint 10; +21
-מ-`9b91d0c`; +27 מ-`68efc7a`). כל commit רץ מול `pytest -q` מלא לפני
+מ-`9b91d0c`; +27 מ-`e6659eb`). כל commit רץ מול `pytest -q` מלא לפני
 ואחרי. חמשת הארטיפקטים ללא שינוי לאורך כל הביצוע (SHA-256 נבדק בקריטריון
 31); `models/` לא נגע בו גם בשני תיקוני ביקורת הקוד. `main` לא נגע בו —
 כל ה-commits על
