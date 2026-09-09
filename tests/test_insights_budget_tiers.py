@@ -54,8 +54,27 @@ def test_rejects_wrong_organization(make_authed_client):
 
 
 # ---------------------------------------------------------------------------
-# Criterion 71 -- sorting, empty-rows-is-200, and .order not relied upon.
+# Criterion 71 -- explicit .order() on the query (checked via the request
+# URL, not just observed behavior), the route's own sort as a second,
+# independent guarantee since the view itself has no ORDER BY, and
+# empty-rows-is-200.
 # ---------------------------------------------------------------------------
+
+
+def test_query_sends_explicit_order_by_tier_order(authed_client):
+    """D12/criterion 71: `.order` explicit in the query itself, not just
+    correct final output -- inspects the actual request URL rather than
+    trusting response.data, which a mock can get right by coincidence."""
+    seen_urls = []
+
+    def handler(request):
+        seen_urls.append(str(request.url))
+        return httpx.Response(200, json=_REAL_TIERS, headers={"content-range": "0-3/4"})
+
+    app.dependency_overrides[get_user_client] = _override_with(handler)
+    authed_client.get(PATH)
+    assert len(seen_urls) == 1
+    assert "order=tier_order" in seen_urls[0]
 
 
 _REAL_TIERS = [

@@ -71,6 +71,22 @@ def test_str_code_is_never_routed_by_isdigit():
     assert status == 403, "a digit-based classifier would wrongly return 500 here"
 
 
+def test_bool_code_is_not_silently_misrouted_by_isinstance():
+    """type(code) is int, not isinstance(code, int): bool is an int
+    subclass in Python (isinstance(True, int) is True), so an isinstance
+    check would silently treat a stray bool as a legitimate HTTP-status
+    int and return a plausible-looking 500. A real APIError.code is only
+    ever int or str (postgrest never sets bool) -- this locks the
+    discriminator itself against the class of bug D16 warns about,
+    not just the one observed "42501" case. type(code) is int correctly
+    refuses to treat True as int and falls through to the str branch,
+    which then fails loudly (AttributeError on .strip()) instead of
+    quietly misclassifying non-status input as a normal error response."""
+    exc = APIError({"message": "x", "code": True, "hint": None, "details": None})
+    with pytest.raises(AttributeError):
+        sc.status_for_supabase_error(exc)
+
+
 def test_transport_error_maps_to_503():
     exc = httpx.ConnectError("connection refused")
     status, _detail = sc.status_for_supabase_error(exc)

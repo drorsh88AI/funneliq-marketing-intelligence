@@ -103,6 +103,24 @@ def test_happy_path_both_parts_available(authed_client):
     assert sum(b["n"] for b in body["calls_to_closed"]["data"]["distribution"]) == TOTAL_PURCHASED
 
 
+def test_stages_query_sends_explicit_order_by_stage_order(authed_client):
+    """D12/criterion 71: `.order` explicit on the followup_insight query
+    itself -- inspects the actual request URL, not just that the final
+    response ends up sorted (which the route's own Python-side sort
+    would guarantee either way)."""
+    seen_urls = []
+
+    def stages_response(request):
+        seen_urls.append(str(request.url))
+        return httpx.Response(200, json=STAGES_ROWS, headers={"content-range": "0-4/5"})
+
+    handler = _make_handler(stages_response=stages_response)
+    app.dependency_overrides[get_user_client] = _override(handler)
+    authed_client.get(PATH)
+    assert len(seen_urls) == 1
+    assert "order=stage_order" in seen_urls[0]
+
+
 def test_stages_are_sorted_even_when_returned_shuffled(authed_client):
     shuffled = list(reversed(STAGES_ROWS))
     handler = _make_handler(stages_response=httpx.Response(200, json=shuffled, headers={"content-range": "0-4/5"}))

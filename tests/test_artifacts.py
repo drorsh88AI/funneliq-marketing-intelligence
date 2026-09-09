@@ -207,6 +207,77 @@ def test_ood_bounds_missing_a_feature_is_fail_fast():
 
 
 # ---------------------------------------------------------------------------
+# D17 completeness -- app/predict.py reads meta["alpha"]/meta["base_rate"]/
+# etc. directly (grep-verified), but these were never in _COMMON_META_KEYS
+# and had zero startup check -- a missing one surfaced only as a bare
+# KeyError on the first real request, not fail-fast at boot. Same pattern
+# as criterion 29/32-36, extended to the task-specific keys the routes
+# actually consume (not every _COMMON_META_KEYS field -- provenance-only
+# fields like `seed`/`training_date` are never read by app code, so a
+# type error there can never surface as a runtime bug).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("key", ["alpha", "conformal_quantile", "interval_method"])
+def test_p2_missing_a_consumed_key_is_fail_fast(key):
+    meta = _real_meta("P2")
+    del meta[key]
+    with pytest.raises(art.ArtifactStartupError, match=key):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
+@pytest.mark.parametrize("task", ["P3", "P4", "P4S"])
+@pytest.mark.parametrize("key", ["base_rate", "calibration_status", "calibration_method"])
+def test_classifier_missing_a_consumed_key_is_fail_fast(task, key):
+    meta = _real_meta(task)
+    del meta[key]
+    with pytest.raises(art.ArtifactStartupError, match=key):
+        art._validate_meta(task, meta, _real_metrics())
+
+
+def test_p2_alpha_out_of_range_is_fail_fast():
+    meta = _real_meta("P2")
+    meta["alpha"] = 1.5
+    with pytest.raises(art.ArtifactStartupError, match="alpha"):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
+def test_p2_conformal_quantile_negative_is_fail_fast():
+    meta = _real_meta("P2")
+    meta["conformal_quantile"] = -1.0
+    with pytest.raises(art.ArtifactStartupError, match="conformal_quantile"):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
+def test_classifier_base_rate_out_of_range_is_fail_fast():
+    meta = _real_meta("P3")
+    meta["base_rate"] = 1.2
+    with pytest.raises(art.ArtifactStartupError, match="base_rate"):
+        art._validate_meta("P3", meta, _real_metrics())
+
+
+def test_classifier_calibration_status_wrong_type_is_fail_fast():
+    meta = _real_meta("P4")
+    meta["calibration_status"] = 42
+    with pytest.raises(art.ArtifactStartupError, match="calibration_status"):
+        art._validate_meta("P4", meta, _real_metrics())
+
+
+def test_observed_ad_budget_values_wrong_type_is_fail_fast():
+    meta = _real_meta("P2")
+    meta["observed_ad_budget_values"] = {"not": "a list"}
+    with pytest.raises(art.ArtifactStartupError, match="observed_ad_budget_values"):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
+def test_model_version_empty_string_is_fail_fast():
+    meta = _real_meta("P6")
+    meta["model_version"] = ""
+    with pytest.raises(art.ArtifactStartupError, match="model_version"):
+        art._validate_meta("P6", meta, _real_metrics())
+
+
+# ---------------------------------------------------------------------------
 # Criterion 30 -- SHA-256 of the five .joblib files, checked at startup by
 # hashing bytes, against the CURRENT meta.checksums.artifact_sha256.
 # ---------------------------------------------------------------------------

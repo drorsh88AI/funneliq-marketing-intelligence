@@ -38,8 +38,13 @@ router = APIRouter()
 
 def _tier_sort_key(row: dict) -> tuple[int, int]:
     """D15: tier_order ascending, the NULL-tier gap row (if it appears
-    at all) always last -- budget_tier_insight has no ORDER BY, so the
-    row order postgrest returns is not guaranteed."""
+    at all) always last -- the view itself has no ORDER BY (D12 finding
+    11), so this is the second, independent guarantee: even though the
+    query below now sends its own `.order()` explicitly (criterion 71),
+    that request-level ordering is a PostgREST-side hint, not something
+    this test suite's mocks (or, defensively, a future view change) can
+    be trusted to honor -- so the response is always re-sorted here
+    regardless of what order the rows arrived in."""
     tier_order = row["tier_order"]
     return (1, 0) if tier_order is None else (0, tier_order)
 
@@ -62,6 +67,7 @@ def insights_budget_tiers(
         response = (
             client.table("budget_tier_insight")
             .select("tier_order,budget_tier,n_records,conversion_rate")
+            .order("tier_order", nullsfirst=False)
             .retry(False)
             .execute()
         )
@@ -96,6 +102,7 @@ def _fetch_stages(client: Client):
         response = (
             client.table("followup_insight")
             .select("stage_order,stage,from_leads,to_leads,drop_rate")
+            .order("stage_order")
             .retry(False)
             .execute()
         )

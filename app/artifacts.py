@@ -56,6 +56,15 @@ _COMMON_META_KEYS = {
 }
 _SUPPORTED_DTYPES = {"int64"}
 
+# D17: beyond _COMMON_META_KEYS, app/predict.py reads several task-specific
+# meta fields directly (meta["alpha"], meta["base_rate"], ...) that were
+# NOT in the common set and had no startup check at all -- a missing one
+# would only surface as a bare KeyError on the first real request, not
+# fail-fast at boot. P2 (conformal regression) and the three classifier
+# tasks each need their own extra required keys.
+_P2_ONLY_META_KEYS = {"alpha", "conformal_quantile", "interval_method"}
+_CLASSIFIER_META_KEYS = {"base_rate", "calibration_status", "calibration_method"}
+
 
 class ArtifactStartupError(RuntimeError):
     """A static asset (JSON) is missing, malformed, or fails schema
@@ -92,13 +101,42 @@ def _validate_meta(task: str, meta: Any, metrics: dict) -> None:
     if not isinstance(meta, dict):
         raise ArtifactStartupError(f"{path}: top-level JSON must be an object")
 
-    missing = _COMMON_META_KEYS - meta.keys()
+    extra_required = _P2_ONLY_META_KEYS if task == "P2" else (
+        _CLASSIFIER_META_KEYS if task in CLASSIFIER_TASKS else set()
+    )
+    missing = (_COMMON_META_KEYS | extra_required) - meta.keys()
     if missing:
         raise ArtifactStartupError(f"{path}: missing required key(s): {sorted(missing)}")
 
     checksums = meta["checksums"]
     if not isinstance(checksums, dict) or "artifact_sha256" not in checksums:
         raise ArtifactStartupError(f"{path}: checksums.artifact_sha256 missing")
+
+    model_version = meta["model_version"]
+    if not isinstance(model_version, str) or not model_version:
+        raise ArtifactStartupError(f"{path}: model_version must be a non-empty string")
+
+    observed_values = meta["observed_ad_budget_values"]
+    if not isinstance(observed_values, list) or not all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) for v in observed_values
+    ):
+        raise ArtifactStartupError(f"{path}: observed_ad_budget_values must be a list of numbers")
+
+    if task == "P2":
+        alpha = meta["alpha"]
+        if not isinstance(alpha, (int, float)) or isinstance(alpha, bool) or not (0 < alpha < 1):
+            raise ArtifactStartupError(f"{path}: alpha must be a number in (0, 1)")
+        quantile = meta["conformal_quantile"]
+        if not isinstance(quantile, (int, float)) or isinstance(quantile, bool) or quantile < 0:
+            raise ArtifactStartupError(f"{path}: conformal_quantile must be a non-negative number")
+    elif task in CLASSIFIER_TASKS:
+        base_rate = meta["base_rate"]
+        if not isinstance(base_rate, (int, float)) or isinstance(base_rate, bool) or not (0 <= base_rate <= 1):
+            raise ArtifactStartupError(f"{path}: base_rate must be a number in [0, 1]")
+        for key in ("calibration_status", "calibration_method"):
+            value = meta[key]
+            if not isinstance(value, str) or not value:
+                raise ArtifactStartupError(f"{path}: {key} must be a non-empty string")
 
     feature_columns = meta["feature_columns"]
     if feature_columns != MODEL_INPUT_FEATURES[task]:

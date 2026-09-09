@@ -160,7 +160,12 @@ def status_for_supabase_error(exc: BaseException) -> tuple[int, str]:
     would map everything to a blanket 500."""
     if isinstance(exc, APIError):
         code = exc.code
-        if isinstance(code, int):
+        # D16: type(code) is int EXACTLY -- not isinstance(code, int). bool
+        # is an int subclass in Python (isinstance(True, int) is True), so
+        # isinstance would silently misroute a stray bool the same way
+        # "42501".isdigit() misroutes that SQLSTATE (the trap D16 documents
+        # above); type(...) is int is the only check immune to both.
+        if type(code) is int:
             if code == 401:
                 return 401, _ERROR_DETAIL_401
             if code == 403:

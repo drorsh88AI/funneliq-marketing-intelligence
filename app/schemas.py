@@ -1,16 +1,19 @@
-"""Phase 8 -- the locked API contract (docs/planning/PHASE8.md).
+"""Phase 8 (extended by PHASE8A.md D20 and PHASE9.md) -- the locked API
+contract (docs/planning/PHASE8.md).
 
 Pure Pydantic models: request/response shape, field types, nullability,
 and every cross-field invariant that is derivable from the payload alone
 (sections D1-D13, section D "סכמות מדויקות"). Zero I/O, zero model
-loading, zero Supabase calls -- phase 9 fills these schemas in with real
-predictions. scripts/export_openapi.py is the only other file that
-imports from here (to register the six locked routes and produce
-docs/api/openapi.json); app/main.py never imports this module (D1).
+loading, zero Supabase calls -- phase 9's routers (app/predict.py,
+app/insights.py) and app/main.py's exception handlers all import from
+here to serve real predictions; scripts/export_openapi.py separately
+imports it to produce docs/api/openapi.json. This module never imports
+FROM app.main or the routers (the dependency direction is one-way).
 
-Six business endpoints, five response families, no "one model with 14
-nullable fields" (D4) -- a field that is not relevant to a task's schema
-does not appear in that schema at all, rather than appearing as null.
+Seven business endpoints (added `POST /api/predict/super-customer` in
+8A), five response families, no "one model with N nullable fields" (D4)
+-- a field that is not relevant to a task's schema does not appear in
+that schema at all, rather than appearing as null.
 """
 from __future__ import annotations
 
