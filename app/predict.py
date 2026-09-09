@@ -23,12 +23,15 @@ from app.auth import bearer, current_user
 from app.inference import out_of_range_features, predict_if_in_domain
 from app.schemas import (
     ClassificationMetrics,
+    EarlyFunnelInput,
     FunnelInput,
     IntervalDetails,
     LtvPrediction,
     OODWarning,
     PropensityPrediction,
     RegressionMetrics,
+    SuperCustomerOODWarning,
+    SuperCustomerPrediction,
     UnobservedBudgetWarning,
     _CvClassification,
     _CvRegression,
@@ -201,3 +204,55 @@ def predict_upsell(body: FunnelInput, user: dict = Depends(current_user)) -> Pro
 )
 def predict_referral(body: FunnelInput, user: dict = Depends(current_user)) -> PropensityPrediction:
     return _predict_propensity("P4", body)
+
+
+# PHASE8A.md D14/D19 -- fixed literals, not read from any artifact: the
+# label formula and the population P4S trains on. Locked at the schema
+# level too (SuperCustomerPrediction.target_definition/population_definition
+# are each a one-value Literal) -- these are the only values that pass.
+_P4S_TARGET_DEFINITION = "referred=Yes AND upsell=1 AND ltv_months>=34"
+_P4S_POPULATION_DEFINITION = "purchased=1"
+
+
+@router.post(
+    "/api/predict/super-customer",
+    response_model=SuperCustomerPrediction,
+    dependencies=[Depends(bearer)],
+    responses=ERROR_RESPONSES,
+)
+def predict_super_customer(
+    body: EarlyFunnelInput, user: dict = Depends(current_user)
+) -> SuperCustomerPrediction:
+    """PHASE8A.md D20: mirrors _predict_propensity's shape, with P4S's own
+    artifact/meta, SuperCustomerOODWarning instead of OODWarning (D15/D19
+    -- a subclass, never folded into the same discriminated union as the
+    other three tasks'), and the two fixed definition literals."""
+    assets = get_assets()
+    meta = assets["meta"]["P4S"]
+    values = body.model_dump()
+    warnings, in_domain, evidence_level = _assess("P4S", meta, values, SuperCustomerOODWarning)
+    metrics_block = _classification_metrics(assets["metrics"], "P4S", meta["algo"])
+    base_rate = meta["base_rate"]
+
+    if not in_domain:
+        return SuperCustomerPrediction(
+            event_probability=None, base_rate=base_rate, propensity_band=None,
+            evidence_level=evidence_level, in_training_domain=False, warnings=warnings,
+            model_version=meta["model_version"], model_algorithm=meta["algo"],
+            calibration_status=meta["calibration_status"], calibration_method=meta["calibration_method"],
+            metrics=metrics_block,
+            target_definition=_P4S_TARGET_DEFINITION, population_definition=_P4S_POPULATION_DEFINITION,
+        )
+
+    _, raw = predict_if_in_domain("P4S", meta, values, method="predict_proba")
+    event_probability = float(raw[0][1])
+    propensity_band = propensity_band_for(event_probability, base_rate)
+
+    return SuperCustomerPrediction(
+        event_probability=event_probability, base_rate=base_rate, propensity_band=propensity_band,
+        evidence_level=evidence_level, in_training_domain=True, warnings=warnings,
+        model_version=meta["model_version"], model_algorithm=meta["algo"],
+        calibration_status=meta["calibration_status"], calibration_method=meta["calibration_method"],
+        metrics=metrics_block,
+        target_definition=_P4S_TARGET_DEFINITION, population_definition=_P4S_POPULATION_DEFINITION,
+    )
