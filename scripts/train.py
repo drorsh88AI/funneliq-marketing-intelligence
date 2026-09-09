@@ -48,6 +48,11 @@ from app.features import (  # noqa: E402
     model_feature_columns,
     target_values,
 )
+# Moved to app/inference.py in phase 9 (PHASE9.md D13) -- re-imported here
+# under the same names so every existing caller in this file (and
+# tests/test_train.py, which calls tr.conformal_interval) is unaffected.
+# Pure transfer: same value, same logic, zero behavior change.
+from app.inference import _require_finite_scalar, conformal_interval  # noqa: E402
 from scripts.load_data import EXPECTED_COLUMNS, load_and_verify_csv  # noqa: E402
 # Imported as a module, not `from ... import EXPECTED_SHA256` -- checkpoint
 # 15's .meta.json reads load_data_module.EXPECTED_SHA256 at call time so
@@ -302,16 +307,6 @@ def _require_finite_1d(values, name: str) -> np.ndarray:
     return values
 
 
-def _require_finite_scalar(value: float, name: str) -> float:
-    """Same guarantee as _require_finite_1d, for the scalar inputs
-    (means, standard errors, point estimates) that don't go through an
-    array-shaped check."""
-    value = float(value)
-    if not math.isfinite(value):
-        raise ValueError(f"{name} must be finite, got {value}")
-    return value
-
-
 def _require_n_folds(values, name: str) -> np.ndarray:
     values = _require_finite_1d(values, name)
     if values.size != N_FOLDS:
@@ -407,16 +402,6 @@ def conformal_quantile(residuals, alpha: float = 0.05) -> float:
     n = len(residuals)
     rank = min(math.ceil((n + 1) * (1 - alpha)), n)
     return float(residuals[rank - 1])
-
-
-def conformal_interval(point_estimate: float, q: float) -> tuple[float, float]:
-    """P2's prediction interval (D9): [point - q, point + q], lower
-    bound clipped at 0 -- ltv_months is never negative. The clip is a
-    documented one-sided deviation from the interval's symmetry, not a
-    second, independent decision."""
-    point_estimate = _require_finite_scalar(point_estimate, "point_estimate")
-    q = _require_finite_scalar(q, "q")
-    return max(0.0, point_estimate - q), point_estimate + q
 
 
 def top_decile_mask(y_true) -> np.ndarray:
