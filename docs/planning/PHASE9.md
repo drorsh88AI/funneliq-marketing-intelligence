@@ -241,7 +241,7 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 | 8 | `simulate/budget` + `budget-tiers` | ✅ done (ק' 72 חסר — ראיה חיה); `.order("tier_order", nullsfirst=False)` מפורש נוסף בביקורת קוד, והבדיקה חוזקה מ-substring לערך המדויק `tier_order.asc.nullslast` | `b2a38a9`; 632→653 · `9b91d0c` · `e6659eb` |
 | 9 | `followup` — עימוד + קדימות | ✅ done (ק' 73 חסר — ראיה חיה); `.order("stage_order")` מפורש נוסף בביקורת קוד, והבדיקה חוזקה לערך המדויק `stage_order.asc` | `8361a05`; 653→669 · `9b91d0c` · `e6659eb` |
 | 10 | HTTP מלא + projection | ✅ done | `168100e`; 669→695 |
-| 11 | סגירה: ביקורת ✅ → סריקת סודות מקומית ✅ → push ✅ → PR ✅ → CI ⏳ (נכשל פעם אחת, תוקן, ממתין לריצה חוזרת) → מיזוג ⏳ (אישור נפרד) → auto-deploy ⏳ → ראיה חיה (ק' 72–73, 75) ⏳ → סגירה ⏳ (אישור נפרד) | 🔄 בביצוע | [PR #24](https://github.com/drorsh88AI/funneliq-marketing-intelligence/pull/24), `feat/api`→`main`, 23 commits; ראו הערת CI למטה |
+| 11 | סגירה: ביקורת ✅ → סריקת סודות מקומית ✅ → push ✅ → PR ✅ → CI ✅ (ירוק, אחרי תיקון) → מיזוג ⏳ (אישור נפרד) → auto-deploy ⏳ → ראיה חיה (ק' 72–73, 75) ⏳ → סגירה ⏳ (אישור נפרד) | 🔄 בביצוע | [PR #24](https://github.com/drorsh88AI/funneliq-marketing-intelligence/pull/24), `feat/api`→`main`, head `d69d56c`, `MERGEABLE`/`CLEAN`; ראו הערת CI למטה |
 
 ⚠ **checkpoint 0 בוצע שלא לפי הסדר, בפועל, לא רק לפי התיעוד:** `main` נקי
 ויצירת `feat/api` בוצעו נכון לפני D21 — אך שלב 0 עצמו (`93c4faa`,
@@ -308,8 +308,14 @@ get_artifact` הועבר לתוך `predict_if_in_domain` — `app.inference`
 **אותו תנאי הצלחה בדיוק** (`calls == {'open': 0, 'json.load': 0}`) אך
 כעת אוספת stack מצומצם לכל קריאה, שיוצג בהודעת הכשל אם זה יישנה —
 בלי צורך ב-commit אבחוני נפרד. `771/771` מקומית; `models/` ו-
-`docs/api/openapi.json` לא נגעו בהם. נדחף לאותו PR #24; ⏳ ממתין לריצת CI
-חוזרת.
+`docs/api/openapi.json` לא נגעו בהם. נדחף לאותו PR #24 (`d69d56c`).
+
+✅ **שתי ריצות ה-CI החוזרות עברו בהצלחה** —
+[run 34417611846](https://github.com/drorsh88AI/funneliq-marketing-intelligence/actions/runs/34417611846)
+ו-[run 34417614089](https://github.com/drorsh88AI/funneliq-marketing-intelligence/actions/runs/34417614089),
+שניהם `pass`. אומת עצמאית פעמיים — פעם אחת על ידי המשתמש ופעם על ידי
+`gh pr checks 24`/`gh pr view 24` — ש-PR #24 עומד על `MERGEABLE`/`CLEAN`
+מול `head d69d56c`. **מיזוג עדיין לא בוצע ולא אושר.**
 
 ⚠ **ק' 72/73/75 (ראיה חיה)** דורשות deploy אמיתי ל-Render עם משתמשי
 `demo-northbound`/`demo-noorg`. אלה חלק מ-checkpoint 11 ומחייבות את
@@ -389,12 +395,14 @@ view/מיגרציה חדשים · אימון/כיול/Bootstrap מחדש · פת
 
 ## 8. מה נותר לפני סגירת הפאזה
 
-1. **checkpoint 11**: ביקורת קוד + סריקת סודות (בוצע חלקית — ראו
-   פרטי commits; יש להריץ סריקה סופית) → push (אישור נפרד) → PR →
-   CI ירוק → מיזוג ל-`main` (אישור נפרד) → auto-deploy ל-Render →
-   ק' 72/73/75 (ראיה חיה) → אימות `main` → סגירת הפאזה (אישור נפרד).
+1. **checkpoint 11**: ביקורת קוד ✅ (שלושה סבבים) → סריקת סודות מקומית ✅
+   → push ✅ → PR #24 ✅ → CI ✅ ירוק (אחרי תיקון `c5b1ebe` לכשל ראשוני;
+   `MERGEABLE`/`CLEAN` מול `head d69d56c`) → **נותר**: מיזוג ל-`main`
+   (אישור נפרד) → auto-deploy ל-Render → ק' 72/73/75 (ראיה חיה) →
+   אימות `main` → סגירת הפאזה (אישור נפרד).
 2. עדכון `docs/planning/REQUIREMENTS.md`: הפניות ראיה ל-`PHASE9.md`
    עבור `B8`/`B12`/`B28`/`B36`/`B52`; `status` כולם נשארים `planned` עד
    שהראיה החיה תתעד.
-3. `ROADMAP.html`: `planning_status → approved_for_execution`,
-   `execution_status → in_progress`, checkpoint-by-checkpoint evidence.
+3. ✅ `ROADMAP.html`: `planning_status → approved_for_execution`,
+   `execution_status → in_progress` הוגדרו; ראיה per-checkpoint מעודכנת
+   דרך checkpoint 11.
