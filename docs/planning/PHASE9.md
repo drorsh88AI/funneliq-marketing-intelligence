@@ -241,7 +241,7 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 | 8 | `simulate/budget` + `budget-tiers` | ✅ done (ק' 72 חסר — ראיה חיה); `.order("tier_order", nullsfirst=False)` מפורש נוסף בביקורת קוד, והבדיקה חוזקה מ-substring לערך המדויק `tier_order.asc.nullslast` | `b2a38a9`; 632→653 · `9b91d0c` · `e6659eb` |
 | 9 | `followup` — עימוד + קדימות | ✅ done (ק' 73 חסר — ראיה חיה); `.order("stage_order")` מפורש נוסף בביקורת קוד, והבדיקה חוזקה לערך המדויק `stage_order.asc` | `8361a05`; 653→669 · `9b91d0c` · `e6659eb` |
 | 10 | HTTP מלא + projection | ✅ done | `168100e`; 669→695 |
-| 11 | סגירה: ביקורת → PR → CI → מיזוג → auto-deploy → ראיה חיה (ק' 72–73, 75) → סגירה | ⏳ ממתין לאישור נפרד לכל תת-שלב | — |
+| 11 | סגירה: ביקורת ✅ → סריקת סודות מקומית ✅ → push ✅ → PR ✅ → CI ⏳ → מיזוג ⏳ (אישור נפרד) → auto-deploy ⏳ → ראיה חיה (ק' 72–73, 75) ⏳ → סגירה ⏳ (אישור נפרד) | 🔄 בביצוע | push+PR: [PR #24](https://github.com/drorsh88AI/funneliq-marketing-intelligence/pull/24), `feat/api`→`main`, 21 commits |
 
 ⚠ **checkpoint 0 בוצע שלא לפי הסדר, בפועל, לא רק לפי התיעוד:** `main` נקי
 ויצירת `feat/api` בוצעו נכון לפני D21 — אך שלב 0 עצמו (`93c4faa`,
