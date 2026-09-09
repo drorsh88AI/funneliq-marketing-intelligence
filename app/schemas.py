@@ -127,6 +127,37 @@ class FunnelInput(ContractModel):
 
 
 # ---------------------------------------------------------------------------
+# PHASE8A.md D20 -- EarlyFunnelInput (P4S): the same 4 columns as
+# EARLY_FUNNEL_FEATURES (app/features.py), not the 13-field FunnelInput --
+# P4S is served from campaign-level early-funnel signals only.
+# ---------------------------------------------------------------------------
+
+
+class EarlyFunnelInput(ContractModel):
+    """P4S's request body -- ad_budget/num_leads/leads_answered/followup_1
+    only, mirroring FunnelInput's shape at a smaller size."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, strict=True)
+
+    ad_budget: int = Field(ge=0)
+    num_leads: int = Field(ge=0)
+    leads_answered: int = Field(ge=0)
+    followup_1: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _check_business_rules(self) -> "EarlyFunnelInput":
+        """Same funnel-ordering rules as FunnelInput's own chain, truncated
+        to the fields P4S actually has."""
+        if self.num_leads <= 0:
+            raise ValueError("num_leads must be > 0")
+        if self.leads_answered > self.num_leads:
+            raise ValueError("leads_answered must be <= num_leads")
+        if self.followup_1 > self.leads_answered:
+            raise ValueError("followup_1 must be <= leads_answered")
+        return self
+
+
+# ---------------------------------------------------------------------------
 # D.7 -- warnings: a discriminated union, never a string array or a single
 # model with optional fields (D3).
 # ---------------------------------------------------------------------------
@@ -160,6 +191,25 @@ class UnobservedBudgetWarning(ContractModel):
 
 
 ContractWarning = Annotated[Union[OODWarning, UnobservedBudgetWarning], Field(discriminator="code")]
+
+
+class SuperCustomerOODWarning(OODWarning):
+    """PHASE8A.md D19/D12: P4S's own OOD warning, narrowed to its 4
+    input features -- a SUBCLASS of OODWarning (not a member of the
+    same ContractWarning union), so `isinstance(w, OODWarning)` keeps
+    returning True for it and _check_ood_and_evidence_invariants below
+    keeps working unchanged. Verified during planning: putting
+    OODWarning and this class in the SAME discriminated union raises
+    TypeError at class-definition time (both carry
+    code="ood_feature_out_of_range") -- ContractWarning above must
+    never be widened to include this class."""
+
+    feature: Literal["ad_budget", "num_leads", "leads_answered", "followup_1"]
+
+
+SuperCustomerContractWarning = Annotated[
+    Union[SuperCustomerOODWarning, UnobservedBudgetWarning], Field(discriminator="code")
+]
 
 
 def _has_ood_warning(warnings: list) -> bool:
@@ -328,6 +378,52 @@ class PropensityPrediction(ContractModel):
         # D.8g rule 13: propensity_band must match the IA.md §4 thresholds
         # applied to event_probability/base_rate, checked only when both
         # are populated.
+        if self.event_probability is not None and self.propensity_band is not None:
+            expected = _propensity_band(self.event_probability, self.base_rate)
+            if expected != self.propensity_band:
+                raise ValueError(
+                    f"propensity_band={self.propensity_band!r} is inconsistent with "
+                    f"event_probability={self.event_probability!r} and base_rate={self.base_rate!r} "
+                    f"(expected {expected!r})"
+                )
+        return self
+
+
+# ---------------------------------------------------------------------------
+# PHASE8A.md D20 -- SuperCustomerPrediction (P4S). Mirrors
+# PropensityPrediction's shape, with three deliberate differences: (a)
+# warnings is SuperCustomerContractWarning, not ContractWarning (D19's
+# narrowed feature enum); (b) calibration_status is narrowed to
+# Literal["calibrated"] only (D10 -- no uncalibrated fallback is ever
+# deployable for P4S); (c) target_definition/population_definition are
+# required (D14 -- one without the other would mislead about what the
+# score means).
+# ---------------------------------------------------------------------------
+
+
+class SuperCustomerPrediction(ContractModel):
+    event_probability: float | None = Field(ge=0, le=1)
+    base_rate: float = Field(ge=0, le=1)
+    propensity_band: Literal["below_base", "near_base", "above_base"] | None
+    evidence_level: Literal["low"] | None
+    in_training_domain: StrictBool
+    warnings: list[SuperCustomerContractWarning]
+    model_version: str = Field(min_length=1)
+    model_algorithm: str = Field(min_length=1)
+    calibration_status: Literal["calibrated"]
+    calibration_method: Literal["sigmoid"]
+    metrics: ClassificationMetrics
+    target_definition: Literal["referred=Yes AND upsell=1 AND ltv_months>=34"]
+    population_definition: Literal["purchased=1"]
+
+    @model_validator(mode="after")
+    def _check_invariants(self) -> "SuperCustomerPrediction":
+        _check_ood_and_evidence_invariants(
+            in_training_domain=self.in_training_domain,
+            prediction_fields=[self.event_probability, self.propensity_band],
+            warnings=self.warnings,
+            evidence_level=self.evidence_level,
+        )
         if self.event_probability is not None and self.propensity_band is not None:
             expected = _propensity_band(self.event_probability, self.base_rate)
             if expected != self.propensity_band:

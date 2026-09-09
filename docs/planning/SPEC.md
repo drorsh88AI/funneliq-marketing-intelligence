@@ -1033,7 +1033,7 @@ Feature importance גלובלי לשלושת המודלים (דרישת הברי
 Project 1/                       ← git init כאן
 ├─ .github/workflows/ci.yml
 ├─ app/
-│  ├─ main.py                    # FastAPI: routes + StaticFiles + CORS מוגבל
+│  ├─ main.py                    # FastAPI: routes + StaticFiles; same-origin, ללא CORSMiddleware
 │  ├─ auth.py                    # Depends(current_user)
 │  ├─ features.py                # רשימות פיצ'רים per-task
 │  ├─ predict.py                 # טעינה עצלה + ולידציה מול הסכמה השמורה
@@ -1141,7 +1141,17 @@ upsert בטרנזקציה: טעינה חד-פעמית של CSV סטטי בן 3,5
 לקבל את הגדרות Supabase לפני שיש לו token. תוקן.*
 
 *נדחה: rate limiting עצמי. ה-API לא נוגע בסיסמאות; supabase-js מדבר ישירות מול
-Supabase שכבר מגביל את endpoints האימות שלו. CORS מוגבל — כן.*
+Supabase שכבר מגביל את endpoints האימות שלו. המערכת פועלת ב-same-origin:
+הסטטי וה-API יוצאים מאותו origin ב-Render, ו-`supabase-js` פונה ישירות
+ל-Supabase שמנהלת CORS משלה. אין קריאה cross-origin בשליטתנו, ולכן **אין
+`CORSMiddleware`**. יש לבחון זאת מחדש רק אם יתווסף origin נפרד.*
+
+⚠ **תיקון S12 (תוכנית היישור לבריף, 09.09.2026 — אושר בביקורת Codex,
+ממתין לאישור מפורש של המשתמש):** הניסוח הקודם כאן — *"CORS מוגבל — כן."* —
+סתר במפורש את עץ הארכיטקטורה למעלה (`main.py # FastAPI: routes +
+StaticFiles + CORS מוגבל`), בעוד בפועל אין `CORSMiddleware` ב-`app/main.py`
+(הכרעת פאזה 4, D11). שני המקומות תוקנו לניסוח זהה בהחלטה ובמשמעות:
+same-origin הוא ההגבלה, ואין middleware. ר' יומן ההכרעות ב-`codex-review.md`.
 
 קריאות הדשבורד ל-Supabase נושאות את ה-JWT של המשתמש, **לא** secret key.
 

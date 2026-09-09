@@ -2006,3 +2006,214 @@ def test_build_task_artifact_raises_if_calibration_genuinely_failed(df, monkeypa
     observed = tr.observed_ad_budget_values([tr.build_task_train_frame(df, "P4")])
     with pytest.raises(RuntimeError, match="calibration failed"):
         tr.build_task_artifact("P4", df, _checkpoint15_fake_metrics(), "abc1234", "20260101", observed)
+
+
+# ---------------------------------------------------------------------------
+# Phase 8A -- P4S (PHASE8A.md). Note: this file's `df` fixture has zero
+# P4S positives by construction (referred=='Yes' and upsell==1 never
+# co-occur in it -- i%2==0 vs i%2==1 are mutually exclusive), which is
+# fine for population/missing-value checks below but would break a
+# stratified split/CV fit; those are exercised against the real CSV via
+# `python scripts/train.py --run-p4s`, not here (same convention this
+# file's own docstring states for P6/P4-sensitivity's exact split sizes).
+# ---------------------------------------------------------------------------
+
+def test_p4s_missing_value_count_catches_the_fixtures_real_missing_ltv_months(df):
+    """D16/criterion 18: task_population's own notna() filter does NOT
+    catch a missing label component for P4S (target_values silently
+    turns NaN into False rather than propagating it, R13) -- this
+    fixture's own 2 purchased rows with missing ltv_months (built for
+    P2's test above) prove p4s_missing_value_count catches it anyway."""
+    assert tr.p4s_missing_value_count(df) == 2
+
+
+def test_p4s_missing_value_count_is_zero_once_the_missing_values_are_filled(df):
+    """Not a check that's always non-zero regardless of input."""
+    clean = df.copy()
+    clean.loc[clean["ltv_months"].isna(), "ltv_months"] = 0.0
+    assert tr.p4s_missing_value_count(clean) == 0
+
+
+def test_p4s_fitted_logistic_candidate_predict_proba_is_deterministic(df):
+    """D15a/criterion 17: two predict_proba calls on the identical input
+    row must return the identical probability -- the property
+    event_probability's API-level determinism actually rests on.
+    build_fitted_candidate's train_df override (its own docstring) is
+    used to fit on a small hand-built frame with real label variation,
+    since this file's shared `df` fixture has none for P4S (see the
+    section note above) -- LogisticRegression is cheap, no search
+    involved, consistent with this file's established "never fit an
+    expensive real booster in a test" convention."""
+    custom_train_df = pd.DataFrame({
+        "ad_budget": [500, 5000, 1000, 8000, 3000, 12000],
+        "num_leads": [20, 30, 15, 40, 25, 35],
+        "leads_answered": [15, 25, 10, 35, 20, 30],
+        "followup_1": [5, 10, 4, 12, 8, 9],
+        "referred": ["Yes", "No", "Yes", "No", "No", "Yes"],
+        "upsell": [1, 1, 0, 0, 1, 0],
+        "ltv_months": [40, 10, 50, 5, 45, 3],
+    })
+    pipeline = tr.build_fitted_candidate("P4S", "logistic", results={}, df=df, train_df=custom_train_df)
+    row = custom_train_df.iloc[[0]]
+    p1 = pipeline.predict_proba(row)[:, 1]
+    p2 = pipeline.predict_proba(row)[:, 1]
+    assert p1[0] == p2[0]
+
+
+def _fake_build_p4s(task, name, results, given_df, train_df=None):
+    """P4S analogue of _fake_build_any_task: a real, cheap
+    LogisticRegression fit through the real P4S preprocessing steps.
+    Not reusable as-is for P4S: target_values() computes P4S's label
+    from referred/upsell/ltv_months rather than reading a real
+    tr.TARGET[task] column, which _fake_build_any_task assumes."""
+    steps = tr.build_preprocessing_steps("P4S", encode_budget_tier=True)
+    t_df = train_df if train_df is not None else tr.build_task_train_frame(given_df, "P4S")
+    y = tr.target_values(t_df, "P4S")
+    pipeline = tr.Pipeline(steps + [("model", tr.LogisticRegression(max_iter=1000))])
+    pipeline.fit(t_df, y)
+    return pipeline
+
+
+def _synthetic_p4s_calibration_frame(n_per_class: int = 15) -> pd.DataFrame:
+    """P4S calibration-shaped frame, balanced for CalibratedClassifierCV's
+    default cv=5 -- same rationale as _synthetic_calibration_frame, but
+    carrying referred/upsell/ltv_months (so target_values computes a
+    real 0/1 label) instead of a fake tr.TARGET[task] column."""
+    rng = np.random.default_rng(42)
+    n = n_per_class * 2
+    data = {c: rng.random(n) * 100 for c in tr.model_feature_columns("P4S")}
+    data["referred"] = (["Yes"] * n_per_class) + (["No"] * n_per_class)
+    data["upsell"] = ([1] * n_per_class) + ([0] * n_per_class)
+    data["ltv_months"] = ([40.0] * n_per_class) + ([10.0] * n_per_class)
+    return pd.DataFrame(data)
+
+
+def test_write_p4s_artifact_never_calls_a_holdout_function(df, monkeypatch, tmp_path):
+    """Checkpoint 8 only: build_p4s_artifact/write_p4s_artifact must
+    never call ANY Holdout-touching function -- same tripwire shape as
+    D22's test_build_all_artifacts_never_calls_a_holdout_function above.
+    This does NOT exercise _run_p4s() itself (checkpoints 3/5-8 wired
+    together) -- see test_run_p4s_calls_holdout_evaluate_p4s_exactly_once
+    _and_never_touches_the_other_tasks below for criteria 10/24 proper,
+    which those criteria actually require (Codex review, round 2)."""
+    # This file's shared `df` fixture has zero P4S positives BY DESIGN
+    # (module docstring) -- give 10 of its 40 purchased rows a real
+    # super-customer label so P4S's stratified train split has both
+    # classes to fit on (calibrate_task_winner refits internally on
+    # build_task_train_frame(df, "P4S"), which this test does not mock).
+    df = df.copy()
+    positive_idx = df.index[df["purchased"] == 1][:10]
+    df.loc[positive_idx, ["referred", "upsell", "ltv_months"]] = ("Yes", 1, 40.0)
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("P4S artifact build must never call a Holdout-touching function")
+
+    for name in ("holdout_evaluate_p2", "holdout_evaluate_p3_p4", "holdout_evaluate_p6",
+                 "holdout_evaluate_p4s", "p4_sensitivity_holdout_comparison", "p6_backtest"):
+        monkeypatch.setattr(tr, name, _boom)
+
+    monkeypatch.setattr(tr, "build_fitted_candidate", _fake_build_p4s)
+    monkeypatch.setattr(tr, "build_task_calibration_frame", lambda given_df, t: _synthetic_p4s_calibration_frame())
+    monkeypatch.setattr(tr, "measure_rss_and_predict_time", _fake_measure_rss)
+
+    fake_metrics = {
+        "P4S": {"stub": {"role": "candidate", "best_params": {}}},
+        "P4S_selection": {"winner": "stub"},
+        "P4S_calibration": {"calibration_status": "calibrated", "calibration_method": "sigmoid"},
+        "P4S_holdout": {"n_holdout": 555},
+    }
+    summary = tr.write_p4s_artifact(df, fake_metrics, tmp_path)
+
+    assert (tmp_path / "P4S.joblib").exists()
+    meta = tr.read_metrics_json(tmp_path / "P4S.meta.json")
+    assert meta["task"] == "P4S"
+    assert meta["target"] == "super_customer"
+    assert meta["population_n"]["holdout"] == 555  # frozen, not recomputed via split_task
+    assert meta["checksums"]["artifact_sha256"]
+    assert summary["rss_bytes"] == 123_456_789  # came from the fake, proves no real subprocess ran
+
+
+def test_run_p4s_calls_holdout_evaluate_p4s_exactly_once_and_never_touches_the_other_tasks(df, monkeypatch):
+    """PHASE8A.md criteria 10/24, proper this time (Codex review round 2,
+    finding #2; boom-trap list widened in round 3, finding #1): actually
+    calls tr._run_p4s() -- the real --run-p4s entry point wiring
+    checkpoints 3 and 5-8 together -- with the expensive/disk-touching
+    pieces mocked, and proves two things the checkpoint-8-only tripwire
+    above cannot: (a) holdout_evaluate_p4s is called EXACTLY once, not
+    zero or two times, and (b) NONE of P2/P3/P4/P6's own functions are
+    ever called -- not just the four primary trainers and five Holdout
+    functions, but every secondary/research/artifact function the old
+    pipeline exposes (round 2's list only covered "the main path", which
+    understated what "zero access to P2/P3/P4/P6" actually requires).
+    load_and_verify_csv/read_metrics_json/write_metrics_json/
+    write_p4s_artifact are mocked so this test never touches the real
+    funnel_marketing_data.csv or models/ directory."""
+    synthetic_df = df.copy()
+    # Clear the fixture's own known-missing ltv_months rows (deliberately
+    # present for the D16 tests above) -- this test needs a population
+    # p4s_missing_value_count(...) actually accepts, or _run_p4s's own
+    # fail-fast assert fires before training ever starts.
+    synthetic_df.loc[synthetic_df["ltv_months"].isna(), "ltv_months"] = 0.0
+    # Same 10-of-40-positive trick as the checkpoint-8 tripwire above.
+    positive_idx = synthetic_df.index[synthetic_df["purchased"] == 1][:10]
+    synthetic_df.loc[positive_idx, ["referred", "upsell", "ltv_months"]] = ("Yes", 1, 40.0)
+
+    monkeypatch.setattr(tr, "load_and_verify_csv", lambda path: synthetic_df)
+    monkeypatch.setattr(tr, "build_task_calibration_frame", lambda given_df, t: _synthetic_p4s_calibration_frame())
+    monkeypatch.setattr(tr, "measure_rss_and_predict_time", _fake_measure_rss)
+
+    def _fake_train_p4s(given_df):
+        # Deliberately makes catboost NOT One-SE-eligible (mean far below
+        # logistic's) so lock_winner never calls build_fitted_candidate
+        # for it -- keeps this test from needing a real CatBoost fit or
+        # fake best_params shaped like real hyperparameters.
+        return {
+            "catboost": {"role": "candidate", "mean_roc_auc": 0.5, "se_roc_auc": 0.001,
+                         "std_roc_auc": 0.002, "best_params": {}},
+            "dummy": {"role": "benchmark", "mean_roc_auc": 0.5},
+            "logistic": {"role": "baseline", "mean_roc_auc": 0.9, "se_roc_auc": 0.01, "std_roc_auc": 0.02},
+        }
+    monkeypatch.setattr(tr, "train_p4s", _fake_train_p4s)
+
+    holdout_calls = []
+
+    def _fake_holdout_evaluate_p4s(given_df, p4s_results, winner):
+        holdout_calls.append(winner)
+        return {"winner": winner, "n_holdout": 42, "roc_auc": 0.8, "pr_auc": 0.5, "brier": 0.1}
+    monkeypatch.setattr(tr, "holdout_evaluate_p4s", _fake_holdout_evaluate_p4s)
+
+    written_artifact = {}
+
+    def _fake_write_p4s_artifact(given_df, metrics, models_dir):
+        written_artifact["metrics"] = metrics
+        return {"winner": "logistic", "model_version": "P4S-logistic-fake",
+                "artifact_sha256": "a" * 64, "rss_bytes": 1, "predict_seconds": 0.001}
+    monkeypatch.setattr(tr, "write_p4s_artifact", _fake_write_p4s_artifact)
+
+    monkeypatch.setattr(tr, "read_metrics_json", lambda path: {})
+    written_metrics_json_calls = []
+    monkeypatch.setattr(tr, "write_metrics_json",
+                         lambda data, path: written_metrics_json_calls.append((data, path)))
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("--run-p4s must never call any P2/P3/P4/P6 training/Holdout/artifact function")
+    # The four primary trainers + every Holdout function (from round 2),
+    # PLUS the old pipeline's secondary/research/artifact functions
+    # (Codex review round 3): a call-count guarantee that only names the
+    # four primaries isn't "zero access to the whole P2/P3/P4/P6 path" --
+    # it just doesn't happen to catch a stray call to one of these.
+    for name in ("train_p2", "train_p3", "train_p4", "train_p6",
+                 "train_p3_weighted_comparison", "train_p3_brief_rule", "train_p3_operational_rule",
+                 "train_p6_guardrail", "train_p2_conformal", "p6_bootstrap_simulation",
+                 "train_p6_log1p_smearing", "train_p4_early_funnel", "train_p4_population_sensitivity",
+                 "p6_duplicate_sensitivity", "build_all_artifacts", "_run_checkpoint_15",
+                 "holdout_evaluate_p2", "holdout_evaluate_p3_p4", "holdout_evaluate_p6",
+                 "p4_sensitivity_holdout_comparison", "p6_backtest"):
+        monkeypatch.setattr(tr, name, _boom)
+
+    tr._run_p4s()
+
+    assert holdout_calls == ["logistic"]  # exactly one call, with the real locked winner
+    assert written_metrics_json_calls  # metrics.json's write path was actually exercised
+    assert written_metrics_json_calls[0][0]["P4S_holdout"]["n_holdout"] == 42  # the fake holdout's own output, wired through
+    assert written_artifact["metrics"]["P4S_selection"]["winner"] == "logistic"

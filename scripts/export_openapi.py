@@ -27,15 +27,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fastapi import Depends, FastAPI  # noqa: E402
 from fastapi.security import HTTPBearer  # noqa: E402
 
+from app.api_contract import ERROR_RESPONSES, ERROR_RESPONSES_NO_422  # noqa: E402
 from app.schemas import (  # noqa: E402
     BudgetSimulation,
     BudgetTiersResponse,
-    ErrorDetail,
+    EarlyFunnelInput,
     FollowupResponse,
     FunnelInput,
-    HTTPValidationError,
     LtvPrediction,
     PropensityPrediction,
+    SuperCustomerPrediction,
 )
 
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "api" / "openapi.json"
@@ -48,25 +49,10 @@ OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "api" / "openapi
 # hand-written 401, not FastAPI's automatic one.
 bearer = HTTPBearer(scheme_name="BearerAuth", auto_error=False)
 
-# D11: 401/403/500/503 on every route; 422 only where there is a request
-# body to violate (the three POST routes) -- verified empirically that
-# FastAPI does not add a 422 response to a route with no body/params.
-ERROR_RESPONSES_NO_422: dict = {
-    401: {"model": ErrorDetail},
-    403: {"model": ErrorDetail},
-    500: {"model": ErrorDetail},
-    503: {"model": ErrorDetail},
-}
-ERROR_RESPONSES: dict = {
-    **ERROR_RESPONSES_NO_422,
-    # Explicitly overriding 422 with our own model replaces FastAPI's
-    # default RequestValidationError schema (which also carries ctx/input
-    # and varies across versions) with the narrow FunnelIQ shape locked
-    # in app.schemas.HTTPValidationError -- verified this is what
-    # actually keeps the auto-generated ctx/input schema out of
-    # components.schemas entirely.
-    422: {"model": HTTPValidationError},
-}
+# ERROR_RESPONSES/ERROR_RESPONSES_NO_422 moved to app/api_contract.py in
+# phase 8A (PHASE8A.md D20) -- single source, now shared with the 7th
+# route below and, later, phase 9's real routers. Re-exported under these
+# same names (imported above) so nothing else in this file changes.
 
 
 def build_app() -> FastAPI:
@@ -121,6 +107,17 @@ def build_app() -> FastAPI:
         responses=ERROR_RESPONSES_NO_422,
     )
     def insights_budget_tiers(): ...  # contract-only, never called
+
+    # Phase 8A (PHASE8A.md D20): additive 7th route -- P4S's own request/
+    # response pair, same ERROR_RESPONSES (has a body, so needs 422 too)
+    # as the three existing POST routes.
+    @app.post(
+        "/api/predict/super-customer",
+        response_model=SuperCustomerPrediction,
+        dependencies=[Depends(bearer)],
+        responses=ERROR_RESPONSES,
+    )
+    def predict_super_customer(body: EarlyFunnelInput): ...  # contract-only, never called
 
     return app
 
