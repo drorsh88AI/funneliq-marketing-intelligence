@@ -5,13 +5,13 @@
 נבדק בהרצה בסביבת הפרויקט לפני שנכתב — אין הכרעה כאן שמבוססת על הנחה בלתי
 מאומתת. **✅ המשתמש אישר במפורש את התכנון והורה על ביצוע (09.09.2026)** ⇒
 `planning_status: approved_for_execution`. **checkpoints 1–8 בוצעו ואומתו
-בפועל, כולל תיקון provenance (09.09.2026, ר' checkpoint 8 למטה — commit
-`18bdf4e` לקוד/בדיקות/חוזה/תיעוד, ואז `--run-p4s` נקי מאותו HEAD בדיוק);
-checkpoint 11 ממתין לפתיחת PR, CI, ביקורת Codex סופית, ואישורי מיזוג/סגירה
-נפרדים** — `execution_status: awaiting_approval` — ענף `feat/super-customer`
-מכיל commit אחד (`18bdf4e`, קוד+בדיקות+חוזה+תיעוד בלבד) ואת ארטיפקטי P4S
-כשינויים לא-מקומיטים, לביקורת לפני commit נפרד; **אין push, PR או merge**
-עד הוראה נפרדת ומפורשת נוספת של המשתמש. ⚠ **אין לטעון שכל 11 ה-checkpoints
+בפועל, כולל תיקון provenance (09.09.2026, ר' checkpoint 8 למטה)** —
+`execution_status: awaiting_approval` — ענף `feat/super-customer`:
+**המימוש מקומט ב-`18bdf4e`; הארטיפקטים והראיות מקומטים ב-`93612c1`.**
+checkpoint 11 פתוח וממתין ל-push, פתיחת PR, CI, ביקורת סופית ואישורי מיזוג
+וסגירה נפרדים; **אין push, PR או merge** עד הוראה נפרדת ומפורשת נוספת של
+המשתמש.
+⚠ **אין לטעון שכל 11 ה-checkpoints
 הושלמו** — checkpoint 11 עצמו פתוח.
 
 ---
@@ -327,7 +327,7 @@ python scripts/train.py --run-p4s
 | 8 | ארטיפקטים, metadata, checksum | ✅ **provenance תוקן ואומת 09.09.2026**: commit `18bdf4e` (קוד+בדיקות+חוזה+תיעוד בלבד, ללא תוצרי אימון) → `git status --short` ריק אומת → `python scripts/train.py --run-p4s` הורץ מחדש מ-`18bdf4e` הנקי → `models/P4S.meta.json.model_version = "P4S-logistic-20260909-18bdf4e"` — ה-SHA המוטבע **תואם בדיוק** ל-HEAD בזמן הבנייה. תוצאות זהות ביט-לביט לריצה הזמנית הקודמת (דטרמיניזם מאומת: ROC-AUC=0.8187050230926212, PR-AUC=0.37789662094554244, Brier=0.11263749662023682, sha256 של ה-`.joblib`=`27b39407…` זהה). `pytest -q`: 448/448. אפס רגרסיה ב-P2/P3/P4/P6 (checksums זהים, אפס מפתחות `metrics.json` ישנים השתנו, רק 4 מפתחות `P4S*` נוספו). |
 | 9 | `app/schemas.py`: `EarlyFunnelInput`, `SuperCustomerPrediction`, `SuperCustomerOODWarning` | ✅ בוצע 09.09.2026 — `tests/test_schemas_p4s.py` (8 בדיקות): `isinstance(w, OODWarning)`, דחיית feature זר, `TypeError` על union מעורב, כללי עסק, דחיית `calibration_status="uncalibrated"` |
 | 10 | ייצוא `docs/api/openapi.json` מחדש עם שבעה נתיבים | ✅ בוצע 09.09.2026 — `app/api_contract.py` נוצר; `tests/test_api_contract_p4s.py` (5 בדיקות, מול fixture קפוא של הקובץ הישן): ששת הנתיבים/`securitySchemes`/כל סכמת רכיב ישנה — זהים בתים; **ממצא חדש**: `tests/test_api_contract.py`'s `test_group2_exactly_six_business_routes_with_locked_methods` הניח בדיוק 6 נתיבים — עודכן להכיר בנתיב השביעי האדיטיבי (ר' דוח הביקורת) |
-| 11 | סגירה | ⏸ **נעצר לפני PR/מיזוג לפי ההוראה המפורשת** — `pytest -q`: 448/448 עברו (430 שהיו + 18 חדשות: 8 ב-`test_schemas_p4s.py`, 5 ב-`test_api_contract_p4s.py`, 5 ב-`test_train.py`); אפס רגרסיה ב-P2/P3/P4/P6 (SHA-256 של כל ארבעת ה-`*.joblib`/`*.meta.json` + `P6_simulation.json`/`run_metadata.json` זהים בתים; מפתחות `metrics.json` הישנים ללא שינוי, רק 4 מפתחות `P4S*` נוספו); `git diff --check` נקי (מלבד אזהרת LF/CRLF שגרתית); ⛔ אין commit, branch push, PR או merge — ממתין לביקורת Codex ואישור המשתמש הנפרד |
+| 11 | סגירה | ⏸ **פתוח — נעצר לפני push/PR/מיזוג לפי ההוראה המפורשת**. **המימוש מקומט ב-`18bdf4e`; הארטיפקטים והראיות מקומטים ב-`93612c1`.** `pytest -q`: 448/448 עברו (430 שהיו + 18 חדשות: 8 ב-`test_schemas_p4s.py`, 5 ב-`test_api_contract_p4s.py`, 5 ב-`test_train.py`); אפס רגרסיה ב-P2/P3/P4/P6 (SHA-256 של כל ארבעת ה-`*.joblib`/`*.meta.json` + `P6_simulation.json`/`run_metadata.json` זהים בתים; מפתחות `metrics.json` הישנים ללא שינוי, רק 4 מפתחות `P4S*` נוספו); `git diff --check` נקי (מלבד אזהרת LF/CRLF שגרתית). ⛔ **נותר**: push לענף מרוחק, פתיחת PR, CI, ביקורת Codex סופית, ⚠ אישור מיזוג נפרד, אימות `main`, ⚠ אישור סגירת פאזה נפרד נוסף — כל אחד ממתין להוראה מפורשת משלו |
 
 ⚠ `ROADMAP.html` מתעדכן **מיד אחרי כל checkpoint שבוצע ואומת**, לא רק
 בסיום. פעולה ידנית מסומנת `done` רק לאחר אישור המשתמש.
