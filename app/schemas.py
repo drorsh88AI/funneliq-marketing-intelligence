@@ -316,6 +316,11 @@ class _HoldoutClassification(ContractModel):
     log_loss: float = Field(ge=0)
 
 
+# Used by P3, P4, and P4S (PHASE8A.md D20) -- NOT stated in the class's
+# own docstring below: a Pydantic model's docstring is serialized
+# verbatim into docs/api/openapi.json's components.schemas description
+# field (D8's locked contract, never changed post-hoc), so this note
+# lives as a source comment instead of inside the docstring text.
 class ClassificationMetrics(ContractModel):
     """P3 and P4. log_loss is bounded below by 0 and deliberately not
     bounded above."""

@@ -5,6 +5,7 @@ criteria 27-43, 45.
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -405,6 +406,156 @@ def test_simulation_entry_level_n_non_positive_is_fail_fast():
     sim = _real_simulation()
     sim["10x5000"]["levels"]["5000"]["n"] = 0
     with pytest.raises(art.ArtifactStartupError, match="levels"):
+        art._validate_simulation(sim)
+
+
+# ---------------------------------------------------------------------------
+# D17 completeness, round 3: value CONTRACTS, not just presence/type --
+# finiteness (NaN/inf) and the same ranges app/schemas.py's Field(ge=...,
+# le=...) already locks. A value that is "a number" but out of range, or
+# NaN/inf, previously passed startup and would only surface as a
+# ResponseValidationError -> 500 on the first request that read it.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_alpha_non_finite_is_fail_fast(bad):
+    meta = _real_meta("P2")
+    meta["alpha"] = bad
+    with pytest.raises(art.ArtifactStartupError, match="alpha"):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_ood_bound_non_finite_is_fail_fast(bad):
+    meta = _real_meta("P2")
+    meta["ood_bounds"]["ad_budget"]["max"] = bad
+    with pytest.raises(art.ArtifactStartupError, match="ood_bounds"):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_observed_ad_budget_values_non_finite_entry_is_fail_fast(bad):
+    meta = _real_meta("P2")
+    meta["observed_ad_budget_values"] = [bad]
+    with pytest.raises(art.ArtifactStartupError, match="observed_ad_budget_values"):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
+def test_metrics_cv_value_out_of_range_is_fail_fast():
+    """mean_roc_auc=2 is a real float (passes a bare type check) but
+    violates ClassificationMetrics' Field(ge=0, le=1) in app/schemas.py."""
+    meta = _real_meta("P3")
+    metrics = _real_metrics()
+    metrics["P3"]["xgboost"]["mean_roc_auc"] = 2.0
+    with pytest.raises(art.ArtifactStartupError, match="mean_roc_auc"):
+        art._validate_meta("P3", meta, metrics)
+
+
+def test_metrics_cv_negative_mae_is_fail_fast():
+    meta = _real_meta("P2")
+    metrics = _real_metrics()
+    metrics["P2"]["catboost"]["mean_mae"] = -1.0
+    with pytest.raises(art.ArtifactStartupError, match="mean_mae"):
+        art._validate_meta("P2", meta, metrics)
+
+
+def test_metrics_cv_nan_is_fail_fast():
+    meta = _real_meta("P2")
+    metrics = _real_metrics()
+    metrics["P2"]["catboost"]["mean_r2"] = float("nan")
+    with pytest.raises(art.ArtifactStartupError, match="mean_r2"):
+        art._validate_meta("P2", meta, metrics)
+
+
+def test_metrics_holdout_value_out_of_range_is_fail_fast():
+    metrics = _real_metrics()
+    metrics["P3_holdout"]["brier"] = 1.5
+    with pytest.raises(art.ArtifactStartupError, match="brier"):
+        art._validate_metrics(metrics)
+
+
+def test_p2_holdout_conformal_coverage_out_of_range_is_fail_fast():
+    metrics = _real_metrics()
+    metrics["P2_holdout"]["conformal_coverage"] = 1.5
+    with pytest.raises(art.ArtifactStartupError, match="conformal_coverage"):
+        art._validate_metrics(metrics)
+
+
+def test_p2_interval_method_wrong_value_is_fail_fast():
+    """app/schemas.py's LtvPrediction.interval_method is
+    Literal["split_conformal"]."""
+    meta = _real_meta("P2")
+    meta["interval_method"] = "bootstrap_percentile"
+    with pytest.raises(art.ArtifactStartupError, match="interval_method"):
+        art._validate_meta("P2", meta, _real_metrics())
+
+
+@pytest.mark.parametrize("task", ["P3", "P4", "P4S"])
+def test_calibration_method_wrong_value_is_fail_fast(task):
+    """app/schemas.py locks calibration_method to Literal["sigmoid"] on
+    both PropensityPrediction and SuperCustomerPrediction."""
+    meta = _real_meta(task)
+    meta["calibration_method"] = "platt"
+    with pytest.raises(art.ArtifactStartupError, match="calibration_method"):
+        art._validate_meta(task, meta, _real_metrics())
+
+
+@pytest.mark.parametrize("task", ["P3", "P4"])
+def test_p3_p4_calibration_status_allows_uncalibrated(task):
+    """Unlike P4S, P3/P4 legitimately allow "uncalibrated" (no calibrated
+    fallback deployed yet) -- must NOT be rejected."""
+    meta = _real_meta(task)
+    meta["calibration_status"] = "uncalibrated"
+    art._validate_meta(task, meta, _real_metrics())  # must not raise
+
+
+def test_p4s_calibration_status_uncalibrated_is_fail_fast():
+    """D10: no uncalibrated fallback is ever deployable for P4S -- unlike
+    P3/P4, "uncalibrated" is not a valid value here."""
+    meta = _real_meta("P4S")
+    meta["calibration_status"] = "uncalibrated"
+    with pytest.raises(art.ArtifactStartupError, match="calibration_status"):
+        art._validate_meta("P4S", meta, _real_metrics())
+
+
+@pytest.mark.parametrize("task", ["P3", "P4", "P4S"])
+def test_calibration_status_unrecognized_value_is_fail_fast(task):
+    meta = _real_meta(task)
+    meta["calibration_status"] = "anything"
+    with pytest.raises(art.ArtifactStartupError, match="calibration_status"):
+        art._validate_meta(task, meta, _real_metrics())
+
+
+def test_strategy_ranking_non_string_element_is_fail_fast():
+    """Guards set(ranked) itself: an unhashable element (e.g. a dict)
+    would otherwise raise a bare TypeError instead of a clean
+    ArtifactStartupError with context."""
+    metrics = _real_metrics()
+    metrics["P6_strategy_ranking"]["ranked"] = [{"not": "a string"}, "25x2000", "10x5000", "100x500"]
+    with pytest.raises(art.ArtifactStartupError, match="ranked"):
+        art._validate_metrics(metrics)
+
+
+@pytest.mark.parametrize("field", ["point", "lower", "upper"])
+def test_simulation_entry_non_finite_field_is_fail_fast(field):
+    sim = _real_simulation()
+    sim["10x5000"][field] = float("nan")
+    with pytest.raises(art.ArtifactStartupError, match="10x5000"):
+        art._validate_simulation(sim)
+
+
+def test_simulation_entry_negative_point_is_fail_fast():
+    sim = _real_simulation()
+    sim["10x5000"]["point"] = -1.0
+    with pytest.raises(art.ArtifactStartupError, match="10x5000"):
+        art._validate_simulation(sim)
+
+
+def test_simulation_entry_lower_greater_than_upper_is_fail_fast():
+    sim = _real_simulation()
+    sim["10x5000"]["lower"] = sim["10x5000"]["upper"] + 1.0
+    with pytest.raises(art.ArtifactStartupError, match="lower"):
         art._validate_simulation(sim)
 
 

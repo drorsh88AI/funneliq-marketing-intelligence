@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import threading
 from pathlib import Path
 from typing import Any
@@ -73,24 +74,56 @@ _CLASSIFIER_META_KEYS = {"base_rate", "calibration_status", "calibration_method"
 # P6_simulation[sid]["levels"][str(ad_budget)]["n"]. None of these were
 # schema-checked before; a bad one surfaced as a bare KeyError/TypeError
 # on the first request that needed it, not fail-fast at boot.
-_REGRESSION_CV_KEYS = {"mean_mae", "mean_rmse", "mean_r2"}
-_REGRESSION_HOLDOUT_KEYS = {"mae", "rmse", "r2"}
-_CLASSIFIER_CV_KEYS = {"mean_roc_auc", "mean_pr_auc", "mean_brier", "mean_log_loss"}
-_CLASSIFIER_HOLDOUT_KEYS = {"roc_auc", "pr_auc", "brier", "log_loss"}
+#
+# D17 completeness, round 3: presence/type isn't the full value contract
+# app/schemas.py already locks -- ClassificationMetrics/RegressionMetrics
+# bound these same fields with Field(ge=..., le=...). A value that
+# satisfies "is a number" but violates that bound (mean_roc_auc=2, a
+# negative MAE, NaN) previously passed startup and would only fail as a
+# ResponseValidationError -> 500 on the first request touching it, not
+# fail-fast at boot. Bounds below mirror app/schemas.py's Field(...)
+# constraints exactly -- (lo, hi), either side None if schemas.py leaves
+# it open (e.g. mean_r2/r2 are bounded above by 1 but deliberately not
+# below, per RegressionMetrics' own docstring).
+_REGRESSION_CV_BOUNDS = {"mean_mae": (0, None), "mean_rmse": (0, None), "mean_r2": (None, 1)}
+_REGRESSION_HOLDOUT_BOUNDS = {"mae": (0, None), "rmse": (0, None), "r2": (None, 1)}
+_CLASSIFIER_CV_BOUNDS = {
+    "mean_roc_auc": (0, 1), "mean_pr_auc": (0, 1), "mean_brier": (0, 1), "mean_log_loss": (0, None),
+}
+_CLASSIFIER_HOLDOUT_BOUNDS = {
+    "roc_auc": (0, 1), "pr_auc": (0, 1), "brier": (0, 1), "log_loss": (0, None),
+}
 
 
 def _is_number(value: Any) -> bool:
-    """int/float, excluding bool (bool is an int subclass in Python)."""
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    """int/float, excluding bool (bool is an int subclass in Python) and
+    excluding NaN/+-inf: json.loads accepts the non-standard NaN/Infinity/
+    -Infinity tokens by default, producing a real float that IS an
+    instance of float but satisfies no Field(ge=.../le=...) bound in
+    either direction -- every value this guards feeds straight into one
+    such bound in app/schemas.py."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(value)
 
 
-def _require_numeric_subkeys(container: Any, keys: set, path: Path, label: str) -> None:
+def _require_numeric_subkeys(container: Any, bounds: dict, path: Path, label: str) -> None:
+    """bounds: {key: (lo, hi)}, either side None for an open bound. Checks
+    presence, finiteness, and the same range app/schemas.py's Field(...)
+    already locks for this value -- fail-fast here beats a
+    ResponseValidationError -> 500 on the first request that reads it."""
+    keys = set(bounds)
     if not isinstance(container, dict) or not keys <= container.keys():
         missing = keys - set(container if isinstance(container, dict) else {})
         raise ArtifactStartupError(f"{path}: {label} missing required key(s): {sorted(missing)}")
-    bad = {k for k in keys if not _is_number(container[k])}
-    if bad:
-        raise ArtifactStartupError(f"{path}: {label} has non-numeric value(s) for: {sorted(bad)}")
+    for key, (lo, hi) in bounds.items():
+        value = container[key]
+        if not _is_number(value):
+            raise ArtifactStartupError(f"{path}: {label}.{key} must be a finite number, got {value!r}")
+        if lo is not None and value < lo:
+            raise ArtifactStartupError(f"{path}: {label}.{key}={value!r} must be >= {lo}")
+        if hi is not None and value > hi:
+            raise ArtifactStartupError(f"{path}: {label}.{key}={value!r} must be <= {hi}")
 
 
 class ArtifactStartupError(RuntimeError):
@@ -154,14 +187,32 @@ def _validate_meta(task: str, meta: Any, metrics: dict) -> None:
         quantile = meta["conformal_quantile"]
         if not _is_number(quantile) or quantile < 0:
             raise ArtifactStartupError(f"{path}: conformal_quantile must be a non-negative number")
+        # app/schemas.py's LtvPrediction.interval_method is Literal["split_conformal"]
+        # -- a meta.json disagreeing here would only surface as a
+        # ResponseValidationError -> 500 on the first /api/predict/ltv call.
+        if meta["interval_method"] != "split_conformal":
+            raise ArtifactStartupError(
+                f"{path}: interval_method must be 'split_conformal', got {meta['interval_method']!r}"
+            )
     elif task in CLASSIFIER_TASKS:
         base_rate = meta["base_rate"]
         if not _is_number(base_rate) or not (0 <= base_rate <= 1):
             raise ArtifactStartupError(f"{path}: base_rate must be a number in [0, 1]")
-        for key in ("calibration_status", "calibration_method"):
-            value = meta[key]
-            if not isinstance(value, str) or not value:
-                raise ArtifactStartupError(f"{path}: {key} must be a non-empty string")
+        # app/schemas.py locks calibration_method to Literal["sigmoid"] on
+        # both PropensityPrediction and SuperCustomerPrediction, and
+        # calibration_status to Literal["calibrated", "uncalibrated"] for
+        # P3/P4 but Literal["calibrated"] ONLY for P4S (D10 -- no
+        # uncalibrated fallback is ever deployable for P4S).
+        if meta["calibration_method"] != "sigmoid":
+            raise ArtifactStartupError(
+                f"{path}: calibration_method must be 'sigmoid', got {meta['calibration_method']!r}"
+            )
+        allowed_status = {"calibrated"} if task == "P4S" else {"calibrated", "uncalibrated"}
+        if meta["calibration_status"] not in allowed_status:
+            raise ArtifactStartupError(
+                f"{path}: calibration_status must be one of {sorted(allowed_status)}, "
+                f"got {meta['calibration_status']!r}"
+            )
 
     feature_columns = meta["feature_columns"]
     if feature_columns != MODEL_INPUT_FEATURES[task]:
@@ -202,8 +253,8 @@ def _validate_meta(task: str, meta: Any, metrics: dict) -> None:
     # app/predict.py's _regression_metrics/_classification_metrics read
     # metrics[task][algo]'s CV fields directly, keyed by the SAME algo this
     # just validated -- can only be checked here, after algo is known.
-    cv_keys = _CLASSIFIER_CV_KEYS if task in CLASSIFIER_TASKS else _REGRESSION_CV_KEYS
-    _require_numeric_subkeys(metrics[task][algo], cv_keys, path, f"metrics[{task!r}][{algo!r}]")
+    cv_bounds = _CLASSIFIER_CV_BOUNDS if task in CLASSIFIER_TASKS else _REGRESSION_CV_BOUNDS
+    _require_numeric_subkeys(metrics[task][algo], cv_bounds, path, f"metrics[{task!r}][{algo!r}]")
 
 
 def _validate_metrics(metrics: Any) -> None:
@@ -218,11 +269,12 @@ def _validate_metrics(metrics: Any) -> None:
         # these holdout fields directly -- doesn't depend on `algo`
         # (the winning model is already baked into *_holdout), unlike the
         # per-algo CV check in _validate_meta below.
-        holdout_keys = _CLASSIFIER_HOLDOUT_KEYS if task in CLASSIFIER_TASKS else _REGRESSION_HOLDOUT_KEYS
-        _require_numeric_subkeys(metrics[f"{task}_holdout"], holdout_keys, _METRICS_PATH, f"{task}_holdout")
+        holdout_bounds = _CLASSIFIER_HOLDOUT_BOUNDS if task in CLASSIFIER_TASKS else _REGRESSION_HOLDOUT_BOUNDS
+        _require_numeric_subkeys(metrics[f"{task}_holdout"], holdout_bounds, _METRICS_PATH, f"{task}_holdout")
     # P2's LtvPrediction.interval_details also reads conformal_coverage
-    # off P2_holdout specifically (app/predict.py predict_ltv).
-    _require_numeric_subkeys(metrics["P2_holdout"], {"conformal_coverage"}, _METRICS_PATH, "P2_holdout")
+    # off P2_holdout specifically (app/predict.py predict_ltv) -- bounded
+    # [0, 1] same as IntervalDetails.measured_coverage in app/schemas.py.
+    _require_numeric_subkeys(metrics["P2_holdout"], {"conformal_coverage": (0, 1)}, _METRICS_PATH, "P2_holdout")
 
     if "P6_strategy_ranking" not in metrics:
         raise ArtifactStartupError(f"{_METRICS_PATH}: missing required key: 'P6_strategy_ranking'")
@@ -236,8 +288,13 @@ def _validate_metrics(metrics: Any) -> None:
     # or carrying a duplicate/unknown id, raises ValueError at request
     # time (an id absent from `ranked`) or silently mis-ranks (a dup).
     ranked = ranking["ranked"]
+    # Guard the shape BEFORE set(ranked): a list containing an unhashable
+    # element (a dict/list entry) would otherwise raise a bare, uncaught
+    # TypeError instead of a clean ArtifactStartupError with context.
+    if not isinstance(ranked, list) or not all(isinstance(x, str) for x in ranked):
+        raise ArtifactStartupError(f"{_METRICS_PATH}: P6_strategy_ranking.ranked must be a list of strings")
     expected_ids = set(STRATEGY_ALLOCATIONS)
-    if not isinstance(ranked, list) or set(ranked) != expected_ids or len(ranked) != len(expected_ids):
+    if set(ranked) != expected_ids or len(ranked) != len(expected_ids):
         raise ArtifactStartupError(
             f"{_METRICS_PATH}: P6_strategy_ranking.ranked must be exactly "
             f"{sorted(expected_ids)}, no duplicates and no gaps -- got {ranked!r}"
@@ -263,7 +320,12 @@ def _validate_simulation(simulation: Any) -> None:
         # n_bootstrap_used straight into StrategyResult fields, and
         # levels[str(ad_budget)]["n"] for every allocation -- validate the
         # exact shape it consumes, not just that the top-level keys exist.
-        _require_numeric_subkeys(entry, {"point", "lower", "upper"}, _SIMULATION_PATH, f"{strategy_id!r}")
+        # Bounds mirror StrategyResult.point_estimate/lower_bound/
+        # upper_bound (Field(ge=0)) in app/schemas.py.
+        point_bounds = {"point": (0, None), "lower": (0, None), "upper": (0, None)}
+        _require_numeric_subkeys(entry, point_bounds, _SIMULATION_PATH, f"{strategy_id!r}")
+        if entry["lower"] > entry["upper"]:
+            raise ArtifactStartupError(f"{_SIMULATION_PATH}: {strategy_id!r}.lower must be <= upper")
         n_bootstrap = entry["n_bootstrap_used"]
         if not isinstance(n_bootstrap, int) or isinstance(n_bootstrap, bool) or n_bootstrap <= 0:
             raise ArtifactStartupError(f"{_SIMULATION_PATH}: {strategy_id!r}.n_bootstrap_used must be a positive int")
