@@ -746,8 +746,8 @@ radius ופורמט מספרים · טווחי אי-ודאות ב-whisker עם �
 | # | תוכן | precondition | ראיה |
 |---|---|---|---|
 | **0** ⚠ *שער פתיחה, לא תת-משימת ביצוע* — ✅ **`done`** | תכנון מאושר; ענף `feat/design` מ-`main` נקי | אישור מפורש של המשתמש + הוראת ביצוע | PR #25 (מסמכי התכנון) מוזג ל-`main` — `merge commit ef289f5`, CI ירוק; `git merge-base feat/design main` = `ef289f5` (בסיס זהה, מאומת); הראיה מתועדת בקומיט checkpoint 0 שבראש `feat/design` |
-| 1 | `docs/DESIGN.md` — מלאי רכיבים, מצבים ומיפוי מסכים | 0 | הקובץ נוצר; כל מצב ב-`IA.md` §9 מופיע |
-| 2 | מיפוי מלא של שדות החוזה החיים לרכיבים (F2) | 1 | טבלה מול `app/schemas.py`; לכל שדה מיקום או נימוק |
+| **1** ✅ **`done`** | `docs/DESIGN.md` — מלאי רכיבים, מצבים ומיפוי מסכים | 0 | הקובץ נוצר (259 שורות, 29 רכיבים בעלי שם — נספר מכנית). כל מצב ב-`IA.md` §9 מופיע; 0 שורות טבלה יתומות; `git diff --check` נקי. תוקן אחרי ביקורת Codex: `calibration-badge` כולל P4S (נעול `calibrated`) · ולידציית P4S = 4 כללים · נוספה קבוצת Login/מעטפת-מחוברת/ניווט/sign-out (D4, `B10`/`B56`) · `panel-error` הורחב לשגיאה ברמת מסך או פאנל · הפניות `business-context-card`/`propensity-band-badge` תוקנו ל-`IA.md` §3א.6/§4 |
+| **2** ✅ **`done`** | מיפוי מלא של שדות החוזה החיים לרכיבים (F2) | 1 | טבלה מול `app/schemas.py` — נבנתה מחדש מהקוד עצמו, לא הועתקה מ-`IA.md` §8; אימות עצמאי בסקריפט שהשווה כל שם שדה בארבע הסכמות (`LtvPrediction`, `PropensityPrediction`, `SuperCustomerPrediction`, `BudgetSimulation`+`StrategyResult`+`BudgetAllocation`) מול `docs/DESIGN.md`. חשף פער אמיתי — ל-`base_rate` לא היה רכיב כלל; נוסף `base-rate-line` (29→30 רכיבים) |
 | 3 | `app/static/tokens.css` — הערכים | 2 | הקובץ נוצר; פורמט קנוני אחד |
 | 4 | `tests/test_design_tokens.py` — תשע הבדיקות של D3א | 3 | הרצה ירוקה; כשל מכוון מאמת שהבדיקה תופסת |
 | 5 | פריסות desktop/mobile ו-Dataviz במפרט | 3 | הסעיפים כתובים בפועל ב-`DESIGN.md` |

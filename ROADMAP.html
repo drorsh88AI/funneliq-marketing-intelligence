@@ -810,6 +810,8 @@
    {t:"...", s:"in_progress", u:"YYYY-MM-DD HH:mm", e:"ראיה קצרה"}.
    כל checkpoint שבוצע ואומת מחייב עדכון מיידי כאן. פעולה ידנית מתעדכנת רק
    לאחר אישור המשתמש. אין להסיק השלמה מעצם קיום commit או קובץ.
+   counts:false — פריט מוצג ברשימה (למשל שער פתיחה) אך מוחרג מהמונה
+   ומהאחוז ב-execTally; ברירת המחדל היא נספר.
    ===================================================================== */
 const PHASES = [
   { num:0, name:"צ'קליסט אימות", branch:"—", execution_status:"done", planning_status:"approved_for_execution",
@@ -1008,8 +1010,9 @@ const PHASES = [
     note:"**checkpoints 1–10 בוצעו ואומתו על ענף feat/api (09–10.09.2026), 448→695 בדיקות ירוקות, ⛔ main לא נגע בו.** תכנון מלא ב-docs/planning/PHASE9.md (D1–D21, 78 קריטריוני קבלה, שבעה סבבי ביקורת Codex) אושר לביצוע 09.09.2026, כולל תיקון חוסם ל-SPEC.md (D20 -- 13 מקומות שיישרו את מקור האמת לתכן להרחבת 8A, בעיקר מיפוי שאלה 3 של המייסדת ל-P4S/super-customer במקום P4/referral). ⚠ **פער תיעוד שתוקן ב-10.09.2026**: checkpoints 1–10 בוצעו לפני ש-'שלב 0' של התכנון עצמו (docs/planning/PHASE9.md, תיקון SPEC.md, עדכון ROADMAP/REQUIREMENTS) בוצע -- בניגוד למדיניות העדכון השוטף של CLAUDE.md. נתפס כשהמשתמש שאל למה ה-ROADMAP לא זז; תוקן רטרואקטיבית באותו ענף לפני המשך. **checkpoint 11 הושלם במלואו**: ביקורת קוד (שלושה סבבים), סריקת סודות מקומית, push, PR #24, CI ירוק (אחרי תיקון c5b1ebe), מיזוג ל-main (merge commit b176eab), auto-deploy מאומת (health=200, openapi חי), וק' 72/73/75 (ראיה חיה מול Render עם demo-northbound/demo-noorg אמיתיים, 10.09.2026 -- כל הבדיקות החיות המתועדות תאמו), כל אחד באישור נפרד. B8/B12/B28/B36/B52 עודכנו ל-done ב-REQUIREMENTS.md עם הראיה. אימות main בוצע על 5beac02 (main==origin/main, worktree נקי, 771/771, CI 34421247013 ירוק). **פאזה 9 נסגרה 10.09.2026** -- המשתמש נתן הוראה נפרדת ומפורשת לסגירה, אחרי שביקורת Codex אישרה את תיקוני התיעוד ללא ממצא נוסף. execution_status: in_progress -> done; planning_status ללא שינוי (approved_for_execution). פאזה 10 לא נפתחה."},
   { num:10, name:"עיצוב חזותי", branch:"feat/design", execution_status:"in_progress", planning_status:"approved_for_execution",
     items:[
-      {t:"checkpoint 1 — docs/DESIGN.md: מלאי רכיבים, מצבים ומיפוי מסכים", s:"not_started"},
-      {t:"checkpoint 2 — מיפוי מלא של שדות החוזה החיים לרכיבים (F2)", s:"not_started"},
+      {t:"checkpoint 0 — שער פתיחה: התכנון אושר, PR #25 מוזג ו-feat/design נפתח מ-main (אינו נספר בתתי-המשימות)", s:"done", u:"2026-09-10", e:"PR #25 מוזג ל-main בקומיט ef289f5, CI ירוק", counts:false},
+      {t:"checkpoint 1 — docs/DESIGN.md: מלאי רכיבים, מצבים ומיפוי מסכים", s:"done", u:"2026-09-10", e:"docs/DESIGN.md נוצר (259 שורות): 29 רכיבים בעלי שם (נספר מכנית), מלאי מצבים מלא לכל אחד משישה המסכים ומיפוי טיירי-P4S/OOD/401-403/מוני-דור, פלטה סמנטית עם כלל D10 (תחזית אינה positive/negative), מלאי Dataviz. אומת מכנית -- כל מונח מ-IA.md §9 נמצא בקובץ; 0 שורות טבלה יתומות; git diff --check נקי. §5 מפרט מה עדיין לא נכתב. ⚠ ביקורת Codex תפסה שש שגיאות ותוקנו: calibration-badge נכלל גם ב-P4S (נעול calibrated) במקום הצהרה סותרת שאינו שם; ולידציית P4S תוקנה ל-4 כללים (לא 3); נוספה קבוצת רכיבים ל-Login/מעטפת-מחוברת/ניווט/sign-out שהייתה חסרה (B10/B56); panel-error הורחב לשגיאה ברמת מסך או פאנל; הפניות business-context-card ו-propensity-band-badge תוקנו ל-IA.md §3א.6/§4 בהתאמה; מונה הרכיבים תוקן מ-14 (שגוי) ל-29 (נספר בפועל)."},
+      {t:"checkpoint 2 — מיפוי מלא של שדות החוזה החיים לרכיבים (F2)", s:"done", u:"2026-09-10", e:"docs/DESIGN.md §5 -- מטריצת שדה->רכיב לארבע הסכמות, נבנתה מול app/schemas.py בפועל (לא הועתקה מ-IA.md). אומת בסקריפט עצמאי שהשווה כל שם שדה בסכמה מול הקובץ; חשף של-base_rate לא היה רכיב כלל -- נוסף base-rate-line (29->30 רכיבים, נספר מכנית). שדות מיכל (strategies, allocations) תועדו במפורש כמפורקים לשדותיהם המקוננים. 0 שורות טבלה יתומות; git diff --check נקי."},
       {t:"checkpoint 3 — app/static/tokens.css: ערכי ה-tokens", s:"not_started"},
       {t:"checkpoint 4 — tests/test_design_tokens.py: תשע הבדיקות האוטומטיות", s:"not_started"},
       {t:"checkpoint 5 — פריסות desktop/mobile ומפרט Dataviz ב-DESIGN.md", s:"not_started"},
@@ -1083,8 +1086,9 @@ function itemStatus(p, it){
 }
 function execTally(p){
   const c = {done:0, in_progress:0, awaiting_approval:0, not_started:0};
-  p.items.forEach(it => c[itemStatus(p, it)]++);
-  c.total = p.items.length;
+  const counted = p.items.filter(it => typeof it === 'string' || it.counts !== false);
+  counted.forEach(it => c[itemStatus(p, it)]++);
+  c.total = counted.length;
   c.pct = c.total ? Math.round(c.done / c.total * 100) : 0;
   return c;
 }
