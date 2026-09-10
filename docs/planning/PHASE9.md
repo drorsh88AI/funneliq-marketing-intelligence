@@ -209,8 +209,9 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 
 ## 3. מיפוי לבריף
 
-**נסגרות** (`owner=9`): `B8` · `B12` · `B28` · `B36` · `B52` — **רק לאחר**
-ראיה חיה (ק' 72–73, 75), ⛔ לא על סמך `TestClient`/mocks בלבד.
+**נסגרו** (`owner=9`): `B8` · `B12` · `B28` · `B36` · `B52` — ✅ **ראיה חיה
+בוצעה** (ק' 72–73, 75, 2026-09-10, מול Render אחרי מיזוג `b176eab`),
+⛔ לא על סמך `TestClient`/mocks בלבד. `status: done` ב-`REQUIREMENTS.md`.
 **contributors:** `B41` · `B44` · `B45` · `B50` · `B55b` · `B56` · `B59` ·
 `B62` · `B10`.
 **סטיות מאושרות, לא נפתחות מחדש:** Render (`B64`) · בלי notebook.
@@ -241,7 +242,7 @@ P4S: 4 `Feature` / 15 `Excluded` / 0 `Derived`. `docs/feature_matrix.md`
 | 8 | `simulate/budget` + `budget-tiers` | ✅ done (ק' 72 חסר — ראיה חיה); `.order("tier_order", nullsfirst=False)` מפורש נוסף בביקורת קוד, והבדיקה חוזקה מ-substring לערך המדויק `tier_order.asc.nullslast` | `b2a38a9`; 632→653 · `9b91d0c` · `e6659eb` |
 | 9 | `followup` — עימוד + קדימות | ✅ done (ק' 73 חסר — ראיה חיה); `.order("stage_order")` מפורש נוסף בביקורת קוד, והבדיקה חוזקה לערך המדויק `stage_order.asc` | `8361a05`; 653→669 · `9b91d0c` · `e6659eb` |
 | 10 | HTTP מלא + projection | ✅ done | `168100e`; 669→695 |
-| 11 | סגירה: ביקורת ✅ → סריקת סודות מקומית ✅ → push ✅ → PR ✅ → CI ✅ (ירוק, אחרי תיקון) → מיזוג ⏳ (אישור נפרד) → auto-deploy ⏳ → ראיה חיה (ק' 72–73, 75) ⏳ → סגירה ⏳ (אישור נפרד) | 🔄 בביצוע | [PR #24](https://github.com/drorsh88AI/funneliq-marketing-intelligence/pull/24), `feat/api`→`main`, head `d69d56c`, `MERGEABLE`/`CLEAN`; ראו הערת CI למטה |
+| 11 | סגירה: ביקורת ✅ → סריקת סודות מקומית ✅ → push ✅ → PR ✅ → CI ✅ → מיזוג ✅ → auto-deploy ✅ (מאומת, ר' הערה) → ראיה חיה (ק' 72–73, 75) ✅ → אימות `main` ⏳ → סגירה ⏳ (אישור נפרד) | 🔄 בביצוע | merge commit `b176eab`; ראיה חיה 2026-09-10 (ר' הערה למטה) |
 
 ⚠ **checkpoint 0 בוצע שלא לפי הסדר, בפועל, לא רק לפי התיעוד:** `main` נקי
 ויצירת `feat/api` בוצעו נכון לפני D21 — אך שלב 0 עצמו (`93c4faa`,
@@ -315,11 +316,29 @@ get_artifact` הועבר לתוך `predict_if_in_domain` — `app.inference`
 ו-[run 34417614089](https://github.com/drorsh88AI/funneliq-marketing-intelligence/actions/runs/34417614089),
 שניהם `pass`. אומת עצמאית פעמיים — פעם אחת על ידי המשתמש ופעם על ידי
 `gh pr checks 24`/`gh pr view 24` — ש-PR #24 עומד על `MERGEABLE`/`CLEAN`
-מול `head d69d56c`. **מיזוג עדיין לא בוצע ולא אושר.**
+מול `head d69d56c`. **מיזוג אושר בנפרד ובוצע** (`gh pr merge 24 --merge`): merge commit
+`b176eab` על `main`. CI על `main` אחרי המיזוג — `success` (run `34418532666`).
 
-⚠ **ק' 72/73/75 (ראיה חיה)** דורשות deploy אמיתי ל-Render עם משתמשי
-`demo-northbound`/`demo-noorg`. אלה חלק מ-checkpoint 11 ומחייבות את
-מדיניות "עצירות מחייבות" — push, PR, מיזוג ו-deploy כל אחד באישור נפרד.
+✅ **auto-deploy אומת (read-only, ללא deploy ידני):** `GET /health` מול
+`https://funneliq.onrender.com` → `200 {"status":"ok"}`; `GET /openapi.json`
+הציבורי (ללא אימות) מציג `title="FunnelIQ API"`, `version="0.4.0"`, ו-10
+נתיבים כולל כל שבעת נתיבי העסק — טביעת-אצבע חד-משמעית ש-`main` שממוזג
+פרוס בפועל (נתיבים אלה לא היו קיימים לפני המיזוג, ואין commit מתחרה
+אחריו). ⚠ **הסתייגות שהמשתמש ביקש לתעד במפורש:** זו הוכחה **לגרסת הקוד
+שרצה** (מסקנה עקיפה, לוגית), ⛔ **לא** קריאה ישירה מרשומת deploy של
+Render בעצמה (אין גישת API/dashboard לזה בסביבה הזו) — אין לתאר זאת
+כהוכחה חד-משמעית לקישור ל-SHA המדויק.
+
+✅ **ק' 72/73/75 (ראיה חיה) בוצעו** — 2026-09-10, מול `https://funneliq.onrender.com`
+אחרי המיזוג ל-`b176eab`, עם `demo-northbound`/`demo-noorg` אמיתיים
+(המשתמש הריץ סקריפט מקומי בעצמו; קלוד מעולם לא ראה את הסיסמאות).
+**ק' 72** (`budget-tiers`): `demo-northbound`→200 (`rows=3`) · טוקן לא
+תקין→401 · `demo-noorg`→403. **ק' 73** (`followup`): `demo-northbound`→200
+(`stages=5`, `population_n=3163`) · אותם שני מסלולי שלילה (401/403).
+**ק' 75** (שבעת הנתיבים): כולם 200 עם `demo-northbound`; `/health` נשאר
+200 בסוף הרצף. ⚠ **הראיה היא ברמת status code בלבד** — לא אימות
+תוכן-הגוף מול `app.schemas` (הוחלט במפורש לא להרחיב לכך). ⛔ אין
+token/password/Authorization מתועדים בשום מקום.
 
 ---
 
@@ -389,20 +408,20 @@ view/מיגרציה חדשים · אימון/כיול/Bootstrap מחדש · פת
 ולקריטריון שסוגר אותו. הבולטים שנפתרו בפועל בביצוע: R8א (מלכודת
 `isdigit`, D16 + ק' 18) · R22 (סדר/dtype שגוי ב-`DataFrame`, D17 + ק' 74)
 · R28 (ארטיפקט משתנה בשקט, ק' 31 עם ליטרלים מעץ `93612c1`) · R32/R35
-(B8/B12/B28/B36/B52 "נסגרות" על mocks בלבד — נחסם עד ראיה חיה).
+(B8/B12/B28/B36/B52 "נסגרות" על mocks בלבד — נסגר ב-2026-09-10 עם ראיה
+חיה בפועל מול Render, ר' סעיף 3 וסעיף 4 למעלה).
 
 ---
 
 ## 8. מה נותר לפני סגירת הפאזה
 
 1. **checkpoint 11**: ביקורת קוד ✅ (שלושה סבבים) → סריקת סודות מקומית ✅
-   → push ✅ → PR #24 ✅ → CI ✅ ירוק (אחרי תיקון `c5b1ebe` לכשל ראשוני;
-   `MERGEABLE`/`CLEAN` מול `head d69d56c`) → **נותר**: מיזוג ל-`main`
-   (אישור נפרד) → auto-deploy ל-Render → ק' 72/73/75 (ראיה חיה) →
-   אימות `main` → סגירת הפאזה (אישור נפרד).
-2. עדכון `docs/planning/REQUIREMENTS.md`: הפניות ראיה ל-`PHASE9.md`
-   עבור `B8`/`B12`/`B28`/`B36`/`B52`; `status` כולם נשארים `planned` עד
-   שהראיה החיה תתעד.
+   → push ✅ → PR #24 ✅ → CI ✅ ירוק → מיזוג ✅ (`b176eab`) → auto-deploy
+   ✅ מאומת (`/health`=200, `/openapi.json` חי) → ק' 72/73/75 ✅ (ראיה
+   חיה, 2026-09-10) → **נותר**: אימות `main` → סגירת הפאזה (אישור נפרד).
+2. ✅ `docs/planning/REQUIREMENTS.md` עודכן: `B8`/`B12`/`B28`/`B36`/`B52`
+   → `status: done`, עם ראיה מפורטת (status codes, timestamp, תוויות
+   מושחרות) לכל אחד.
 3. ✅ `ROADMAP.html`: `planning_status → approved_for_execution`,
    `execution_status → in_progress` הוגדרו; ראיה per-checkpoint מעודכנת
    דרך checkpoint 11.
