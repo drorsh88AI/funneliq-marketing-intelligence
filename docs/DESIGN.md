@@ -51,7 +51,7 @@
 | `model-details` | `<details>` מתקפל — `model_version`, `model_algorithm`, `metrics`, שיטת אינטרוול/כיול | — |
 | `prediction-panel` | מיכל פאנל חיזוי. **משותף לכל משימה:** `prediction-primary`+`evidence-badge`+`model-disclaimer`+`model-details` (מקור: `IA.md` §8, "שדות משותפים לכל תשובות החיזוי"). **לכל משימה ילדים נוספים משלה, ⛔ לא אחידים בין המשימות** (מקור: `IA.md` §3.4/§3א.4; פירוט הכיול הספציפי — §2.4): **P2** מוסיף `prediction-range` בלבד (⛔ אין לו `propensity-band-badge`, `base-rate-line` או `calibration-badge` — רגרסיה, אין מכייל ואין שיעור בסיס) · **P3/P4** מוסיפים `propensity-band-badge`+`base-rate-line`+`calibration-badge` (⛔ אין להם `prediction-range` — מסווגים, אין טווח חיזוי) · **P4S** מוסיף `propensity-band-badge`+`base-rate-line`+`calibration-badge` (נעול `calibrated`)+`business-context-card` (⛔ אין `prediction-range`). שלושת הווריאנטים נושאים בעצמם את `panel-loading`/`panel-error` ברמת הפאנל (§2.1) | — |
 | `business-context-card` | כרטיס הקשר עסקי במסך P4S בלבד — פרופיל לקוחות-העל (מקור: `IA.md` §3א.6) | `model-disclaimer` (מבנה דומה), טקסט קבוע |
-| `panel-error` | שגיאה בשלושה סוגי היקף: **ברמת מסך שלם** — ארבעה מסכים (Login, Overview, Follow-up, Budget Simulator) · **ברמת פאנל בודד** בתוך `prediction-panel` וריאנט הטופס המשותף (הפאנלים האחרים ממשיכים) · **ברמת הפאנל היחיד** של `prediction-panel` וריאנט P4S. כל ההיקפים משתמשים באותו רכיב, ר' מטריצת §2.1 | `role="alert"` |
+| `panel-error` | שגיאה בשלושה סוגי היקף: **ברמת מסך שלם** — ארבעה מסכים (Login, Overview, Follow-up, Budget Simulator) · **ברמת פאנל בודד** בתוך `prediction-panel` וריאנט הטופס המשותף (הפאנלים האחרים ממשיכים) · **ברמת הפאנל היחיד** של `prediction-panel` וריאנט P4S. כל ההיקפים משתמשים באותו רכיב, ר' מטריצת §2.1 | `role="alert"`, `--error-fg`, `--error-bg` |
 
 ### 1.2 — רכיבי מצב-מערכת (חוצי-מסכים)
 
@@ -60,8 +60,8 @@
 | `panel-loading` | טעינה — `role="status"` | — |
 | `panel-empty` | הסבר "מה חסר ומה לעשות"; ⛔ לעולם לא מסך ריק ללא טקסט | — |
 | `ood-banner` | פאנל/מסך מחוץ לתחום — הודעה + סיבה קונקרטית, **בלי מספר** | `out-of-distribution` |
-| `auth-redirect` | 401 — הפניה למסך Login + הודעה; תוכן טופס לא נשמר | — |
-| `forbidden-notice` | 403 — הודעת חוסר הרשאה; ⛔ בלי נתונים, בלי ניסיון חוזר, בלי חזרה ל-Login; sign-out זמין | — |
+| `auth-redirect` | 401 — הפניה למסך Login + הודעה; תוכן טופס לא נשמר | `role="alert"`, `--error-fg`, `--error-bg` |
+| `forbidden-notice` | 403 — הודעת חוסר הרשאה; ⛔ בלי נתונים, בלי ניסיון חוזר, בלי חזרה ל-Login; sign-out זמין | `role="alert"`, `--error-fg`, `--error-bg` |
 
 ### 1.3 — רכיבי טופס קלט
 
@@ -86,9 +86,9 @@
 | `app-nav` | ניווט בין **חמשת המסכים המחוברים — מסכים 2–6**, בתוך `authenticated-shell` (B56 — "login-gated dashboard"). ⛔ **אינו כולל את Login** (מסך 1) — הוא מחוץ למעטפת ואין אליו ניווט-חזרה מתוכה | — |
 | `sign-out-control` | פקד יציאה — **זמין תמיד** במעטפת המחוברת, **כולל** במצב `forbidden-notice` (403, §2.6) | — |
 | `founder-question-index` | אינדקס חמש שאלות המייסדת ב-Overview — חמישה כרטיסים לארבעה יעדים (D8) | — |
-| `tier-table` | טבלת טיירי תקציב ב-Overview; שורת `gap` מסומנת בנפרד | `--color-tier-1..3` |
+| `tier-table` | טבלת טיירי תקציב ב-Overview; שורת `gap` מסומנת בנפרד | `color-tier-1` · `color-tier-2` · `color-tier-3` |
 | `overlap-alert` | הודעת חפיפת שתי האסטרטגיות המובילות ב-Simulator — **הרכיב הבולט ביותר במסך** | `--color-uncertain` |
-| `strategy-row` | שורת אסטרטגיה בסימולטור — רווח + טווח + `n` + רמת ראיות | `evidence-*` |
+| `strategy-row` | שורת אסטרטגיה בסימולטור — רווח + טווח + `n` + רמת ראיות | `evidence-high` · `evidence-medium` · `evidence-low` |
 | `summary-recommendation` | רכיב D9 בן ארבע שכבות — תשובה / מה זה אומר / מה כדאי לעשות / חשוב לדעת. חוזר על כל מסך תוצאה/תובנה (⛔ לא Login) | `model-disclaimer` לשכבת "חשוב לדעת" |
 | `chart-live` | גרף SVG חי — ארבע מופעים (§4). **ה-fallback הטבלאי הנגיש הוא חלק מהרכיב עצמו, ⛔ לא רכיב נפרד** — `chart-live` תמיד מרנדר את שניהם יחד | ≤5 צבעים סמנטיים |
 
@@ -189,7 +189,10 @@ P4S `calibration-badge` נעול ל-`calibrated` בלבד** — `uncalibrated`
 | `--color-positive` | **תוצאה שנצפתה בנתונים**: סגירה, אפסייל שקרה, הפניה שניתנה, לקוח-על בפרופיל היסטורי | ⛔ אסור על תחזית/הסתברות |
 | `--color-negative` | תוצאה שלילית שנצפתה: נשירה, לא נסגר | ⛔ אסור על תחזית/הסתברות |
 | `--color-uncertain` | **תחזית או הסתברות** — P2, P3, P4, P4S, רווח צפוי ב-P6. ⚠ ניטרלי/ענברי, ⛔ לא ירוק/אדום | חובה על כל תחזית, ⛔ ללא יוצא מן הכלל |
-| `--color-tier-1..3` | טיירי תקציב Low/Mid/High — סדרה מסודרת | — |
+| `--color-muted` | טקסט משני/הסתייגות — הבסיס ל-`model-disclaimer` | — |
+| `--color-text` | טקסט גוף רגיל | — |
+| `--color-bg` | רקע העמוד — הרקע שמולו נבדקים כל מילויי הגרפיקה (בדיקות 2–3) | — |
+| `color-tier-1` · `color-tier-2` · `color-tier-3` (כל אחד זוג `-fg`/`-bg`) | טיירי תקציב Low/Mid/High — **סדרה מסודרת** (רמפה עוקבת, לא שלושה גוונים בלתי-קשורים), כרקע `tier-table` בלבד | — |
 
 ⛔ **כלל D10, חוצה-מסכים:** `prediction-primary` בכל ארבע משימות החיזוי
 (P2/P3/P4/P4S) צורך **תמיד** `--color-uncertain` או ניטרלי, **לעולם לא**
@@ -198,19 +201,33 @@ P4S `calibration-badge` נעול ל-`calibrated` בלבד** — `uncalibrated`
 
 ### 3.2 — טוקני מצב
 
-`evidence-high` · `evidence-medium` · `evidence-low` · `prediction-range` ·
-`model-disclaimer` · `out-of-distribution` · `calibrated` · `uncalibrated`.
+`evidence-high` · `evidence-medium` · `evidence-low` · `prediction-range`
+(`--prediction-range-color`) · `model-disclaimer` · `out-of-distribution` ·
+`calibrated` · `uncalibrated`.
 
-טיפוגרפיה משנית לראיות ולהסתייגות — קטנה יותר, ⛔ לא קטנה עד כדי הסתרה.
+טיפוגרפיה משנית לראיות ולהסתייגות — קטנה יותר, ⛔ לא קטנה עד כדי הסתרה
+(`--model-disclaimer-font-size`).
 
 ⛔ **אין הסתמכות על צבע בלבד בשום מצב** — `ood-banner`,
 `evidence-badge`, `calibration-badge`, `propensity-band-badge` מקבלים
 תמיד גם טקסט וגם אייקון (`IA.md` §10).
 
+⚠ **`--focus-outline`** — לא רכיב סטטוס-נתונים כמו האחרים, אלא מענה
+ישיר לדרישת `IA.md` §10 "מקלדת: `focus` נראה תמיד". מוחל על כל פקד בר-מיקוד
+(`field-input`, `app-nav`, `sign-out-control`, `prefill-picker`).
+
 ### 3.3 — מערכת ויזואלית (מקור: `PHASE10.md` §ו)
 
-סקאלת טיפוגרפיה · סקאלת spacing · `radius` · `elevation` · רשת — כולן
-נכתבות מאפס ל-FunnelIQ (לא ירושה ממערכת אחרת). גופן: **Rubik**.
+כולן נכתבות מאפס ל-FunnelIQ (לא ירושה ממערכת אחרת):
+
+| קבוצה | טוקנים |
+|---|---|
+| טיפוגרפיה | `--font-family` (Rubik) · `--font-size-xs` · `--font-size-sm` · `--font-size-base` · `--font-size-lg` · `--font-size-xl` · `--font-size-2xl` (שש דרגות) |
+| Spacing | `--space-1` · `--space-2` · `--space-3` · `--space-4` · `--space-6` · `--space-8` (רשת 4px) |
+| Radius | `--radius-sm` · `--radius-md` · `--radius-lg` |
+| Elevation | `--shadow-card` · `--shadow-popover` |
+| רשת | `--grid-columns-desktop` · `--grid-gap` |
+
 כיוון: `dir="rtl"`. מטבע: `he-IL` עם מפרידי אלפים. מספרים, מטבעות,
 צירים ושמות שדות באנגלית — **LTR בתוך container RTL**.
 
@@ -266,7 +283,8 @@ caption/מסקנות/הסתייגויות סביב הגרף **בעברית**.
 | `warnings[OODWarning]` | `list` | `ood-banner` — `message`/`feature`/`min`/`max` מהאזהרה |
 | `warnings[UnobservedBudgetWarning]` | `list` | הודעת `evidence-badge` (§1.1) |
 | `model_version` · `model_algorithm` | `str` | `model-details` |
-| `metrics.cv.mean_mae/mean_rmse/mean_r2` · `.holdout.mae/rmse/r2` | `float` | `model-details` |
+| `metrics.cv.mean_mae` · `metrics.cv.mean_rmse` · `metrics.cv.mean_r2` | `float` | `model-details` |
+| `metrics.holdout.mae` · `metrics.holdout.rmse` · `metrics.holdout.r2` | `float` | `model-details` |
 
 ### 5.2 — `PropensityPrediction` (P3, P4 — סכמה משותפת)
 
@@ -282,7 +300,8 @@ caption/מסקנות/הסתייגויות סביב הגרף **בעברית**.
 | `model_version` · `model_algorithm` | `str` | `model-details` |
 | `calibration_status` | `Literal["calibrated","uncalibrated"]` | `calibration-badge` |
 | `calibration_method` | `Literal["sigmoid"]` | `model-details` |
-| `metrics.cv.*` · `.holdout.*` (ROC-AUC/PR-AUC/Brier/log-loss) | `float` | `model-details` |
+| `metrics.cv.mean_roc_auc` · `metrics.cv.mean_pr_auc` · `metrics.cv.mean_brier` · `metrics.cv.mean_log_loss` | `float` | `model-details` |
+| `metrics.holdout.roc_auc` · `metrics.holdout.pr_auc` · `metrics.holdout.brier` · `metrics.holdout.log_loss` | `float` | `model-details` |
 
 ### 5.3 — `SuperCustomerPrediction` (P4S)
 
@@ -298,7 +317,8 @@ caption/מסקנות/הסתייגויות סביב הגרף **בעברית**.
 | `model_version` · `model_algorithm` | `str` | `model-details` |
 | `calibration_status` | `Literal["calibrated"]` | `calibration-badge` — **נעול**, ⛔ `uncalibrated` לא אפשרי כאן |
 | `calibration_method` | `Literal["sigmoid"]` | `model-details` |
-| `metrics.cv.*` · `.holdout.*` | `float` | `model-details` |
+| `metrics.cv.mean_roc_auc` · `metrics.cv.mean_pr_auc` · `metrics.cv.mean_brier` · `metrics.cv.mean_log_loss` | `float` | `model-details` |
+| `metrics.holdout.roc_auc` · `metrics.holdout.pr_auc` · `metrics.holdout.brier` · `metrics.holdout.log_loss` | `float` | `model-details` |
 | `target_definition` | `Literal["referred=Yes AND upsell=1 AND ltv_months>=34"]` | **גלוי בגוף `prediction-panel` וריאנט P4S**, ⛔ לא ב-`model-details` (`IA.md` §3א.4 — "הגדרות גלויות") |
 | `population_definition` | `Literal["purchased=1"]` | כנ"ל — גלוי, לא ב-`model-details` |
 
@@ -325,7 +345,8 @@ caption/מסקנות/הסתייגויות סביב הגרף **בעברית**.
 | `BudgetSimulation.interval_method` · `.bootstrap_percentiles` | `Literal[...]` | `model-details` |
 | `BudgetSimulation.top_two_overlap` | `bool` | `overlap-alert` |
 | `BudgetSimulation.model_version` · `.model_algorithm` | `str` | `model-details` |
-| `BudgetSimulation.metrics.*` | `float` | `model-details` |
+| `BudgetSimulation.metrics.cv.mean_mae` · `BudgetSimulation.metrics.cv.mean_rmse` · `BudgetSimulation.metrics.cv.mean_r2` | `float` | `model-details` |
+| `BudgetSimulation.metrics.holdout.mae` · `BudgetSimulation.metrics.holdout.rmse` · `BudgetSimulation.metrics.holdout.r2` | `float` | `model-details` |
 
 ✅ כל שדה בארבע הסכמות (`LtvPrediction`, `PropensityPrediction`,
 `SuperCustomerPrediction`, `BudgetSimulation`+`StrategyResult`+
@@ -342,7 +363,7 @@ caption/מסקנות/הסתייגויות סביב הגרף **בעברית**.
 | ערכי tokens בפועל (hex/px/rem) | 3 |
 | בדיקות אוטומטיות (`tests/test_design_tokens.py`) | 4 |
 | מפרט פריסה desktop/mobile מלא (breakpoints, מידות) | 5 |
-| מטריצת D9 בת שש העמודות (שאלה·תשובה·משמעות·פעולה·מגבלה·מקור ראיה) לכל פאנל/גרף, ומסע המשתמש בן שבעת השלבים | 6 |
+| מטריצת D9 בת שש העמודות (שאלה·תשובה·משמעות·פעולה·מגבלה·מקור ראיה) לכל פאנל/גרף, ומסע המשתמש בן שבעת השלבים. ⚠ **בתא הראשון (שאלה) בלבד, כל שורה חייבת לשאת מזהה חד-משמעי לאחד משמונת היעדים הנעולים** (`PHASE10.md` D9: Overview · P2 · P3 · P4 · P4S · Budget Simulator · שני גרפי Follow-up — נשירה ו-`calls_to_closed`), ⛔ בדיוק פעם אחת לכל יעד — כך שבדיקה 9 (`test_design_tokens.py`) תוכל לזהות כל שורה. חמשת התאים האחרים רשאים להזכיר יעדים אחרים בחופשיות (למשל תשובת Overview שמפנה ל-P2, או הבחנת P4/P4S זו מזו) — הזיהוי בודק את תא השאלה בלבד, לא את השורה כולה | 6 |
 | מפת שדות P4S (D11) — תווית עסקית, שם טכני, יחידה, מועד מדידה, הסבר | 6 (משולב עם מטריצת D9) |
 | reference חזותי מ-Stitch | 7–8 (אישור נפרד) |
 | צילומי מסכים + מטריצת כיסוי מלאה | 9 |

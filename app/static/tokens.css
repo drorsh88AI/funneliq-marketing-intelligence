@@ -1,0 +1,132 @@
+/* FunnelIQ -- design tokens (phase 10, checkpoint 3).
+   Source of truth for VALUES only (colors, sizes) -- source of truth for
+   RULES (which token goes where, and why) is docs/DESIGN.md.
+   ⛔ Not wired into the UI yet -- no <link> to this file exists anywhere.
+   Phase 11 consumes it; app/static/style.css's palette stays the
+   temporary one it already declares itself to be (PHASE10.md D4).
+
+   Format: one canonical shape for every token -- a CSS custom property
+   under :root. State tokens that pair text-on-background (badges,
+   banners) are declared as two properties, `--<name>-fg` and
+   `--<name>-bg`, so a script can find every pair mechanically via that
+   naming convention (checkpoint 4's contrast tests read this file).
+
+   Every color pair below was checked against the actual WCAG 2.1
+   contrast formula (relative luminance), not eyeballed:
+     - text/badge pairs  -> >= 4.5:1 (normal text) or >= 3:1 (large text)
+     - fill vs page bg    -> >= 3:1 (graphical element) */
+
+:root {
+  /* ---- Typography -- scale, not inherited from any other system ---- */
+  --font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-size-xs: 0.75rem;   /* 12px -- evidence tags, disclaimers */
+  --font-size-sm: 0.875rem;  /* 14px -- secondary lines, <details> */
+  --font-size-base: 1rem;    /* 16px -- body text */
+  --font-size-lg: 1.25rem;   /* 20px -- section headings */
+  --font-size-xl: 1.5rem;    /* 24px -- prediction-primary, emphasis */
+  --font-size-2xl: 2rem;     /* 32px -- large hero numbers */
+
+  /* ---- Spacing -- 4px grid ---- */
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+
+  /* ---- Radius / elevation ---- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-popover: 0 4px 12px rgba(0, 0, 0, 0.12);
+
+  /* ---- Grid ---- */
+  --grid-columns-desktop: 12;
+  --grid-gap: var(--space-4);
+
+  /* =====================================================================
+     Semantic palette (DESIGN.md §3.1). D10, non-negotiable:
+     --color-positive / --color-negative are for OBSERVED outcomes only.
+     A prediction or probability (P2/P3/P4/P4S, or P6's expected profit)
+     is NEVER colored in them -- always --color-uncertain or neutral,
+     even when the forecast looks "good". ===================================== */
+  --color-primary: #2563eb;      /* brand -- vs white: 5.17:1 */
+  --color-positive: #166534;     /* observed success: closed, upsell happened,
+                                     referral given, super-customer in the
+                                     historical profile -- vs white: 7.13:1 */
+  --color-negative: #991b1b;     /* observed failure: dropout, not closed
+                                     -- vs white: 8.31:1 */
+  --color-uncertain: #92400e;    /* ⛔ every prediction/probability, always --
+                                     amber, not green/red -- vs white: 7.09:1 */
+  --color-muted: #6b7280;        /* secondary/disclaimer text -- vs white: 4.83:1 */
+  --color-text: #1a1a1a;         /* body text -- vs white: 17.40:1 */
+  --color-bg: #ffffff;
+
+  /* Budget tiers -- an ORDERED sequential ramp (Low -> Mid -> High), not
+     three unrelated hues, so the visual order matches the logical order.
+     ⚠ These backgrounds are for tier-table rows (paired with their own
+     text below) ONLY -- too light to use as standalone chart-bar fills
+     (tier-1/2 fail the 3:1 graphical-vs-page-bg check on their own).
+     The Overview conversion chart uses --color-primary as its bar fill. */
+  --color-tier-1-bg: #dbeafe;  /* Low */
+  --color-tier-1-fg: #1e3a8a;  /* vs tier-1-bg: 8.49:1 */
+  --color-tier-2-bg: #93c5fd;  /* Mid */
+  --color-tier-2-fg: #1e3a8a;  /* vs tier-2-bg: 5.74:1 */
+  --color-tier-3-bg: #1d4ed8;  /* High */
+  --color-tier-3-fg: #ffffff;  /* vs tier-3-bg: 6.70:1 */
+
+  /* =====================================================================
+     State tokens (DESIGN.md §3.2). Each is a declared fg/bg pair so
+     checkpoint 4 can test it directly.
+
+     ⚠ Fixed after independent review: evidence-high/calibrated originally
+     reused --color-positive's exact green, and evidence-low used a red
+     from the same family as --color-negative. Evidence level and
+     calibration status are NOT claims about a real-world outcome --
+     "high evidence" doesn't mean "this closed" any more than "low
+     evidence" means "this failed" -- so they get their OWN blue/slate
+     family, fully distinct from positive(green)/negative(red)/
+     uncertain(amber). high/medium/low are one coherent 3-step scale;
+     calibrated deliberately shares evidence-high's blue ("in good
+     working order"); uncalibrated stays neutral gray (a disclosed
+     state, not a failure) -- unchanged, it was never on the green/red
+     scale to begin with. out-of-distribution stays amber ON PURPOSE:
+     unlike evidence/calibration, OOD *is* directly about prediction
+     reliability, the same concern --color-uncertain exists for -- so
+     sharing that family is a correct semantic link, not a collision.
+     ===================================================================== */
+  --evidence-high-bg: #dbeafe;
+  --evidence-high-fg: #1e40af;    /* 7.15:1 */
+  --evidence-medium-bg: #bfdbfe;
+  --evidence-medium-fg: #1e3a8a;  /* 7.29:1 */
+  --evidence-low-bg: #e2e8f0;
+  --evidence-low-fg: #334155;     /* 8.40:1 */
+
+  --calibrated-bg: #dbeafe;
+  --calibrated-fg: #1e40af;       /* 7.15:1 -- same blue as evidence-high */
+  --uncalibrated-bg: #e5e7eb;
+  --uncalibrated-fg: #374151;     /* 8.33:1 -- neutral gray, not alarming;
+                                      uncalibrated is a disclosed state,
+                                      not a failure */
+
+  --out-of-distribution-bg: #fef3c7;
+  --out-of-distribution-fg: #92400e;  /* 6.37:1 -- same amber family as
+                                          --color-uncertain: an OOD panel
+                                          IS a prediction-related state */
+
+  --model-disclaimer-fg: var(--color-muted);   /* 4.83:1 vs white */
+  --model-disclaimer-font-size: var(--font-size-sm);
+
+  --prediction-range-color: var(--color-uncertain);  /* whisker/range line,
+                                                          graphical: 7.09:1
+                                                          vs white */
+
+  /* ---- Error / focus (not named as a checkpoint-1 component, but
+     needed by panel-error / auth-redirect / forbidden-notice, which
+     already exist as components -- reused verbatim from the values
+     app/static/style.css already established for the same purpose) ---- */
+  --error-bg: #fef2f2;
+  --error-fg: #b91c1c;  /* 5.91:1 */
+  --focus-outline: var(--color-primary);
+}
