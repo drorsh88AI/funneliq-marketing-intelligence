@@ -2,3 +2,5 @@
 # evidence in docs/planning/PHASE0.md and must stay identical on every platform.
 * text=auto
 scripts/verify_phase0.py -text
+# Matplotlib SVG path data legitimately ends some coordinate lines with spaces.
+*.svg whitespace=-blank-at-eol

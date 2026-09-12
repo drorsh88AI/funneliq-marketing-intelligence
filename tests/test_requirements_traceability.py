@@ -55,9 +55,9 @@ _EXPECTED_IDS = frozenset({
 # a test that never needs updating as work actually happens isn't testing
 # anything.
 _EXPECTED_STATUS_COUNTS = {
-    "done": 39,
+    "done": 41,
     "planned": 15,
-    "gap": 17,
+    "gap": 15,
     "N/A": 1,
     "parent": 1,
 }

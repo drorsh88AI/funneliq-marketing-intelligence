@@ -60,6 +60,12 @@ B22/B23/B24/B29b/B29c/B32/B33/B37a/B37b/B37c/B37d/B43/B53a/B53b/
 B57/B60/B65 ואת רכיב התיעוד
 של B59. ‏B54 נשארת parent ו־B58 נשארת N/A. הספירה אינה משתנה.
 
+**עדכון CP9, ‏12.09.2026:** שלושת חסמי המימוש תוקנו. Follow-up קורא ומאמת
+את אוכלוסיית `closed>0`; ‏P4S נפרס כ־CatBoost ייעודי מגרסת המקור `1c70ca8`
+תוך שמירת תוצאות Logistic ההיסטוריות; ו־P6 נבנה מחדש מפרופיל train נצפה
+ודטרמיניסטי בלי לפתוח שוב את ה־Holdout. ‏B49 ו־B51 נסגרו ל־`done`.
+הספירה הפעילה: 41 `done`, ‏15 `planned`, ‏15 `gap`, אחת `N/A` ואחת `parent`.
+
 ## §04 GitHub
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
@@ -144,9 +150,9 @@ B57/B60/B65 ואת רכיב התיעוד
 | **B38** | §05.4 | "Build: a CatBoost classifier" | מסווג CatBoost נבנה | 6 | 13, 10A | 12 | done | `PHASE6.md:693–695` — *"P4 — הזוכה Logistic (זכאי, מנצח CatBoost בפשטות)"*; `metrics.json.P4_selection`; One-SE + RSS ב-`train.py:1196`, לפני ה-Holdout |
 | **B39** | §05.4 | "engineer a categorical budget-tier feature (Low/Mid/High) and let CatBoost handle it natively" | `budget_tier` בטיפול נייטיב | 6 | 10A | 12 | done | `train.py:243` `build_preprocessing_steps(encode_budget_tier=False)` |
 | **B40** | §05.4 | "with hyperparameter tuning (search over learning rate, depth, and iterations)" | כוונון שלושת הצירים | 6 | 10A | 12 | done | `train.py:526` `catboost_param_distributions()` |
-| **B41** | §05.4 | "Then build a scoring pipeline: given a new customer's early funnel data, output a 0–100 likelihood of becoming a super customer, served by your app." | ציון 0–100 ללקוח-על, מוגש באפליקציה | 8A | 9, 10, 11, 10A | 12 | planned | הכרעת משתמש 12.09.2026: CatBoost שאומן על יעד P4S יהיה המודל הראשי; Logistic השוואה בלבד. CP5 נעל ארבעה קלטים; CP6 מיפה את הציון ל־`SuperCustomerPrediction.event_probability` ואת ההקשר ל־`base_rate/target_definition/population_definition`. הארטיפקט/ה־API עדיין Logistic והחשיפה טרם מומשה; מסלול C ב־CP9 |
-| **B42** | §05.4 | "Profile the super customers (referred = Yes, upsell = 1, long tenure): what share of total profit do they represent, and what's their average acquisition cost?" | פרופיל: אחוז רווח + CAC | 6 | 10, 13, 10A | 12 | done | `metrics.json.super_customer_profile` — n=529, 33.61% מהרווח, CAC 990.7 מול 1,437.5 (חיסכון 31.1%). CP6 קבע העתק מצומצם וגרסאי ב־`business_facts.json`; אין להגיש לדפדפן את כל metrics.json |
-| **B43** | §05.4 | "How could Northbound spot them earlier?" | תשובה כתובה | 13 | 8A, 10, 10A | 12 | gap | `SPEC.md` §ראיות ותשובות CP4-B: הפרופיל ההיסטורי ברור, אך ארבעת האותות אינם מצדיקים כרגע דירוג אישי אמין; CatBoost מיועד כאות מסייע לבדיקה ידנית של רוכש ידוע בלבד, לאחר מעקב 1 וסגירת החלון החודשי. נשאר `gap` עד מדידת CatBoost והטמעת התשובה הסופית ב־REPORT בפאזה 13 |
+| **B41** | §05.4 | "Then build a scoring pipeline: given a new customer's early funnel data, output a 0–100 likelihood of becoming a super customer, served by your app." | ציון 0–100 ללקוח-על, מוגש באפליקציה | 8A | 9, 10, 11, 10A | 12 | planned | CP9 פרס CatBoost ייעודי ליעד P4S עם ארבעת הקלטים: `P4S-catboost-20260912-1c70ca8`; ה־API מחזיר אותו באותה סכמה. Logistic נשמר להשוואה. נשארה חשיפת הציון 0–100 במסע הדשבורד בפאזה 11 ואימות בפאזה 12 |
+| **B42** | §05.4 | "Profile the super customers (referred = Yes, upsell = 1, long tenure): what share of total profit do they represent, and what's their average acquisition cost?" | פרופיל: אחוז רווח + CAC | 6 | 10, 13, 10A | 12 | done | `metrics.json.super_customer_profile` — n=529, 33.61% מהרווח, CAC 990.7 מול 1,437.5 (חיסכון 31.1%); CP9 הפיק העתק מצומצם וגרסאי ב־`app/static/business_facts.json` |
+| **B43** | §05.4 | "How could Northbound spot them earlier?" | תשובה כתובה | 13 | 8A, 10, 10A | 12 | gap | CP9 מדד CatBoost: Holdout ROC-AUC=0.8014, PR-AUC=0.3420 ו־Recall=0 בסף 0.5, חלש מ־Logistic ההיסטורי (0.8187/0.3779). לכן ארבעת האותות משמשים רק ציון רציף לבדיקה ידנית של רוכש ידוע לאחר מעקב 1 וסגירת החלון; נשארה הטמעה ב־REPORT בפאזה 13 |
 
 ## §05 חבילה 5
 
@@ -155,20 +161,20 @@ B57/B60/B65 ואת רכיב התיעוד
 | **B44** | §05.5 | "the dropout rate at each follow-up stage (followup_1→followup_5), visualized" | נשירה בכל שלב, ויזואלית | 5 | 9, 10, 11, 10A | 12 | done | `findings.json.funnel_dropoff` — 21.7/25.7/18.6/10.4/29.2%; `funnel_dropoff.svg` |
 | **B45** | §05.5 | "plus a data-driven recommendation surfaced in the dashboard" | המלצה מוצגת בדשבורד | 11 | 5, 9, 10, 10A | 12 | planned | טקסט מ־`SPEC.md` §הכרעת CP4-D; CP5 נעל פעולה/מגבלה גלויות, ו־CP6 נעל שהמלצה משולבת תלויה בשני חלקי `FollowupResponse` התקינים וללא fallback קבוע. החשיפה בדשבורד טרם בוצעה |
 | **B46a** | §05.5 | "At which stage does dropout behave unexpectedly?" | תשובה כתובה | 5 | 10, 13, 10A | 12 | done | `funnel_dropoff.followup_4 = 0.10372` — הנמוך ביותר |
-| **B46b** | §05.5 | "For deals that eventually closed, how many follow-ups did they typically take?" | תשובה כתובה | 5 | 10, 13, 10A | 12 | done | `SPEC.md` §הכרעת CP4-D: אין בקובץ מניין מעקבים לעסקה; במדד הקרוב, `calls_to_closed`, באוכלוסיית `closed>0` ‏(3,318) החציון 3, השכיח 2, הממוצע 3.706 ו־1,595 (48.07%) עם ממוצע 4+ שיחות. CP6 קבע שהמסך גוזר אותם רק מ־`calls_to_closed.data.distribution`; ה־API עדיין `purchased=1` ותיקונו מסלול C ב־CP9 |
-| **B46c** | §05.5 | "Should Northbound change its follow-up policy — yes or no, and why?" | תשובה כתובה | 5 | 10, 13, 10A | 12 | done | `SPEC.md` §הכרעת CP4-D — לא לעצירה אוטומטית; `FINDINGS.md` §מסקנת P5 היא הראיה ההיסטורית |
+| **B46b** | §05.5 | "For deals that eventually closed, how many follow-ups did they typically take?" | תשובה כתובה | 5 | 10, 13, 10A | 12 | done | `SPEC.md` §הכרעת CP4-D ו־`docs/findings.json.calls_to_closed`: באוכלוסיית `closed>0` ‏(3,318) החציון 3, השכיח 2, הממוצע 3.706 ו־1,595 (48.07%) עם ממוצע 4+; CP9 יישר את ה־API לאותה אוכלוסייה עם עימוד וספירה עצמאית |
+| **B46c** | §05.5 | "Should Northbound change its follow-up policy — yes or no, and why?" | תשובה כתובה | 5 | 10, 13, 10A | 12 | done | `SPEC.md` §הכרעת CP4-D ו־`FINDINGS.md` §מסקנת P5 — לא לעצירה אוטומטית; להמשיך מבוקר ולמדוד עלות ושיעור סגירה שולי |
 
 ## §05 חבילה 6
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
 | **B48** | §05.6 | "a model that predicts cumulative_profit" | מודל שמנבא רווח מצטבר | 6 | 10A | 12 | done | `models/P6.joblib` (linear); `metrics.json.P6_holdout` — mae 3,678.9, rmse 4,590.9, r2 0.7961 |
-| **B49** | §05.6 | "used to simulate allocation strategies built from campaign sizes the data actually covers (₪500–₪20,000)" | סימולציה בטווח שהנתונים מכסים | 6 | 10A | 12 | gap | ארבע הרמות והאסטרטגיות קיימות, אך `SPEC.md` §ראיות ותשובות CP4-C הוכיח שפרופילי החציון מפרים זהויות מקור ב־4/5 רמות. CP6 נעל מסלול B: פרופיל רב־משתני תקף מ־train בלבד ובנייה מחדש בלי שינוי חוזה ה־GET |
-| **B50** | §05.6 | "and a recommendation for which maximizes expected total profit" | המלצה איזו ממקסמת רווח | 11 | 6, 9, 10, 13, 10A | 12 | planned | `SPEC.md` §ראיות ותשובות CP4-C מכין תשובה זמנית: אין לפעול לפי 100×500; ‏25×2,000 היא נקודת בדיקה הגנתית. המלצה סופית תלויה בתיקון B49/B51 ובממשק |
-| **B51** | §05.6 | "Your simulator only knows each campaign's budget, so decide how to fill in the other features (a typical funnel profile per budget level is one reasonable approach)." | החלטה מתועדת על מילוי הפיצ'רים | 6 | 10A | 12 | gap | `scripts/train.py:1585` מחשב חציון לכל עמודה בנפרד; בדיקת train-only ב־CP4-C מצאה אפס פרופילים משותפים שנצפו והפרת `closed+not_closed=followup_5` ב־4/5 רמות. CP6 נעל מסלול B: פרופיל רב־משתני תקף, דטרמיניסטי, ללא היעד ומ־train בלבד; המימוש ב־CP9 |
-| **B52** | §05.6 | "Expose the simulator in your app." | חשיפת הסימולטור | 9 | 10, 11, 10A | 12 | planned | ראיית ביניים: `/api/simulate/budget` חי כלוקאפ GET ללא body (PHASE9 ק' 75). CP6 מיפה את ארבע האסטרטגיות ל־`BudgetSimulation.strategies[]/top_two_overlap`; ממשק חסר והארטיפקט הפעיל אינו קביל עד תיקון CP9 |
-| **B53a** | §05.6 | "Based on what your model learned about diminishing returns, does concentrating or spreading spend win?" | תשובה כתובה | 13 | 6, 10, 10A | 12 | gap | `SPEC.md` §ראיות ותשובות CP4-C: תקציב 500→20,000 גדל פי 40 וחציון הלידים רק פי 9.38; הכיוון הנתמך הוא פיזור מתון, אך לא 100×500. נשאר `gap` עד תיקון הסימולציה ו־REPORT |
-| **B53b** | §05.6 | "What would you tell the founder to do next month?" | תשובה כתובה | 13 | 6, 10, 10A | 12 | gap | `SPEC.md` §ראיות ותשובות CP4-C: לא לפעול לפי הדירוג הקיים; 25×2,000 היא נקודת בדיקה זמנית. תשובה סופית לאחר תיקון CP9 וב־REPORT |
+| **B49** | §05.6 | "used to simulate allocation strategies built from campaign sizes the data actually covers (₪500–₪20,000)" | סימולציה בטווח שהנתונים מכסים | 6 | 10A | 12 | done | CP9 בנה מחדש `models/P6_simulation.json` בארבע הרמות 500–20,000 ובארבע אסטרטגיות שסכומן 50,000; כל פרופיל מצביע ל־`profile_source_row_id` שנצפה ב־train |
+| **B50** | §05.6 | "and a recommendation for which maximizes expected total profit" | המלצה איזו ממקסמת רווח | 11 | 6, 9, 10, 13, 10A | 12 | planned | הסימולציה המתוקנת מדרגת `100x500` ראשונה, אך טווחה חופף ל־`25x2000` וה־backtest ברמת 500 חושף הערכת־יתר חריפה; לכן אין המלצת הקצאה קבועה, ורק ניסוי מבוקר יוצג בפאזה 11 |
+| **B51** | §05.6 | "Your simulator only knows each campaign's budget, so decide how to fill in the other features (a typical funnel profile per budget level is one reasonable approach)." | החלטה מתועדת על מילוי הפיצ'רים | 6 | 10A | 12 | done | `scripts/train.py::compute_budget_profiles`: בכל תקציב נבחרת שורת train נצפית במינימום L1 מנורמל־IQR מחציוני הקבוצה, ללא היעד ועם `source_row_id` כשובר שוויון; `metrics.json.P6_profile_method` |
+| **B52** | §05.6 | "Expose the simulator in your app." | חשיפת הסימולטור | 9 | 10, 11, 10A | 12 | planned | `/api/simulate/budget` מחזיר את `P6_simulation.json` המתוקן כלוקאפ GET ללא body; חוזה ה־API עבר בבדיקות. נשאר ממשק בפאזה 11 ואימות מסע בפאזה 12 |
+| **B53a** | §05.6 | "Based on what your model learned about diminishing returns, does concentrating or spreading spend win?" | תשובה כתובה | 13 | 6, 10, 10A | 12 | gap | CP9: `100x500` מדורגת ראשונה (789,594) ו־`25x2000` שנייה (530,953), אך הטווחים חופפים וה־backtest ברמת 500 רחוק מאוד מהתחזית. אין הוכחה שפיזור קיצוני מנצח; נשארה הטמעה ב־REPORT |
+| **B53b** | §05.6 | "What would you tell the founder to do next month?" | תשובה כתובה | 13 | 6, 10, 10A | 12 | gap | ההמלצה המתוקנת: לא להעביר 50,000 ש״ח ל־100 קמפיינים על סמך המודל; אם בוחנים אחת מארבע החלופות, לבצע פיילוט מוגבל בדפוס `25x2000` ולמדוד רווח מצטבר באותו אופק. נשארה הטמעה ב־REPORT |
 
 ## §06 מה תבנה
 

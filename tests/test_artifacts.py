@@ -305,7 +305,7 @@ def test_model_version_empty_string_is_fail_fast():
 # first request that actually needed it.
 # ---------------------------------------------------------------------------
 
-_TASK_ALGO = {"P2": "catboost", "P3": "xgboost", "P4": "logistic", "P4S": "logistic", "P6": "linear"}
+_TASK_ALGO = {"P2": "catboost", "P3": "xgboost", "P4": "logistic", "P4S": "catboost", "P6": "linear"}
 
 
 @pytest.mark.parametrize("task,key", [
@@ -617,7 +617,7 @@ _PHASE8A_SHA256 = {
     "P2": "101576ba359c2ec862cecb3b3e5e738a0a8c7e9c6cc31fe8da388c21ff62201f",
     "P3": "a169f6b139c2c8f544f93a54f80baf309b8971bd71feab022b9f5675264d398a",
     "P4": "57a7a54f67406b6c5f4746449e6d776a00e5e45dfc66928c63a6238805b09598",
-    "P4S": "27b39407dfb9bc2357be73748703f0c9f096b8fb2468173519dca2a4f7c7ebef",
+    "P4S": "aba37602cf12a8d81ca2c165f8680388ccc15f0b9aae19c3c851aa955666a534",
     "P6": "2364e4f0b722b444b26fac9390c33e53f234fc6d69f80091640ad0a6fd790519",
 }
 
@@ -634,7 +634,7 @@ def test_joblib_matches_phase8a_pinned_sha256(task):
 
 def test_p4s_model_version_is_pinned():
     meta = _real_meta("P4S")
-    assert meta["model_version"] == "P4S-logistic-20260909-18bdf4e"
+    assert meta["model_version"] == "P4S-catboost-20260912-1c70ca8"
 
 
 def test_get_assets_is_memoized(monkeypatch):
