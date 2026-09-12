@@ -345,6 +345,19 @@ def test_fetch_all_rows_applies_filters_and_order():
     assert "select=calls_to_closed" in captured["url"]
 
 
+def test_fetch_all_rows_applies_greater_than_filter():
+    captured = {}
+
+    def handler(request):
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json=[], headers={"content-range": "*/0"})
+
+    client = _mock_client(handler)
+    sc.fetch_all_rows(client, "funnel_records", "calls_to_closed", gt_filters={"closed": 0})
+    assert "closed=gt.0" in captured["url"]
+    assert "purchased=" not in captured["url"]
+
+
 # ---------------------------------------------------------------------------
 # Criteria 68-69 -- the independent count query's exact shape.
 # ---------------------------------------------------------------------------
@@ -382,3 +395,17 @@ def test_independent_count_query_returns_at_most_one_row():
     # source explicitly.
     count = sc.independent_purchased_count(client)
     assert count == 3163
+
+
+def test_independent_filtered_count_uses_closed_positive_filter():
+    captured = {}
+
+    def handler(request):
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json=[{"source_row_id": 1}], headers={"content-range": "0-0/3318"})
+
+    client = _mock_client(handler)
+    count = sc.independent_filtered_count(client, gt_filters={"closed": 0})
+    assert count == 3318
+    assert "closed=gt.0" in captured["url"]
+    assert "purchased=" not in captured["url"]

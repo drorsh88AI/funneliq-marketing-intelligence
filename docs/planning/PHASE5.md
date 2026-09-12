@@ -1,6 +1,11 @@
 # פאזה 5 — ניקוי + EDA (`feat/analysis`)
 
-> **`planning_status: approved_for_execution` · `execution_status: in_progress`.**
+> **הבהרת 10A/CP7 — 12.09.2026:** הפאזה סגורה. שורות הסטטוס הישנות שלהלן הן
+> תצלומי זמן מן הביצוע. `feature_matrix.md` עודכן בחוזה היעד ל־P6: ‏14
+> הנגזרות יילקחו יחד מפרופיל רב־משתני תקף שנצפה ב־train; החציינים הנפרדים
+> של המימוש הפעיל הוכחו כבלתי־תקפים ויתוקנו ב־CP9.
+
+> **תצלום זמן היסטורי:** `planning_status: approved_for_execution` · `execution_status: in_progress`.
 > המסמך עבר שלושה סבבי ביקורת Codex–Claude ואושר סופית ב-04.09.2026 (ר' §י).
 > המשתמש נתן הוראת ביצוע מפורשת ונפרדת ב-04.09.2026: `branch feat/analysis`
 > **נפתח**, ו-**checkpoint 1 בוצע ואומת** (SHA-256 של ה-CSV תואם `PHASE0.md`).

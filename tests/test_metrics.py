@@ -274,22 +274,17 @@ def test_funnel_dropoff_uses_sum_over_sum_not_mean_of_row_ratios(funnel_dropoff_
 
 
 # ---------------------------------------------------------------------------
-# calls_to_closed() -- purchased=1 population only. 4 purchased rows with
-# distinct closed/calls_to_closed combinations, plus one ADVERSARIAL
-# purchased=0 row (P5): closed=2 (lands in the closed>=2 bucket if the
-# purchased filter leaks) and calls_to_closed=999 (an extreme outlier
-# that would wreck mean_calls_to_closed_closed_ge_2 and the correlation
-# if it leaked in). A boring excluded row (e.g. closed=0) wouldn't land
-# in either bucket and so wouldn't perturb most metrics even if the
-# filter were broken -- P5 is deliberately built to break every metric
-# below if the exclusion has any bug, not just the population count.
+# calls_to_closed() -- closed>0 population only. Four purchased rows with
+# distinct closed/calls_to_closed combinations, plus one adversarial
+# purchased=0 row (P5): closed=2 and calls_to_closed=999, which must
+# still enter every relevant aggregate and makes the filter visible.
 #
 #   row  purchased  closed  calls_to_closed
 #   P1   1          1       5
 #   P2   1          1       3
 #   P3   1          2       2
 #   P4   1          3       1
-#   P5   0          2       999   (adversarial -- must be excluded)
+#   P5   0          2       999   (adversarial -- must be included)
 # ---------------------------------------------------------------------------
 CALLS_TO_CLOSED_CSV_TEXT = (
     ",".join(ld.EXPECTED_COLUMNS) + "\n"
@@ -309,79 +304,64 @@ def calls_to_closed_df(tmp_path, monkeypatch):
 def test_calls_to_closed(calls_to_closed_df):
     result = an.calls_to_closed(calls_to_closed_df)
 
-    assert result["n_purchased1"] == 4  # P1-P4; P5 excluded
-    assert result["n_calls_to_closed_ge_4"] == 1  # only P1 (5 >= 4)
+    assert result["population_definition"] == "closed>0"
+    assert result["population_n"] == 5  # P1-P5, regardless of purchased
+    assert result["n_calls_to_closed_ge_4"] == 2  # P1 and P5
     assert result["n_closed_eq_1"] == 2   # P1, P2
-    assert result["n_closed_ge_2"] == 2   # P3, P4
+    assert result["n_closed_ge_2"] == 3   # P3, P4, P5
     assert result["n_closed_eq_1_calls_ge_4"] == 1  # within {P1,P2}, only P1
 
     assert result["mean_calls_to_closed_closed_eq_1"] == pytest.approx((5 + 3) / 2)  # 4.0
-    assert result["mean_calls_to_closed_closed_ge_2"] == pytest.approx((2 + 1) / 2)  # 1.5
+    assert result["mean_calls_to_closed_closed_ge_2"] == pytest.approx((2 + 1 + 999) / 3)
 
-    # corr([1,1,2,3], [5,3,2,1]) computed by hand:
-    #   means: closed=1.75, calls=2.75
-    #   deviations: closed=[-.75,-.75,.25,1.25]  calls=[2.25,.25,-.75,-1.75]
-    #   sum(products) = -1.6875-.1875-.1875-2.1875 = -4.25
-    #   sum(closed_dev^2) = .5625+.5625+.0625+1.5625 = 2.75
-    #   sum(calls_dev^2)  = 5.0625+.0625+.5625+3.0625 = 8.75
-    #   r = -4.25 / sqrt(2.75 * 8.75) = -4.25 / sqrt(24.0625)
+    # corr([1,1,2,3,2], [5,3,2,1,999]) computed from centered sums.
     import math
-    expected_r = -4.25 / math.sqrt(2.75 * 8.75)
+    expected_r = 195 / math.sqrt(2.8 * 794020)
     assert result["corr_closed_calls_to_closed"] == pytest.approx(expected_r)
 
-    # frequency_by_calls_to_closed: P1-P4 have calls_to_closed 5,3,2,1 --
-    # four distinct values, each occurring once. Sum of frequencies must
-    # equal n_purchased1 (checkpoint 11 correction, 2026-09-04: this is
+    # All five closed>0 records appear, including purchased=0 P5. Sum
+    # of frequencies must equal population_n (checkpoint 11 correction: this is
     # the actual distribution -- the two per-closed-subgroup means above
     # are complementary summary evidence, not themselves "the
     # distribution").
-    assert result["frequency_by_calls_to_closed"] == {1: 1, 2: 1, 3: 1, 5: 1}
-    assert sum(result["frequency_by_calls_to_closed"].values()) == result["n_purchased1"]
+    assert result["frequency_by_calls_to_closed"] == {1: 1, 2: 1, 3: 1, 5: 1, 999: 1}
+    assert sum(result["frequency_by_calls_to_closed"].values()) == result["population_n"]
+    assert result["mean_calls_to_closed"] == pytest.approx(202.0)
+    assert result["median_calls_to_closed"] == pytest.approx(3.0)
+    assert result["mode_calls_to_closed"] == [1, 2, 3, 5, 999]
 
-    # rate_calls_to_closed_ge_4 = 1/4 = 0.25, rate_closed_eq_1_calls_ge_4 =
+    # rate_calls_to_closed_ge_4 = 2/5 = 0.4, rate_closed_eq_1_calls_ge_4 =
     # 1/2 = 0.5 -- computed here (checkpoint 12 correction, 2026-09-04),
     # not by dividing raw counts in FINDINGS.md's rendering layer
-    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(0.25)
+    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(0.4)
     assert result["rate_closed_eq_1_calls_ge_4"] == pytest.approx(0.5)
 
 
-def test_calls_to_closed_excludes_adversarial_purchased_0_row_from_every_metric(calls_to_closed_df):
-    """P5 is adversarial, not incidental: closed=2 would join the
-    closed>=2 bucket (making n_closed_ge_2=3, not 2) and
-    calls_to_closed=999 would drag mean_calls_to_closed_closed_ge_2 from
-    1.5 to (2+1+999)/3=334.0 and distort the correlation, if the
-    purchased=1 filter leaked it in anywhere. Every field below must
-    still equal the exact 4-row (P1-P4) known answer -- not just the
-    population count, which a boring excluded row could pass by
-    accident even with a broken filter."""
+def test_calls_to_closed_includes_adversarial_purchased_0_closed_record(calls_to_closed_df):
+    """P5 locks the corrected population: closed>0, independent of purchase."""
     result = an.calls_to_closed(calls_to_closed_df)
 
-    assert result["n_purchased1"] == 4
-    assert result["n_calls_to_closed_ge_4"] == 1
+    assert result["population_n"] == 5
+    assert result["n_calls_to_closed_ge_4"] == 2
     assert result["n_closed_eq_1"] == 2
-    assert result["n_closed_ge_2"] == 2  # NOT 3 -- P5's closed=2 must not join this bucket
+    assert result["n_closed_ge_2"] == 3
     assert result["n_closed_eq_1_calls_ge_4"] == 1
 
     assert result["mean_calls_to_closed_closed_eq_1"] == pytest.approx((5 + 3) / 2)
-    # NOT (2+1+999)/3=334.0 -- P5's extreme calls_to_closed must not leak in
-    assert result["mean_calls_to_closed_closed_ge_2"] == pytest.approx((2 + 1) / 2)
+    assert result["mean_calls_to_closed_closed_ge_2"] == pytest.approx((2 + 1 + 999) / 3)
 
     import math
-    expected_r = -4.25 / math.sqrt(2.75 * 8.75)  # same derivation as test_calls_to_closed
+    expected_r = 195 / math.sqrt(2.8 * 794020)
     assert result["corr_closed_calls_to_closed"] == pytest.approx(expected_r)
 
-    # NOT {..., 999: 1} -- P5's extreme calls_to_closed=999 must not appear
-    # as its own bucket in the distribution either
-    assert result["frequency_by_calls_to_closed"] == {1: 1, 2: 1, 3: 1, 5: 1}
+    assert result["frequency_by_calls_to_closed"] == {1: 1, 2: 1, 3: 1, 5: 1, 999: 1}
 
-    # same 0.25/0.5 as the clean 4-row population -- P5 must not shift
-    # either denominator or numerator
-    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(0.25)
+    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(0.4)
     assert result["rate_closed_eq_1_calls_ge_4"] == pytest.approx(0.5)
 
 
 # ---------------------------------------------------------------------------
-# A single-record purchased=1 population -- pandas' Series.corr() on a
+# A single-record closed>0 population -- pandas' Series.corr() on a
 # lone point is mathematically undefined (needs at least two pairs) and
 # returns NaN, not an exception. Proves _safe_corr() (used by both
 # calls_to_closed and correlations) turns that into None, not a raw NaN
@@ -399,12 +379,12 @@ def single_record_df(tmp_path, monkeypatch):
 
 
 def test_calls_to_closed_single_record_population_correlation_is_none_not_nan(single_record_df):
-    """n_p1=1: correlation is undefined (fewer than two valid pairs), not
+    """population_n=1: correlation is undefined (fewer than two valid pairs), not
     computable as any real number -- must come back as None, and the
     whole dict must be JSON-serializable without emitting a bareword NaN."""
     result = an.calls_to_closed(single_record_df)
 
-    assert result["n_purchased1"] == 1
+    assert result["population_n"] == 1
     assert result["n_calls_to_closed_ge_4"] == 1   # calls_to_closed=5 >= 4
     assert result["n_closed_eq_1"] == 1
     assert result["n_closed_ge_2"] == 0             # empty bucket
@@ -412,13 +392,16 @@ def test_calls_to_closed_single_record_population_correlation_is_none_not_nan(si
     assert result["mean_calls_to_closed_closed_eq_1"] == pytest.approx(5.0)
     assert result["mean_calls_to_closed_closed_ge_2"] is None  # empty bucket -> None, not NaN
 
-    # both denominators (n_purchased1=1, n_closed_eq_1=1) are nonzero here,
+    # both denominators (population_n=1, n_closed_eq_1=1) are nonzero here,
     # so both rates are defined: 1/1 = 1.0 either way
     assert result["rate_calls_to_closed_ge_4"] == pytest.approx(1.0)
     assert result["rate_closed_eq_1_calls_ge_4"] == pytest.approx(1.0)
 
     assert result["corr_closed_calls_to_closed"] is None  # undefined with n=1, not NaN
     assert result["frequency_by_calls_to_closed"] == {5: 1}
+    assert result["mean_calls_to_closed"] == pytest.approx(5.0)
+    assert result["median_calls_to_closed"] == pytest.approx(5.0)
+    assert result["mode_calls_to_closed"] == [5]
 
     serialized = json.dumps(result)
     assert "NaN" not in serialized
@@ -427,13 +410,13 @@ def test_calls_to_closed_single_record_population_correlation_is_none_not_nan(si
 # ---------------------------------------------------------------------------
 # rate_calls_to_closed_ge_4 / rate_closed_eq_1_calls_ge_4 -- None when their
 # own denominator is 0, never a fabricated 0.0. Two distinct denominators,
-# tested separately: n_purchased1 (NO_PURCHASED1_CSV_TEXT has zero
-# purchased=1 rows at all) and n_closed_eq_1 (NO_CLOSED_EQ1_CSV_TEXT has
-# purchased=1 rows, but none with closed==1 exactly).
+# tested separately: population_n (NO_CLOSED_POS_CSV_TEXT has zero
+# closed>0 rows) and n_closed_eq_1 (NO_CLOSED_EQ1_CSV_TEXT has a
+# closed>0 row, but none with closed==1 exactly).
 # ---------------------------------------------------------------------------
-NO_PURCHASED1_CSV_TEXT = (
+NO_CLOSED_POS_CSV_TEXT = (
     ",".join(ld.EXPECTED_COLUMNS) + "\n"
-    "500,10,8,2,6,5,4,3,2,1,1,5,3,100,10.0,0,0,500.0,No\n"
+    "500,10,8,2,6,5,4,3,2,3,0,5,3,100,10.0,1,0,500.0,No\n"
 )
 
 NO_CLOSED_EQ1_CSV_TEXT = (
@@ -444,8 +427,8 @@ NO_CLOSED_EQ1_CSV_TEXT = (
 
 
 @pytest.fixture
-def no_purchased1_df(tmp_path, monkeypatch):
-    return _load(NO_PURCHASED1_CSV_TEXT, tmp_path, monkeypatch)
+def no_closed_pos_df(tmp_path, monkeypatch):
+    return _load(NO_CLOSED_POS_CSV_TEXT, tmp_path, monkeypatch)
 
 
 @pytest.fixture
@@ -453,20 +436,23 @@ def no_closed_eq1_df(tmp_path, monkeypatch):
     return _load(NO_CLOSED_EQ1_CSV_TEXT, tmp_path, monkeypatch)
 
 
-def test_calls_to_closed_rate_ge_4_is_none_when_no_purchased1_rows(no_purchased1_df):
-    result = an.calls_to_closed(no_purchased1_df)
-    assert result["n_purchased1"] == 0
+def test_calls_to_closed_rate_ge_4_is_none_when_no_closed_positive_rows(no_closed_pos_df):
+    result = an.calls_to_closed(no_closed_pos_df)
+    assert result["population_n"] == 0
     assert result["rate_calls_to_closed_ge_4"] is None  # 0-denominator -> None, not 0.0
-    # n_closed_eq_1 is a subset of purchased=1, so it's also empty here
+    assert result["mean_calls_to_closed"] is None
+    assert result["median_calls_to_closed"] is None
+    assert result["mode_calls_to_closed"] == []
+    # n_closed_eq_1 is a subset of closed>0, so it is also empty here
     assert result["n_closed_eq_1"] == 0
     assert result["rate_closed_eq_1_calls_ge_4"] is None
 
 
 def test_calls_to_closed_rate_closed_eq1_ge_4_is_none_when_no_closed_eq1_rows(no_closed_eq1_df):
     result = an.calls_to_closed(no_closed_eq1_df)
-    assert result["n_purchased1"] == 2
-    assert result["n_calls_to_closed_ge_4"] == 1  # row 1 only (calls_to_closed=5)
-    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(0.5)  # defined: 1/2
+    assert result["population_n"] == 1
+    assert result["n_calls_to_closed_ge_4"] == 0
+    assert result["rate_calls_to_closed_ge_4"] == pytest.approx(0.0)
 
     assert result["n_closed_eq_1"] == 0  # neither row has closed==1 (0 and 2)
     assert result["rate_closed_eq_1_calls_ge_4"] is None  # 0-denominator -> None, not 0.0
@@ -1044,7 +1030,8 @@ def test_write_svgs_works_from_a_fabricated_results_dict_with_no_dataframe_anywh
             "gap": {"n_records": 5},
         },
         "calls_to_closed": {
-            "n_purchased1": 9, "n_calls_to_closed_ge_4": 1, "n_closed_eq_1": 4,
+            "population_definition": "closed>0", "population_n": 9,
+            "n_calls_to_closed_ge_4": 1, "n_closed_eq_1": 4,
             "n_closed_ge_2": 5, "n_closed_eq_1_calls_ge_4": 1,
             "mean_calls_to_closed_closed_eq_1": 1.23,
             "mean_calls_to_closed_closed_ge_2": 8.76,
@@ -1271,7 +1258,7 @@ def test_findings_percentages_reflect_the_rate_fields_not_a_recomputation_from_c
     ['rate_closed_eq_1_calls_ge_4'] directly -- _findings_context() may
     only format an already-computed fraction (_pct_from_fraction), never
     divide two counts itself. Mutates ONLY the two rate fields (the raw
-    counts n_calls_to_closed_ge_4/n_purchased1/n_closed_eq_1/
+    counts n_calls_to_closed_ge_4/population_n/n_closed_eq_1/
     n_closed_eq_1_calls_ge_4 are left exactly as they are) and confirms
     the rendered percentages change to match the new rates -- if the
     context builder were still secretly dividing the counts itself, this
@@ -1283,7 +1270,7 @@ def test_findings_percentages_reflect_the_rate_fields_not_a_recomputation_from_c
     mutated["calls_to_closed"]["rate_closed_eq_1_calls_ge_4"] = 0.1234
     text = an.render_findings_md(mutated, svg_dir)
 
-    assert an._pct_from_fraction(0.6789, 0) + "%" in text   # "68%"
+    assert an._pct_from_fraction(0.6789, 2) + "%" in text   # "67.89%"
     assert an._pct_from_fraction(0.1234, 2) + "%" in text   # "12.34%"
 
 
@@ -1320,18 +1307,18 @@ def test_p5_conclusion_matches_spec_md_verbatim():
     test instead of silently drifting from the locked source of truth."""
     ctx = {
         "dropoff_fourth_pct": an._pct_from_fraction(0.10371680652328663, 1),  # -> "10.4"
-        "ge4_n": an._comma(1519),
-        "p1_n": an._comma(3163),
-        "ge4_pct": an._pct_from_fraction(1519 / 3163, 0),            # -> "48"
-        "closed_eq1_ge4_n": an._comma(439),
-        "closed_eq1_n": an._comma(488),
-        "closed_eq1_ge4_pct": an._pct_from_fraction(439 / 488, 2),   # -> "89.96"
+        "ge4_n": an._comma(1595),
+        "closed_n": an._comma(3318),
+        "ge4_pct": an._pct_from_fraction(1595 / 3318, 2),            # -> "48.07"
+        "calls_mean": an._num_or_na(3.706148282097649, 3),
+        "calls_median": an._num_or_na(3.0, 0),
+        "calls_mode": "2",
     }
     rendered = Template(an._P5_CONCLUSION_TEMPLATE).substitute(ctx)
 
     spec_path = Path(__file__).resolve().parent.parent / "docs" / "planning" / "SPEC.md"
     lines = spec_path.read_text(encoding="utf-8").splitlines(keepends=True)
-    start = next(i for i, line in enumerate(lines) if "הניסוח שייכתב" in line)
+    start = next(i for i, line in enumerate(lines) if "הכרעת CP4-D — תשובת P5 המחייבת" in line)
     block: list[str] = []
     started = False
     for line in lines[start + 1:]:

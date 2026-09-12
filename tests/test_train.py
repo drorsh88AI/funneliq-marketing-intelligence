@@ -1399,22 +1399,46 @@ def test_strategy_totals_all_equal_50000():
     assert tr.strategy_totals() == {name: 50_000 for name in tr.STRATEGY_ALLOCATIONS}
 
 
-def test_compute_budget_profiles_computes_median_per_exact_level_and_flags_unavailable():
-    cols = list(tr.DERIVED_FROM_PROFILE["P6"])
+def test_compute_budget_profiles_selects_observed_row_and_flags_unavailable():
+    cols = [c for c in tr.model_feature_columns("P6") if c != "ad_budget"]
     rows = []
-    for num_leads in (1, 2, 3):  # level 500 -> median 2.0
-        rows.append({**{c: 0.0 for c in cols}, "ad_budget": 500, "num_leads": float(num_leads)})
-    for num_leads in (10, 20):  # level 2000 -> median 15.0
-        rows.append({**{c: 0.0 for c in cols}, "ad_budget": 2000, "num_leads": float(num_leads)})
+    source_id = 1
+    for num_leads in (1, 2, 30):
+        rows.append({**{c: 0.0 for c in cols}, "source_row_id": source_id,
+                     "ad_budget": 500, "num_leads": float(num_leads)})
+        source_id += 1
+    for num_leads in (10, 20):
+        rows.append({**{c: 0.0 for c in cols}, "source_row_id": source_id,
+                     "ad_budget": 2000, "num_leads": float(num_leads)})
+        source_id += 1
     train_df = pd.DataFrame(rows)
 
     profiles = tr.compute_budget_profiles(train_df, [500, 2000, 5000])
     assert profiles[500]["n"] == 3
     assert profiles[500]["profile"]["num_leads"] == 2.0
+    assert profiles[500]["source_row_id"] == 2
     assert "ad_budget" not in profiles[500]["profile"]  # never part of the profile itself
     assert profiles[2000]["n"] == 2
-    assert profiles[2000]["profile"]["num_leads"] == 15.0
-    assert profiles[5000] == {"profile": None, "n": 0}  # zero rows -> unavailable, not completed from elsewhere
+    assert profiles[2000]["profile"]["num_leads"] == 10.0  # tie -> lower source_row_id
+    assert profiles[2000]["source_row_id"] == 4
+    assert profiles[5000] == {"profile": None, "n": 0, "source_row_id": None}
+
+    for level in (500, 2000):
+        source = train_df.loc[train_df["source_row_id"] == profiles[level]["source_row_id"]].iloc[0]
+        assert profiles[level]["profile"] == {c: float(source[c]) for c in cols}
+
+
+def test_compute_budget_profiles_is_deterministic_and_never_uses_target():
+    cols = [c for c in tr.model_feature_columns("P6") if c != "ad_budget"]
+    rows = [
+        {**{c: float(i) for c in cols}, "source_row_id": sid, "ad_budget": 500,
+         "cumulative_profit": target}
+        for i, sid, target in ((1, 20, -999999), (2, 10, 0), (100, 30, 999999999))
+    ]
+    first = tr.compute_budget_profiles(pd.DataFrame(rows), [500])
+    reversed_targets = pd.DataFrame(rows).assign(cumulative_profit=[999999999, 0, -999999])
+    second = tr.compute_budget_profiles(reversed_targets.sample(frac=1, random_state=9), [500])
+    assert first == second
 
 
 class _FakePipelineByBudget:
@@ -1445,9 +1469,9 @@ def test_simulate_strategies_returns_none_only_for_strategies_needing_the_unavai
 def test_p6_bootstrap_simulation_wires_point_and_bootstrap_calls_correctly(monkeypatch):
     cols = list(tr.DERIVED_FROM_PROFILE["P6"])
     rows = [
-        {**{c: 0.0 for c in cols}, "ad_budget": level}
+        {**{c: 0.0 for c in cols}, "source_row_id": level * 100 + i, "ad_budget": level}
         for level in tr.STRATEGY_LEVELS
-        for _ in range(30)  # enough per level that a 5-iteration bootstrap essentially never misses one
+        for i in range(30)  # enough per level that a 5-iteration bootstrap essentially never misses one
     ]
     synthetic_train_df = pd.DataFrame(rows)
 
@@ -1485,6 +1509,40 @@ def test_p6_bootstrap_simulation_wires_point_and_bootstrap_calls_correctly(monke
         assert r["n_bootstrap_used"] == 5  # every level present in every resample
         assert r["lower"] == pytest.approx(expected)
         assert r["upper"] == pytest.approx(expected)
+
+
+def test_p6_backtest_repair_preserves_frozen_actuals_without_opening_holdout(monkeypatch):
+    cols = [c for c in tr.model_feature_columns("P6") if c != "ad_budget"]
+    train_df = pd.DataFrame([
+        {**{c: 1.0 for c in cols}, "source_row_id": i + 1, "ad_budget": level}
+        for i, level in enumerate(tr.STRATEGY_LEVELS)
+    ])
+    monkeypatch.setattr(tr, "build_task_train_frame", lambda _df, task: train_df)
+    monkeypatch.setattr(
+        tr, "_holdout_frame",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("P6 Holdout reopened")),
+    )
+    monkeypatch.setattr(
+        tr, "build_fitted_candidate",
+        lambda *_args, **_kwargs: _FakePipelineByBudget(),
+    )
+    frozen = {
+        str(level): {
+            "actual_mean_per_customer": float(level + 7),
+            "n_holdout_at_level": i + 2,
+            "predicted_per_customer": -1.0,
+            "n_train_at_level": -1,
+        }
+        for i, level in enumerate(tr.STRATEGY_LEVELS)
+    }
+
+    rebuilt = tr.p6_backtest_from_frozen_actuals(object(), {"stub": {}}, "stub", frozen)
+    for i, level in enumerate(tr.STRATEGY_LEVELS):
+        row = rebuilt[str(level)]
+        assert row["actual_mean_per_customer"] == float(level + 7)
+        assert row["n_holdout_at_level"] == i + 2
+        assert row["predicted_per_customer"] == pytest.approx(level / 100.0)
+        assert row["profile_source_row_id"] == i + 1
 
 
 # ---------------------------------------------------------------------------
@@ -2058,6 +2116,41 @@ def test_p4s_fitted_logistic_candidate_predict_proba_is_deterministic(df):
     p1 = pipeline.predict_proba(row)[:, 1]
     p2 = pipeline.predict_proba(row)[:, 1]
     assert p1[0] == p2[0]
+
+
+def test_phase10a_p4s_switch_reuses_frozen_catboost_and_preserves_logistic_audit(monkeypatch):
+    metrics = {
+        "P4S": {"catboost": {"best_params": {
+            "model__depth": 6, "model__iterations": 400, "model__learning_rate": 0.01,
+        }}},
+        "P4S_selection": {"eligible": ["logistic"], "winner": "logistic"},
+        "P4S_calibration": {"winner": "logistic", "calibration_status": "calibrated"},
+        "P4S_holdout": {"winner": "logistic", "n_holdout": 633, "roc_auc": 0.81},
+    }
+    calibrator = object()
+    monkeypatch.setattr(
+        tr, "calibrate_task_winner",
+        lambda task, _df, results, winner: {
+            "winner": winner, "calibrator": calibrator,
+            "calibration_status": "calibrated", "calibration_method": "sigmoid",
+        },
+    )
+    calls = []
+
+    def fake_holdout(_df, results, winner, *, calibration=None):
+        calls.append((winner, calibration["calibrator"]))
+        return {"winner": winner, "n_holdout": 633, "roc_auc": 0.79}
+
+    monkeypatch.setattr(tr, "holdout_evaluate_p4s", fake_holdout)
+    updated = tr.phase10a_p4s_catboost_metrics(object(), metrics)
+
+    assert calls == [("catboost", calibrator)]
+    assert updated["P4S_selection"]["winner"] == "catboost"
+    assert updated["P4S_selection"]["cv_rule_winner"] == "logistic"
+    assert updated["P4S_pre_cp9_audit"]["holdout"]["winner"] == "logistic"
+    assert updated["P4S_holdout"]["winner"] == "catboost"
+    assert "calibrator" not in updated["P4S_calibration"]
+    assert metrics["P4S_selection"]["winner"] == "logistic"  # input not mutated
 
 
 def _fake_build_p4s(task, name, results, given_df, train_df=None):

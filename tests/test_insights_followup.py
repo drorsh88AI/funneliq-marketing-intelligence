@@ -16,7 +16,7 @@ from app.main import app
 from app.supabase_client import get_user_client
 
 PATH = "/api/insights/followup"
-TOTAL_PURCHASED = 3163
+TOTAL_CLOSED = 3318
 
 STAGES_ROWS = [
     {"stage_order": 1, "stage": "followup_1", "from_leads": 100, "to_leads": 78, "drop_rate": 0.22},
@@ -27,13 +27,13 @@ STAGES_ROWS = [
 ]
 
 
-def _funnel_records_page(offset: int, total: int = TOTAL_PURCHASED) -> httpx.Response:
+def _funnel_records_page(offset: int, total: int = TOTAL_CLOSED) -> httpx.Response:
     page = min(1000, max(0, total - offset))
     data = [{"calls_to_closed": (offset + i) % 9 + 1} for i in range(page)]
     return httpx.Response(200, json=data, headers={"content-range": f"{offset}-{offset + page - 1}/{total}"})
 
 
-def _make_handler(*, stages_response, funnel_records_total=TOTAL_PURCHASED, independent_count=None):
+def _make_handler(*, stages_response, funnel_records_total=TOTAL_CLOSED, independent_count=None):
     """stages_response: an httpx.Response, or a callable(request) -> Response.
     independent_count defaults to funnel_records_total (i.e. no mismatch)."""
     count = funnel_records_total if independent_count is None else independent_count
@@ -99,8 +99,29 @@ def test_happy_path_both_parts_available(authed_client):
     assert body["stages"]["status"] == "available"
     assert [s["stage_order"] for s in body["stages"]["data"]] == [1, 2, 3, 4, 5]
     assert body["calls_to_closed"]["status"] == "available"
-    assert body["calls_to_closed"]["data"]["population_n"] == TOTAL_PURCHASED
-    assert sum(b["n"] for b in body["calls_to_closed"]["data"]["distribution"]) == TOTAL_PURCHASED
+    assert body["calls_to_closed"]["data"]["population_n"] == TOTAL_CLOSED
+    assert sum(b["n"] for b in body["calls_to_closed"]["data"]["distribution"]) == TOTAL_CLOSED
+
+
+def test_calls_queries_use_closed_positive_population(authed_client):
+    seen_urls = []
+
+    def handler(request):
+        url = str(request.url)
+        seen_urls.append(url)
+        if "followup_insight" in url:
+            return httpx.Response(200, json=STAGES_ROWS, headers={"content-range": "0-4/5"})
+        if "limit=1" in url and "select=source_row_id" in url:
+            return httpx.Response(200, json=[{"source_row_id": 1}], headers={"content-range": "0-0/3318"})
+        offset = int(dict(p.split("=") for p in url.split("?")[1].split("&"))["offset"])
+        return _funnel_records_page(offset)
+
+    app.dependency_overrides[get_user_client] = _override(handler)
+    assert authed_client.get(PATH).status_code == 200
+    funnel_urls = [url for url in seen_urls if "funnel_records" in url]
+    assert funnel_urls
+    assert all("closed=gt.0" in url for url in funnel_urls)
+    assert all("purchased=" not in url for url in funnel_urls)
 
 
 def test_stages_query_sends_explicit_order_by_stage_order(authed_client):
@@ -235,7 +256,7 @@ def test_one_part_unavailable_is_200_with_the_other_part_intact(authed_client):
             return httpx.Response(503, text="<html>gateway</html>")
         if "funnel_records" in url:
             if "limit=1" in url and "select=source_row_id" in url:
-                return httpx.Response(200, json=[{"source_row_id": 1}], headers={"content-range": "0-0/3163"})
+                return httpx.Response(200, json=[{"source_row_id": 1}], headers={"content-range": "0-0/3318"})
             offset = int(dict(p.split("=") for p in url.split("?")[1].split("&"))["offset"])
             return _funnel_records_page(offset)
         raise AssertionError(url)
@@ -267,13 +288,13 @@ def test_both_parts_unavailable_is_503(authed_client):
 
 
 def test_aggregation_mismatch_marks_calls_part_unavailable_not_stages(authed_client):
-    """The paginated fetch returns 3163 rows, but the independent count
-    query reports 3164 -- a mismatch that must be caught, not silently
+    """The paginated fetch returns 3318 rows, but the independent count
+    query reports 3319 -- a mismatch that must be caught, not silently
     accepted because len(rows) alone looked plausible."""
     handler = _make_handler(
         stages_response=httpx.Response(200, json=STAGES_ROWS, headers={"content-range": "0-4/5"}),
-        funnel_records_total=3163,
-        independent_count=3164,
+        funnel_records_total=3318,
+        independent_count=3319,
     )
     app.dependency_overrides[get_user_client] = _override(handler)
 
@@ -291,11 +312,11 @@ def test_truncated_pagination_is_caught_by_the_independent_count(authed_client):
     population (e.g. a cut-off final page) must be caught by the
     independent count, not accepted because it 'looked like' a real
     distribution -- fetch reports 2000 rows total, independent count
-    reports the true 3163."""
+    reports the true 3318."""
     handler = _make_handler(
         stages_response=httpx.Response(200, json=STAGES_ROWS, headers={"content-range": "0-4/5"}),
         funnel_records_total=2000,
-        independent_count=3163,
+        independent_count=3318,
     )
     app.dependency_overrides[get_user_client] = _override(handler)
 

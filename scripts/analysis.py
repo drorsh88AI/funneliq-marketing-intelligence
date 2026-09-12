@@ -283,9 +283,9 @@ def funnel_dropoff(df: pd.DataFrame) -> dict:
 
 
 def calls_to_closed(df: pd.DataFrame) -> dict:
-    """calls_to_closed within the purchased=1 population -- SPEC.md's own
-    established reading of this column (PHASE0.md's verified reference
-    numbers). calls_to_closed is documented as a record-level average,
+    """calls_to_closed within records where at least one deal closed.
+
+    calls_to_closed is documented as a record-level average,
     not a per-deal call history (SPEC.md § עובדות שנמדדו) -- every
     quantity below stays explicit about which unit (record vs. deal) and
     which subpopulation it's counted over, per SPEC.md's warning against
@@ -293,7 +293,7 @@ def calls_to_closed(df: pd.DataFrame) -> dict:
 
     frequency_by_calls_to_closed is the actual distribution SPEC.md
     package 5/PHASE5.md checkpoint 8 asks for: exact observed
-    calls_to_closed value -> record count, over purchased=1, with no
+    calls_to_closed value -> record count, over closed>0, with no
     invented bins -- a value that never occurs in this population simply
     has no key (checkpoint 11 correction, 2026-09-04: the two per-
     closed-subgroup means below are complementary summary evidence, not
@@ -301,25 +301,27 @@ def calls_to_closed(df: pd.DataFrame) -> dict:
 
     rate_calls_to_closed_ge_4 / rate_closed_eq_1_calls_ge_4 (checkpoint
     12 correction, 2026-09-04): SPEC.md's P5 conclusion needs these two
-    ratios (n_calls_to_closed_ge_4/n_purchased1,
+    ratios (n_calls_to_closed_ge_4/population_n,
     n_closed_eq_1_calls_ge_4/n_closed_eq_1) as percentages. Computing a
     ratio is analysis, not display formatting -- it belongs here, in a
     tested pure function, not in FINDINGS.md's rendering layer, which
     may only format an already-computed value from results. None when
     the denominator is 0, never a fabricated 0.0 (same principle as
     every other None in this module)."""
-    p1 = df[df["purchased"] == 1]
-    n_p1 = len(p1)
+    population = df[df["closed"] > 0]
+    population_n = len(population)
 
-    closed1 = p1[p1["closed"] == 1]
-    closed2p = p1[p1["closed"] >= 2]
+    closed1 = population[population["closed"] == 1]
+    closed2p = population[population["closed"] >= 2]
 
-    freq = p1["calls_to_closed"].value_counts()
+    freq = population["calls_to_closed"].value_counts()
     frequency_by_calls_to_closed = {int(k): int(v) for k, v in sorted(freq.items())}
+    max_frequency = max(frequency_by_calls_to_closed.values(), default=0)
 
     return {
-        "n_purchased1": int(n_p1),
-        "n_calls_to_closed_ge_4": int((p1["calls_to_closed"] >= 4).sum()),
+        "population_definition": "closed>0",
+        "population_n": int(population_n),
+        "n_calls_to_closed_ge_4": int((population["calls_to_closed"] >= 4).sum()),
         "n_closed_eq_1": int(len(closed1)),
         "n_closed_ge_2": int(len(closed2p)),
         "n_closed_eq_1_calls_ge_4": int((closed1["calls_to_closed"] >= 4).sum()),
@@ -329,10 +331,19 @@ def calls_to_closed(df: pd.DataFrame) -> dict:
         "mean_calls_to_closed_closed_ge_2": (
             float(closed2p["calls_to_closed"].mean()) if len(closed2p) else None
         ),
-        "corr_closed_calls_to_closed": _safe_corr(p1["closed"], p1["calls_to_closed"]),
+        "corr_closed_calls_to_closed": _safe_corr(population["closed"], population["calls_to_closed"]),
         "frequency_by_calls_to_closed": frequency_by_calls_to_closed,
+        "mean_calls_to_closed": (
+            float(population["calls_to_closed"].mean()) if population_n else None
+        ),
+        "median_calls_to_closed": (
+            float(population["calls_to_closed"].median()) if population_n else None
+        ),
+        "mode_calls_to_closed": [
+            calls for calls, n in frequency_by_calls_to_closed.items() if n == max_frequency
+        ],
         "rate_calls_to_closed_ge_4": (
-            int((p1["calls_to_closed"] >= 4).sum()) / n_p1 if n_p1 else None
+            int((population["calls_to_closed"] >= 4).sum()) / population_n if population_n else None
         ),
         "rate_closed_eq_1_calls_ge_4": (
             int((closed1["calls_to_closed"] >= 4).sum()) / len(closed1) if len(closed1) else None
@@ -783,7 +794,7 @@ def _svg_budget_tier_conversion(results: dict, out_path: Path) -> None:
 def _svg_calls_to_closed_distribution(results: dict, out_path: Path) -> None:
     """The actual distribution (checkpoint 11 correction, 2026-09-04): one
     bar per exact observed calls_to_closed value, height = record count,
-    within purchased=1. No invented bins -- a value with no bar simply
+    within closed>0. No invented bins -- a value with no bar simply
     never occurs in this population. Round 1 of this chart plotted the
     mean calls_to_closed for the closed=1 vs. closed>=2 subgroups, which
     is a real, useful comparison but is not a distribution of
@@ -800,16 +811,16 @@ def _svg_calls_to_closed_distribution(results: dict, out_path: Path) -> None:
     ax.set_ylim(bottom=0)
     ax.set_xlabel("calls_to_closed (exact observed value)")
     ax.set_ylabel("record count")
-    ax.set_title("calls_to_closed distribution (purchased=1 population)")
+    ax.set_title("calls_to_closed distribution (closed>0 population)")
     fig.tight_layout()
     _write_svg_with_description(
         fig, out_path,
-        title_en="calls_to_closed distribution (purchased=1 population)",
+        title_en="calls_to_closed distribution (closed>0 population)",
         description_he=(
             "תרשים עמודות: התפלגות calls_to_closed בפועל בתוך אוכלוסיית "
-            "purchased=1 -- לכל ערך calls_to_closed שנצפה בקובץ (ציר x), "
+            "closed>0 -- לכל ערך calls_to_closed שנצפה בקובץ (ציר x), "
             "ספירת הרשומות עם אותו ערך בדיוק (ציר y), בלי חלוקה ל-bins "
-            f"מומצאים. סך התדירויות שווה n_purchased1={data['n_purchased1']}. "
+            f"מומצאים. סך התדירויות שווה population_n={data['population_n']}. "
             "calls_to_closed מתועד ב-SPEC.md כממוצע ברמת רשומה, לא כהיסטוריית "
             "שיחות לעסקה בודדת. כל הערכים לקוחים ישירות מ-"
             "results['calls_to_closed']['frequency_by_calls_to_closed'], בלי "
@@ -938,7 +949,7 @@ def _findings_context(results: dict, svg_dir: Path) -> dict[str, str]:
     return {
         "pop_full": _comma(mv["n_rows"]),
         "pop_known_profit": _comma(m3["n_known"]),
-        "pop_purchased": _comma(ctc["n_purchased1"]),
+        "pop_closed": _comma(ctc["population_n"]),
         "source_sha": sm["source_sha256"],
 
         "missing_ltv": str(mv["missing_ltv_months"]),
@@ -967,12 +978,15 @@ def _findings_context(results: dict, svg_dir: Path) -> dict[str, str]:
         "dropoff_fourth_pct": _pct_from_fraction(fd["followup_4"], 1),
         "dropoff_fifth_pct": _pct_from_fraction(fd["followup_5"], 1),
 
-        "p1_n": _comma(ctc["n_purchased1"]),
+        "closed_n": _comma(ctc["population_n"]),
         "ge4_n": _comma(ctc["n_calls_to_closed_ge_4"]),
-        "ge4_pct": _pct_from_fraction(ctc["rate_calls_to_closed_ge_4"], 0),
+        "ge4_pct": _pct_from_fraction(ctc["rate_calls_to_closed_ge_4"], 2),
         "closed_eq1_n": _comma(ctc["n_closed_eq_1"]),
         "closed_eq1_ge4_n": _comma(ctc["n_closed_eq_1_calls_ge_4"]),
         "closed_eq1_ge4_pct": _pct_from_fraction(ctc["rate_closed_eq_1_calls_ge_4"], 2),
+        "calls_mean": _num_or_na(ctc["mean_calls_to_closed"], 3),
+        "calls_median": _num_or_na(ctc["median_calls_to_closed"], 0),
+        "calls_mode": ", ".join(str(v) for v in ctc["mode_calls_to_closed"]) or "לא זמין",
 
         "zero_profit_n": _comma(m1["n_zero_profit"]),
         "missing_profit_n": _comma(m1["n_missing_profit"]),
@@ -1024,34 +1038,29 @@ def _findings_context(results: dict, svg_dir: Path) -> dict[str, str]:
 
 # The P5 conclusion -- word-for-word from SPEC.md § מסקנת P5, with only
 # the analytical numbers replaced by $placeholders. Every OTHER digit left
-# literal below (the "1" in purchased=1/closed=1, the "4"/"2" in the >=4/
+# literal below (the "0"/"1" in closed>0/closed=1, the "4"/"2" in the >=4/
 # >=2 thresholds) is a fixed metric-defining threshold, not a measured
 # finding -- SPEC.md itself writes these as literal condition values, not
 # results. tests/test_metrics.py verifies this resolves to an EXACT match
 # against SPEC.md's own live text (read from the file, not retyped), so a
 # transcription slip here fails a test rather than silently drifting.
 _P5_CONCLUSION_TEMPLATE = """\
-> הנתונים **אינם תומכים** בעצירה אוטומטית אחרי המעקב השלישי. שיעור הנשירה בשלב
-> הרביעי הוא הנמוך בשרשרת ($dropoff_fourth_pct%). בנוסף, ב-$ge4_n מתוך $p1_n רשומות שבהן
-> `purchased = 1` ($ge4_pct%) הערך **הממוצע** של `calls_to_closed` הוא 4 ומעלה,
-> ובתת-האוכלוסייה `closed = 1` — $closed_eq1_ge4_n מתוך $closed_eq1_n רשומות ($closed_eq1_ge4_pct%) מציגות
-> `calls_to_closed >= 4`.
-> **מה שהנתונים אינם מוכיחים:** `calls_to_closed` הוא ממוצע ברמת רשומה ולא
-> היסטוריה פר-עסקה, ולכן **אין לטעון ש-$ge4_pct% מהעסקאות הבודדות דרשו 4+ שיחות**
-> ואין לטעון שעצירה אחרי השלישית הייתה מוותרת על כל $ge4_n הרשומות.
-> תת-האוכלוסייה `closed = 1` נבדלת תיאורית בגודל, בתקציב, בהמרה ובמספר השיחות,
-> ולכן אינה מייצגת בהכרח את כלל הרשומות או העסקאות. **לא ניתן להסיק ממנה את
-> שיעור העסקאות הכולל ולא את כיוון ההטיה** — יחידת ההשוואה היא רשומה, ורשומת
-> `closed ≥ 2` נספרת כאחת אף שהיא מכילה כמה עסקאות.
-> הנתונים אגרגטיביים ואינם מאפשרים לאמוד סיבתיות או כדאיות כלכלית שולית.
-> **ההמלצה:** להמשיך את המעקבים באופן מבוקר, ולמדוד בניסוי תפעולי את שיעור
-> הסגירה השולי, זמן העבודה ועלות כל שלב.
+> **לא. אין לאמץ עצירה אוטומטית אחרי המעקב השלישי.** שיעור הנשירה לאחר המעקב
+> הרביעי הוא הנמוך בשרשרת ($dropoff_fourth_pct%). מבין $closed_n הרשומות שבהן נסגרה עסקה
+> (`closed>0`), הקובץ אינו מאפשר למנות סבבי מעקב לעסקה בודדת. במדד הקרוב,
+> התפלגות `calls_to_closed` ברמת הרשומה, החציון הוא $calls_median, הערך
+> השכיח הוא $calls_mode והממוצע $calls_mean; ב־$ge4_n רשומות ($ge4_pct%) הממוצע הוא 4 שיחות ומעלה.
+> חמשת שלבי המעקב מתארים כמה לידים נותרו אחרי כל סבב, ואילו
+> `calls_to_closed` הוא ממוצע שיחות ברמת רשומה שיכול להגיע עד 9. לכן אי אפשר
+> לומר ש־$ge4_pct% מהעסקאות הבודדות דרשו 4+ שיחות, או שהשיחות המאוחרות גרמו
+> לסגירה. ההמלצה היא להמשיך מעקבים אחרי השלישי באופן מבוקר ולמדוד בכל שלב
+> את שיעור הסגירה השולי, זמן העבודה והעלות לפני שינוי קבוע במדיניות.
 """
 
 # Every analytical value below is a $placeholder resolved from `results`
 # via _findings_context() -- see that function's docstring for the "no new
 # computation" rule. Every finding carries a population label (3,500 /
-# 3,471 / 3,163) and a "dataset description" tag per PHASE5.md/SPEC.md §
+# 3,471 / 3,318) and a "dataset description" tag per PHASE5.md/SPEC.md §
 # מטריצת זמינות פיצ'רים -- none of this is a causal claim or a phase-6
 # feature-selection input (D3).
 _FINDINGS_TEMPLATE = Template("""\
@@ -1102,7 +1111,7 @@ $desc_ad_budget
 
 $desc_corr
 
-## חבילה 5 — נשירה במשפך, calls_to_closed (אוכלוסייה: $pop_full / $pop_purchased, dataset description)
+## חבילה 5 — נשירה במשפך, calls_to_closed (אוכלוסייה: $pop_full / $pop_closed, dataset description)
 
 נשירה בכל שלב במשפך (Σ/Σ, לא ממוצע יחסים לשורה), על $pop_full הרשומות:
 
@@ -1113,13 +1122,14 @@ $desc_funnel
 שלב 1: $dropoff_first_pct% · שלב 2: $dropoff_second_pct% · שלב 3: $dropoff_third_pct% ·
 שלב 4: $dropoff_fourth_pct% · שלב 5: $dropoff_fifth_pct%.
 
-התפלגות `calls_to_closed` בתוך אוכלוסיית `purchased=1` ($pop_purchased רשומות):
+התפלגות `calls_to_closed` בתוך אוכלוסיית `closed>0` ($pop_closed רשומות):
 
 ![calls_to_closed distribution](calls_to_closed_distribution.svg)
 
 $desc_calls
 
-מתוך $p1_n רשומות `purchased=1`, ב-$ge4_n מהן ($ge4_pct%) `calls_to_closed`
+מתוך $closed_n רשומות `closed>0`, החציון הוא $calls_median, השכיח הוא
+$calls_mode והממוצע $calls_mean. ב-$ge4_n מהן ($ge4_pct%) `calls_to_closed`
 הממוצע הוא 4 ומעלה. בתת-האוכלוסייה `closed=1` ($closed_eq1_n רשומות),
 $closed_eq1_ge4_n מהן ($closed_eq1_ge4_pct%) מציגות `calls_to_closed >= 4`.
 
@@ -1178,7 +1188,7 @@ $decile_ties_n רשומות).
 זהה במדויק לנתוני חבילה 1 לעיל ($dup_rows שורות ב-$dup_groups קבוצות)
 -- `m6_duplicate_profile()` הוא alias ל-`duplicates()`, לא הגדרה מתחרה.
 
-## מסקנת P5 — תיאורית, לא סיבתית (אוכלוסייה: $pop_full / $pop_purchased, dataset description)
+## מסקנת P5 — תיאורית, לא סיבתית (אוכלוסייה: $pop_full / $pop_closed, dataset description)
 
 הניסוח הבא זהה מילולית לניסוח הנעול ב-SPEC.md § מסקנת P5:
 

@@ -29,3 +29,6 @@ catboost_info/
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Claude Code — personal local overrides (not team policy)
+.claude/settings.local.json

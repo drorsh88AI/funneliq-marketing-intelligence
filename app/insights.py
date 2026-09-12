@@ -29,7 +29,7 @@ from app.schemas import (
 from app.supabase_client import (
     fetch_all_rows,
     get_user_client,
-    independent_purchased_count,
+    independent_filtered_count,
     status_for_supabase_error,
 )
 
@@ -131,8 +131,8 @@ def _fetch_calls_to_closed(client: Client):
     """Returns ("auth", status_code, detail) | ("unavailable", PartError)
     | ("available", CallsPart)."""
     try:
-        rows = fetch_all_rows(client, "funnel_records", "calls_to_closed", filters={"purchased": 1})
-        independent_count = independent_purchased_count(client)
+        rows = fetch_all_rows(client, "funnel_records", "calls_to_closed", gt_filters={"closed": 0})
+        independent_count = independent_filtered_count(client, gt_filters={"closed": 0})
     except (APIError, httpx.TransportError) as e:
         status, detail = status_for_supabase_error(e)
         if status in (401, 403):
