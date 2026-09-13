@@ -268,73 +268,7 @@
   }
   .mock-screen h2{margin:0 0 4px; font-size:16px;}
   .mock-screen .mock-caption{color:var(--text-dim); font-size:13px; margin-bottom:18px;}
-  .tag{
-    display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600;
-    padding:2px 8px; border-radius:999px; margin-inline-start:6px; vertical-align:middle;
-  }
-  .tag.demo{background:var(--gray-dim); color:var(--gray);}
-  .tag.spec{background:var(--amber-dim); color:var(--amber);}
-
-  /* login mock */
-  .login-card{max-width:320px; margin:0 auto; border:1px solid var(--border); border-radius:var(--radius); padding:22px;}
-  .login-card h3{margin:0 0 4px; text-align:center;}
-  .login-card .brandline{text-align:center; color:var(--text-dim); font-size:12.5px; margin-bottom:18px;}
-  .login-card label{display:block; font-size:12.5px; color:var(--text-dim); margin:12px 0 4px;}
-  .login-card input{
-    width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:7px;
-    font-family:inherit; font-size:13.5px; background:var(--bg);
-  }
-  .login-card button{
-    width:100%; margin-top:16px; padding:10px; border:none; border-radius:7px;
-    background:var(--brand); color:#fff; font-family:inherit; font-weight:700; font-size:14px; cursor:default;
-  }
-  .login-fine{margin-top:14px; font-size:11.5px; color:var(--text-dim); text-align:center;}
-
-  /* prediction cards */
-  .predict-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px;}
-  .predict-card{border:1px solid var(--border); border-radius:var(--radius); padding:16px;}
-  .predict-card h4{margin:0 0 2px; font-size:12.5px; color:var(--text-dim); font-weight:600;}
-  .predict-main{font-size:26px; font-weight:700; margin:6px 0 2px;}
-  .predict-sub{font-size:12.5px; color:var(--text-dim); margin-bottom:10px;}
-  .badge-row{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
-  .badge{
-    display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600;
-    padding:3px 8px; border-radius:6px; border:1px solid transparent;
-  }
-  .badge.evidence-high{background:var(--positive-dim); color:var(--positive);}
-  .badge.evidence-med{background:var(--amber-dim); color:var(--amber);}
-  .badge.calibrated{background:var(--brand-dim); color:var(--brand);}
-  .badge.disclaimer{background:var(--gray-dim); color:var(--gray);}
-  .predict-disclaimer{font-size:11.5px; color:var(--text-dim); margin-top:8px; border-top:1px dashed var(--border); padding-top:8px;}
-
-  /* funnel svg */
-  .funnel-wrap{overflow-x:auto;}
-  .funnel-caption{font-size:12.5px; color:var(--text-dim); margin-top:8px;}
-  table.fallback{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px;}
-  table.fallback th, table.fallback td{border:1px solid var(--border); padding:6px 8px; text-align:center;}
-  table.fallback caption{caption-side:top; text-align:right; font-size:11.5px; color:var(--text-dim); padding-bottom:4px;}
-
-  /* budget ranking */
-  .strategy-row{display:flex; align-items:center; gap:12px; margin-bottom:14px;}
-  .strategy-label{width:118px; flex-shrink:0; font-size:13px;}
-  .strategy-label b{display:block; font-size:13.5px;}
-  .strategy-label span{color:var(--text-dim); font-size:11.5px;}
-  .strategy-bar-wrap{flex:1; position:relative; height:26px; background:var(--gray-dim); border-radius:5px;}
-  .strategy-bar{position:absolute; top:0; right:0; height:100%; background:var(--brand); border-radius:5px;}
-  .strategy-whisker{position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--amber);}
-  .strategy-whisker::before,.strategy-whisker::after{content:"";position:absolute; right:-3px; width:8px; height:2px; background:var(--amber);}
-  .strategy-whisker::before{top:0;} .strategy-whisker::after{bottom:0;}
-  .strategy-meta{width:150px; flex-shrink:0; font-size:11.5px; color:var(--text-dim); text-align:left;}
-
-  /* OOD */
-  .alert-box{
-    display:flex; gap:12px; align-items:flex-start;
-    background:var(--amber-dim); border:1px solid #eddcb0; border-radius:var(--radius);
-    padding:16px 18px;
-  }
-  .alert-box .icon{font-size:20px; line-height:1;}
-  .alert-box strong{display:block; margin-bottom:4px; color:var(--amber);}
-  .alert-box p{margin:0; color:#6b4c08; font-size:13.5px;}
+  .mock-screen img{width:100%; height:auto; display:block; border:1px solid var(--border); border-radius:8px;}
 
   footer{text-align:center; color:var(--text-dim); font-size:12px; padding:20px 0 40px;}
 </style>
@@ -539,7 +473,7 @@
     <div class="policy-card">
       <h2>תמונת מצב לתכנון</h2>
       <p id="planning-current-state"></p>
-      <p class="policy-fine"><strong>עדכון פעיל 13.09.2026 — פאזה 10A נסגרה:</strong> <a href="docs/planning/PHASE10A.md">תוכנית התיקון הרוחבית מול הבריף והנתונים</a> הושלמה (CP0–CP11). CP9 תיקן את P4S ל־CatBoost, בנה את הסימולטור מפרופילי train נצפים, יישר את <code>calls_to_closed</code> ל־<code>closed&gt;0</code> ויצר נכס עובדות מצומצם; ‏789 בדיקות עברו והחוזה החיצוני נשמר. CatBoost חלש מעט מ־Logistic ההיסטורי ו־<code>100x500</code> אינה המלצה; לפיילוט מבוקר הומלצה <code>25x2000</code>. המרשם עומד על 41 done, 15 planned, 15 gap, אחת N/A ואחת parent. CP10 תיעד שתי ביקורות Codex ו־15 מקרי הפרכה; CP11 הוסיף ביקורת Claude עצמאית (קריאה בלבד) שאימתה את הממצאים ותיקנה שתי בעיות קלות לא-חוסמות — הפניה עצמית ב־CLAUDE.md ובדיקת <code>test_design_tokens.py</code> שהורצה מחדש (9/9). המשתמש אישר במפורש את סגירת 10A. פאזה 10 checkpoint 8 חוזר לתור: בדיקת ששת מסכי Stitch מול DESIGN.md המעודכן טרם בוצעה.</p>
+      <p class="policy-fine"><strong>עדכון פעיל 13.09.2026 — פאזה 10A נסגרה:</strong> <a href="docs/planning/PHASE10A.md">תוכנית התיקון הרוחבית מול הבריף והנתונים</a> הושלמה (CP0–CP11). CP9 תיקן את P4S ל־CatBoost, בנה את הסימולטור מפרופילי train נצפים, יישר את <code>calls_to_closed</code> ל־<code>closed&gt;0</code> ויצר נכס עובדות מצומצם; ‏789 בדיקות עברו והחוזה החיצוני נשמר. CatBoost חלש מעט מ־Logistic ההיסטורי ו־<code>100x500</code> אינה המלצה; לפיילוט מבוקר הומלצה <code>25x2000</code>. המרשם עומד על 41 done, 15 planned, 15 gap, אחת N/A ואחת parent. CP10 תיעד שתי ביקורות Codex ו־15 מקרי הפרכה; CP11 הוסיף ביקורת Claude עצמאית (קריאה בלבד) שאימתה את הממצאים ותיקנה שתי בעיות קלות לא-חוסמות — הפניה עצמית ב־CLAUDE.md ובדיקת <code>test_design_tokens.py</code> שהורצה מחדש (9/9). המשתמש אישר במפורש את סגירת 10A. פאזה 10 checkpoint 8 חזר לתור ונסגר: בדיקה מלאה מול DESIGN.md/IA.md המעודכנים בוצעה ואומתה על <strong>כל ששת המסכים</strong> — פירוט מלא ביומן checkpoint 8, PHASE10.md §טו. גישה ד׳ נבדקה במלואה: <code>select-on-focus</code> הורחב ואומת בשני הטפסים, סדר Tab נבדק כמוקאפ סטטי, והצהרת מועד המדידה הקיימת מכסה את כל 13 השדות ללא צורך ב-<code>tooltip</code> נוסף. checkpoint 9 (ייצוא נכסים + מטריצת כיסוי) הושלם בהתאם: שישה נכסי תמונה ברזולוציה מקורית ב-<code>docs/design/</code>, ומטריצת כיסוי ב-DESIGN.md §9 — שבעת מצבי ה-runtime (<code>loading</code>/<code>error</code>/<code>empty</code>/<code>401</code>/<code>403</code>/<code>OOD</code>/כשל חלקי) ומצב ה-<code>prefill</code> של P4S <strong>נדחים לפאזה 11 ואינם מכוסים חזותית בפאזה 10</strong>, בהכרעת סקופ מפורשת בהוראת המשתמש — לא מגבלה טכנית. ⚠ <strong>ביקורת נוספת (13.09.2026) פתחה מחדש checkpoints 8–9</strong> וזיהתה פער אמיתי במסך P4S (<code>(P4S)</code> גלוי ב-<code>&lt;h1&gt;</code> ושני תגי <code>SUPER-CLIENT</code>), שורת <code>empty</code> הפוכה ב-§9.2, וצילומים ב-thumbnail 512px — כולם תוקנו, כולל תיקון P4S בשני סבבי Stitch ידניים (הסבב הראשון הוסיף רגרסיה קטנה, נתפסה ב-<code>diff</code> ותוקנה). אימות סופי: <code>SUPER-CLIENT</code>=0, <code>(P4S)</code> ב-<code>&lt;h1&gt;</code>=0, <code>{model_version}</code>=1. checkpoint 8: <code>done</code>. checkpoint 9: <code>done</code>. <strong>checkpoint 10 (בדיקה חזותית ידנית) הושלם.</strong> אחד-עשר ממצאים בסך הכול לאורך ארבעה סבבי ביקורת עצמאית + side-effect אחד, כולם תוקנו ואומתו: 9 שדות חסרים בטופס המשותף; מספרי <code>91</code>/<code>356</code> ב-Follow-up; <code>8.2%</code> ב-Overview; תרגום+צביעה מחדש של תגי רמת-הראיות בטבלת הסימולטור; שתי הכותרות האנגליות ב-Follow-up; breadcrumb בשני מסכים; לוגו כחול אחיד עם האייקון שהוסר משלושה מסכים (Overview/טופס משותף/P4S); רכיבי <code>toggle</code>/מכולות ריקות שהוסרו מ-Overview ומ-P4S; ו-<code>evidence: high/medium</code> שתורגם ל"רמת ראיות: גבוהה/בינונית" בתרשים הסימולטור. ⚠ <strong>שתי הצהרות "done" קודמות התבררו כמוקדמות מדי</strong> — פעם ראשונה בגלל הסתמכות חלקית על צילום, פעם שנייה בגלל חיפוש <code>grep</code> צר מדי (שמות class ספציפיים במקום בדיקת תוכן מלא). הסבב הרביעי אימת כל תיקון ישירות מול תוכן ה-HTML החי. ששת נכסי docs/design/*.jpg הוחלפו בפעם הרביעית. פירוט מלא ב-PHASE10.md §ח שורה 10. <strong>checkpoint 11 בוצע ונסגר</strong>: לשונית "דוגמת ממשק" ב-ROADMAP.html — המוקאפ הידני שקדם לפאזה 8A (ללא Overview, ללא P4S) הוסר לגמרי והוחלף בששת תגי <code>img</code> לצילומי <code>docs/design/*.jpg</code> הקנוניים; אפס markup חזותי כפול (D6). לפני סגירה סופית נוקו גם כל כללי ה-CSS ששייכים בלעדית למוקאפ (<code>tag</code>/<code>login-card</code>/<code>predict-*</code>/<code>badge*</code>/<code>funnel-*</code>/<code>table.fallback</code>/<code>strategy-*</code>/<code>alert-box</code>) — כל selector נבדק ב-<code>grep</code> כבעל 0 מופעים לפני מחיקה; <code>mock-note</code>/<code>mock-screen</code> (בשימוש בכרטיסי הצילום) ו-<code>phase-note</code> (בשימוש פעיל ב-JS) נבדקו ונשארו. נתיבים, <code>git diff --check</code> ותחביר ה-JS אומתו. <strong>checkpoint 12 (ביקורת וסריקה → commit → push → PR → CI → merge) הותחל</strong>: שלב 1/6 בלבד — ביקורת קוד מלאה על ה-diff מול <code>a3d5674</code> (אפס שינוי ב-<code>app/</code>, <code>tests/</code>, <code>REQUIREMENTS.md</code>, <code>IA.md</code>), סריקת סודות (0 סודות שמישים ב-diff — דפוסי החיפוש עצמם מופיעים ביומן הביקורת ואינם סוד; <code>login.jpg</code> נבדק — שדות ריקים), ו-<code>pytest</code> ממוקד (<code>test_design_tokens.py</code>+<code>test_roadmap_render.py</code>+<code>test_requirements_traceability.py</code> — 23/23) — לא נמצא ממצא הדורש תיקון. ⛔ אין מודלים/Holdout. <strong>שלב 2/6 (commit) בוצע באישור נפרד:</strong> commit על <code>feat/design</code>, 9 קבצים (3 שונו + 6 <code>docs/design/*.jpg</code> חדשים); הודעת ה-commit נושאת <code>Co-Authored-By</code> בלבד, ⛔ ללא <code>Claude-Session</code> (ריפו ציבורי). ⚠ תוקן: תיעוד שלב 2/6 נכתב אחרי ה-commit ונשאר לא-מקומט עד שאימות עצמאי תפס זאת — תוקן ב-<code>git commit --amend</code> (מכניס גם תיעוד זה); ה-SHA משתנה ב-<code>amend</code> ולכן אינו מוקלד כאן, נבדק תמיד ב-<code>git log</code> בפועל; עץ עבודה נקי, <code>ahead 1</code> מול <code>origin/feat/design</code> אחרי ה-<code>amend</code>. ⛔ אין push/PR/merge — כל אחד מארבעת השלבים הבאים (push, PR, CI, merge) דורש אישור נפרד.</p>
       <p>תקציר מצטבר לקראת הפאזה הבאה. הסטטוסים נגזרים מנתוני מפת הביצוע; <a href="docs/planning/SPEC.md">SPEC</a> קובע את האפיון ו<a href="docs/planning/codex-review.md">יומן ההכרעות</a> מתעד את ההחלטות. הראיות המפורטות נשארות בכרטיסי הפאזות.</p>
       <p class="policy-fine"><strong>עודכן בשער 9→10:</strong> תכנון פאזה 10 נכתב ב-<a href="docs/planning/PHASE10.md">PHASE10.md</a> והועבר לביקורת Codex; <code>planning_status</code> עבר ל-<code>planning_in_progress</code> ו-<code>execution_status</code> נשאר <code>not_started</code>. בבדיקת המצב התגלו ארבעה ממצאים חוסמים ב-<a href="docs/IA.md">IA.md</a>, שנכתב בפאזה 7 לפני שקיים P4S: ייחוס תצוגת 0–100 ל-P4 בסתירה ל-SPEC · חמישה שדות חוזה שנעדרו ממטריצת §8 · prefill ל-P4S שלא היה נעול · מונה דור שלא כיסה את P4S. כולם תוקנו, ו-SPEC.md קיבל תיקונים ממוקדים בשישה סעיפים: § מסכי יעד, § Prefill (בגרסה דאז חובה; כעת עזר אופציונלי), § Dataviz (סגירת המלאי לארבע תצוגות חיות ושתי משפחות offline), הפלטה הסמנטית (D10), מפת שדות הקלט (D11) וניסוח שאלת המייסדת הראשונה. נוספה הכרעת עיצוב חדשה ומוצהרת (D8): מסך שישי ל-P4S ו-Overview כאינדקס חמש שאלות המייסדת. ⛔ פאזה 10 סוגרת אפס דרישות בריף ואין לה owner=10; ב-REQUIREMENTS.md השתנתה עמודת contributors בלבד, ב-21 שורות. ⚠ לשונית המוקאפ סומנה כהיסטורית — היא קדמה לפאזה 8A ואינה ראיית קבלה.</p>
       <p class="policy-fine">תוכן התקציר עודכן ב־10.09.2026: פאזה 9 אושרה לביצוע 09.09.2026 (<a href="docs/planning/PHASE9.md">PHASE9.md</a>, שבעה סבבי ביקורת Codex, 78 קריטריוני קבלה) וכוללת תיקון חוסם ל־SPEC.md (D20, 13 מקומות שיישרו את מיפוי שאלה 3 של המייסדת ל־P4S/super-customer). checkpoints 1–10 בוצעו ואומתו על ענף feat/api, 448→771 בדיקות ירוקות (כולל שלושה סבבי ביקורת קוד וכשל CI אחד שתוקן), main ללא שינוי עד למיזוג. checkpoint 11: ביקורת/סריקת-סודות/push/PR/CI/מיזוג בוצעו — PR #24 מוזג ל-main (b176eab); auto-deploy אומת (health=200, openapi חי עם 10 נתיבים); ראיה חיה (ק' 72/73/75) בוצעה 10.09.2026 מול Render עם demo-northbound/demo-noorg אמיתיים — כל הבדיקות החיות המתועדות תאמו. אימות main בוצע. **פאזה 9 נסגרה 10.09.2026** בהוראה נפרדת ומפורשת של המשתמש. אלה סיכומי התוצרים והאימותים המתועדים, לא בדיקת שירותים או הרצת מודלים חדשה. בסגירת כל פאזה: מוסיפים תקציר ותוצרים, מעדכנים מגבלות ונקודת פתיחה, ובודקים התאמה ל־SPEC ולרישומי הסגירה. שינוי סטטוס לבדו אינו מעדכן את התוכן.</p>
@@ -586,206 +520,59 @@
   <!-- ===================== TAB 2: MOCKUP ===================== -->
   <section class="panel" id="panel-mockup">
 
-    <div class="mock-note" style="border-right:4px solid #b3341f;">
-      <strong style="display:block; margin-bottom:4px;">⚠ מוקאפ היסטורי — קדם לפאזה 8A. אינו ראיית קבלה לפאזה 10.</strong>
-      המוקאפ צויר לפני שהמודל <strong>P4S</strong> והמסך <strong>ציון לקוח-על מוקדם</strong> היו קיימים.
-      לכן הוא מציג <strong>שלושה פאנלי חיזוי בלבד</strong> ואין בו את המסך השישי, והוא מייחס את שאלת
-      הסופר-לקוח ל-P4 — ייחוס שתוקן מאז (ר' <a href="docs/planning/PHASE10.md">PHASE10.md</a> §ב, ממצא F1,
-      ו-<a href="docs/IA.md">IA.md</a> §3א).
+    <div class="mock-note">
+      <strong style="display:block; margin-bottom:4px;">עיצוב חזותי מ-Stitch — checkpoints 9–10, פאזה 10 (D6).</strong>
+      ששת הצילומים שלהלן הם הנכסים הקנוניים שיוצאו מ-Stitch (<code>docs/design/</code>), ברזולוציה מקורית,
+      אחרי בדיקה חזותית ידנית מלאה מול <a href="docs/DESIGN.md">DESIGN.md</a> ו-<a href="docs/IA.md">IA.md</a>
+      (checkpoint 10 — ר' <a href="docs/planning/PHASE10.md">PHASE10.md</a> §ח). המוקאפ הידני הישן שקדם לפאזה
+      8A (P4S/Overview לא היו קיימים בו) הוסר לגמרי ואינו מופיע כאן.
       <br><br>
-      ⛔ <strong>אין להשתמש בו כראיית קבלה, כמקור לערכי עיצוב או כהוכחת מערכת עובדת.</strong>
-      נכסי העיצוב הקנוניים של פאזה 10 יהיו <code>app/static/tokens.css</code> (ערכים),
-      <code>docs/DESIGN.md</code> (כללים ורכיבים) ו-<code>docs/design/</code> (צילומים);
-      המוקאפ הידני הזה יוסר ויוחלף בהם בביצוע הפאזה.
-      <br><br>
-      <strong style="display:block; margin-bottom:4px;">מוקאפ סטטי, לא אפליקציה חיה.</strong>
-      כל מספר כאן מסומן <span class="tag demo">נתוני הדגמה</span> — בדוי להמחשת פריסה,
-      למעט שני שיעורי הבסיס שמסומנים <span class="tag spec">מהאפיון — אומת בפאזה 0</span>,
-      שנמדדו מול ה-CSV ואומתו במדויק (ר' docs/planning/PHASE0.md). אין כאן מודל, API או חיבור לנתונים אמיתיים.
+      ⛔ <strong>D2: ה-markup של Stitch אינו מיובא לקוד.</strong>
+      מקור האמת לערכים הוא <code>app/static/tokens.css</code>, לרכיבים ולכללים —
+      <code>docs/DESIGN.md</code>, ולתוכן/התנהגות — <code>docs/IA.md</code>. הצילומים כאן הם
+      ראיית עיצוב סטטית בלבד, לא אפליקציה חיה — אין בהם חיווט לנתונים, ל-API או ל-Auth אמיתיים.
     </div>
 
     <!-- LOGIN -->
     <div class="mock-screen">
       <h2>מסך 1 — התחברות</h2>
-      <div class="mock-caption">הרשמה ציבורית כבויה · משתמשים נוצרים ידנית · משתמש דמו מאומת מראש</div>
-      <div class="login-card">
-        <h3>FunnelIQ</h3>
-        <div class="brandline">כלי פנימי — צוות Northbound בלבד</div>
-        <label>אימייל</label>
-        <input type="text" placeholder="demo@northbound.internal" disabled>
-        <label>סיסמה</label>
-        <input type="text" placeholder="••••••••" disabled>
-        <button disabled>התחברות</button>
-        <div class="login-fine">שכחת סיסמה? פנייה למנהל המערכת בלבד</div>
-      </div>
+      <div class="mock-caption">מבנה, תוכן ולוגיקה זהים ל-<code>app/static/index.html</code> הקיים (D4) — רק עיצוב חזותי נוסף</div>
+      <img src="docs/design/login.jpg" alt="מסך התחברות — עיצוב Stitch">
     </div>
 
-    <!-- PREDICTION FORM -->
+    <!-- OVERVIEW -->
     <div class="mock-screen">
-      <h2>מסך 2 — טופס חיזוי משותף</h2>
-      <div class="mock-caption">מוקאפ היסטורי: P2 + P3 + P4 · prefill הוצג בו כחובה; החוזה הפעיל מאפשר גם הזנה עצמאית</div>
-      <div class="predict-grid">
+      <h2>מסך 2 — Overview</h2>
+      <div class="mock-caption">אינדקס חמש שאלות המייסדת לארבעה מסכי יעד (D8) · טבלת רמות הוצאה וגרף המרה</div>
+      <img src="docs/design/overview.jpg" alt="מסך Overview — עיצוב Stitch">
+    </div>
 
-        <div class="predict-card">
-          <h4>P2 · כמה זמן יישאר לקוח</h4>
-          <div class="predict-main"><span class="ltr">24</span> חודשים <span class="tag demo">הדגמה</span></div>
-          <div class="predict-sub">טווח חיזוי משוער: <span class="ltr">18–31</span> חודשים</div>
-          <div class="badge-row">
-            <span class="badge evidence-high">✓ ראיות גבוהות</span>
-            <span class="badge disclaimer">ℹ interval_method: split_conformal</span>
-          </div>
-          <div class="predict-disclaimer" style="border-right:3px solid #b3341f;">
-            ⛔ <strong>ניסוח היסטורי מקוצר.</strong> שאלת המייסדת המלאה עוסקת ב<strong>לקוח חדש</strong>,
-            והתחזית מבוססת על נתוני <strong>סוף מחזור הקמפיין</strong> — כלומר היא אינה תחזית
-            בשלב מוקדם של המשפך. ר' <a href="docs/IA.md">IA.md</a> §2.
-          </div>
-        </div>
+    <!-- SHARED PREDICTION FORM -->
+    <div class="mock-screen">
+      <h2>מסך 3 — טופס תחזיות משותף</h2>
+      <div class="mock-caption">P2 + P3 + P4 באותו טופס · 12 שדות עריכה + ערך מחושב אחד (<code>not_closed</code>) · דוגמה היסטורית אופציונלית, לא חובה</div>
+      <img src="docs/design/shared-form.jpg" alt="מסך טופס תחזיות משותף — עיצוב Stitch">
+    </div>
 
-        <div class="predict-card">
-          <h4>P3 · נטייה לאפסייל</h4>
-          <div class="predict-main"><span class="ltr">62%</span> <span class="tag demo">הדגמה</span></div>
-          <div class="predict-sub">
-            גבוהה בכ-16 נקודות משיעור האפסייל הבסיסי
-            (<span class="ltr">46.35%</span><span class="tag spec">מהאפיון — אומת בפאזה 0</span>)
-          </div>
-          <div class="badge-row">
-            <span class="badge evidence-high">✓ נטייה גבוהה</span>
-          </div>
-        </div>
-
-        <div class="predict-card">
-          <h4>P4 · נטייה להפניה</h4>
-          <div class="predict-main"><span class="ltr">71</span> <span style="font-size:14px; color:var(--text-dim);">/ 100</span> <span class="tag demo">הדגמה</span></div>
-          <div class="predict-sub">
-            שיעור בסיס: <span class="ltr">42.71%</span><span class="tag spec">מהאפיון — אומת בפאזה 0</span>
-          </div>
-          <div class="badge-row">
-            <span class="badge calibrated">☑ calibrated</span>
-            <span class="badge evidence-med">◐ ראיות בינוניות</span>
-          </div>
-          <div class="predict-disclaimer">
-            ⚠ המודל מנבא הפניה בלבד; זהו Proxy מוקדם ללקוח-על — לא הסתברות לעמוד
-            בשלושת התנאים במקביל. גרסת מודל: <span class="ltr">v0.1-eval</span>.
-          </div>
-          <div class="predict-disclaimer" style="border-right:3px solid #b3341f;">
-            ⛔ <strong>ניסוח מיושן, נשמר כארכיון.</strong> P4 אינו Proxy ואינו ציון 0–100:
-            הוא מציג <strong>נטייה להפניה באחוזים</strong>. ציון לקוח-על 0–100 מוצג
-            במסך P4S הנפרד, שאינו קיים במוקאפ הזה. ר'
-            <a href="docs/planning/SPEC.md">SPEC.md</a> § הצגת אי-ודאות ו-<a href="docs/IA.md">IA.md</a> §3א.
-          </div>
-        </div>
-
-      </div>
+    <!-- P4S -->
+    <div class="mock-screen">
+      <h2>מסך 4 — ציון לקוח-על (P4S)</h2>
+      <div class="mock-caption">מסך נפרד, ארבעה שדות בלבד · ציון 0–100, לא אחוז · אינו P4 (נטייה להפניה, מוצג באחוזים)</div>
+      <img src="docs/design/p4s.jpg" alt="מסך ציון לקוח-על מוקדם — עיצוב Stitch">
     </div>
 
     <!-- BUDGET SIMULATOR -->
     <div class="mock-screen">
-      <h2>מסך 3 — סימולטור תקציב</h2>
-      <div class="mock-caption">₪50,000 מחולק בארבע אסטרטגיות · דירוג "מועדפת לפי המודל", לא הבטחת רווח <span class="tag demo">הדגמה</span></div>
-
-      <div class="strategy-row">
-        <div class="strategy-label"><b>2×20K+10K</b><span>ריכוז גבוה</span></div>
-        <div class="strategy-bar-wrap"><div class="strategy-bar" style="width:82%"></div><div class="strategy-whisker" style="right:70%"></div></div>
-        <div class="strategy-meta"><span class="ltr">₪118,400</span> · n=12 · ראיות נמוכות</div>
-      </div>
-      <div class="strategy-row">
-        <div class="strategy-label"><b>10×5,000</b><span>בינוני</span></div>
-        <div class="strategy-bar-wrap"><div class="strategy-bar" style="width:91%"></div><div class="strategy-whisker" style="right:82%"></div></div>
-        <div class="strategy-meta"><span class="ltr">₪131,900</span> · n=64 · ראיות בינוניות</div>
-      </div>
-      <div class="strategy-row">
-        <div class="strategy-label"><b>25×2,000</b><span>מפוזר</span></div>
-        <div class="strategy-bar-wrap"><div class="strategy-bar" style="width:88%"></div><div class="strategy-whisker" style="right:79%"></div></div>
-        <div class="strategy-meta"><span class="ltr">₪127,300</span> · n=140 · ראיות גבוהות</div>
-      </div>
-      <div class="strategy-row">
-        <div class="strategy-label"><b>100×500</b><span>פיזור מרבי</span></div>
-        <div class="strategy-bar-wrap"><div class="strategy-bar" style="width:68%"></div><div class="strategy-whisker" style="right:52%"></div></div>
-        <div class="strategy-meta"><span class="ltr">₪98,700</span> · n=210 · ראיות גבוהות</div>
-      </div>
-      <div class="alert-box" style="margin-top:16px;">
-        <span class="icon">⚠</span>
-        <div><strong>שתי האסטרטגיות המובילות חופפות</strong>
-        <p>הטווחים של "10×5,000" ו-"25×2,000" חופפים באופן מהותי — אין מנצחת ודאית. מומלץ ניסוי מבוקר.</p></div>
-      </div>
+      <h2>מסך 5 — סימולטור תקציב</h2>
+      <div class="mock-caption">ארבע אסטרטגיות קבועות מפרופילי train נצפים · באנר חפיפת טווחים כשרלוונטי · הדירוג אינו הבטחת רווח</div>
+      <img src="docs/design/budget-simulator.jpg" alt="מסך סימולטור תקציב — עיצוב Stitch">
     </div>
 
     <!-- FOLLOW-UP -->
     <div class="mock-screen">
-      <h2>מסך 4 — נשירה במעקבים</h2>
-      <div class="mock-caption">מ-Supabase, שיעורי נשירה מצטברים לכל שלב <span class="tag spec">מהאפיון — אומת בפאזה 0</span></div>
-
-      <div class="funnel-wrap">
-        <svg viewBox="0 0 460 190" width="100%" height="190" role="img" aria-label="Follow-up drop-off chart">
-          <!-- bars: fu1 21.7, fu2 25.7, fu3 18.6, fu4 10.4, fu5 29.2 (as % height of 140px max) -->
-          <g font-family="Consolas, monospace" font-size="10" fill="#5b6270">
-            <line x1="40" y1="150" x2="440" y2="150" stroke="#e2e5ea"/>
-            <!-- fu1: 21.7% -->
-            <rect x="55" y="42" width="55" height="108" fill="#b3341f" rx="3"></rect>
-            <text x="82" y="145" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">21.7%</text>
-            <text x="82" y="166" text-anchor="middle">Follow-up 1</text>
-            <!-- fu2: 25.7% -->
-            <rect x="135" y="22" width="55" height="128" fill="#b3341f" rx="3"></rect>
-            <text x="162" y="145" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">25.7%</text>
-            <text x="162" y="166" text-anchor="middle">Follow-up 2</text>
-            <!-- fu3: 18.6% -->
-            <rect x="215" y="57" width="55" height="93" fill="#b3341f" rx="3"></rect>
-            <text x="242" y="145" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">18.6%</text>
-            <text x="242" y="166" text-anchor="middle">Follow-up 3</text>
-            <!-- fu4: 10.4% (lowest — no early-stop signal) -->
-            <rect x="295" y="98" width="55" height="52" fill="#1a7f4b" rx="3"></rect>
-            <text x="322" y="140" text-anchor="middle" fill="#1a7f4b" font-weight="700" font-size="11">10.4%</text>
-            <text x="322" y="166" text-anchor="middle">Follow-up 4</text>
-            <!-- fu5: 29.2% -->
-            <rect x="375" y="4" width="55" height="146" fill="#b3341f" rx="3"></rect>
-            <text x="402" y="20" text-anchor="middle" fill="#fff" font-weight="700" font-size="11">29.2%</text>
-            <text x="402" y="166" text-anchor="middle">Follow-up 5</text>
-          </g>
-        </svg>
-      </div>
-      <div class="funnel-caption">
-        שיעור הנשירה בשלב הרביעי הוא הנמוך בשרשרת (<span class="ltr">10.4%</span>) — הנתונים
-        אינם תומכים בעצירה אוטומטית אחרי המעקב השלישי. מסקנה תיאורית, לא סיבתית.
-      </div>
-      <table class="fallback">
-        <caption>טבלת נתונים נגישה (fallback לגרף)</caption>
-        <thead><tr><th>שלב</th><th>שיעור נשירה</th></tr></thead>
-        <tbody>
-          <tr><td>Follow-up 1</td><td><span class="ltr">21.7%</span></td></tr>
-          <tr><td>Follow-up 2</td><td><span class="ltr">25.7%</span></td></tr>
-          <tr><td>Follow-up 3</td><td><span class="ltr">18.6%</span></td></tr>
-          <tr><td>Follow-up 4</td><td><span class="ltr">10.4%</span></td></tr>
-          <tr><td>Follow-up 5</td><td><span class="ltr">29.2%</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- OOD -->
-    <div class="mock-screen">
-      <h2>מסך 5 — מצב מחוץ לתחום (OOD)</h2>
-      <div class="mock-caption">קלט שחורג מתחום האימון המתועד — לא תלוי בסתירת ה-16 ערכים <span class="tag demo">הדגמה</span></div>
-      <div class="alert-box">
-        <span class="icon">⚠</span>
-        <div>
-          <strong>אין מספיק נתונים לחיזוי אמין</strong>
-          <p>
-            תקציב שהוזן (<span class="ltr">₪25,000</span>) חורג מהטווח שנצפה באימון
-            (<span class="ltr">500–20,000 ₪</span>) — חריגה מתחום האימון המתועד
-            (<span class="ltr">training domain</span>), לא תלויה בהכרעה עתידית
-            כלשהי. לא מוצג חיזוי מספרי.
-          </p>
-        </div>
-      </div>
-      <div class="phase-note" style="margin-top:12px;">
-        ✅ <b>המקרה הגבולי הוכרע.</b> תקציב <em>בתוך</em> הטווח
-        (<span class="ltr">500–20,000 ₪</span>) שאינו אחד מ-16 הערכים שנצפו —
-        למשל <span class="ltr">₪3,500</span> — <b>אינו Hard OOD</b>. הוא אינו
-        מפר Data invariant, ו-16 הערכים הם Snapshot expectation ולא חוק עסקי.
-        לכן מוחזר עבורו <b>חיזוי</b> עם <span class="inline-code">evidence_level = low</span>,
-        אזהרה שהערך לא נצפה באימון, וטווח תקף. אם לא ניתן לחשב טווח תקף — אין
-        המלצה חד-משמעית. ההכרעה תוקנה ב-<span class="inline-code">SPEC.md</span>
-        באישור כפול ונרשמה ביומן ההכרעות.
-      </div>
+      <h2>מסך 6 — Follow-up</h2>
+      <div class="mock-caption">נשירה לאורך חמש נקודות מעקב + התפלגות שיחות עד סגירה, שני גרפים נפרדים עם fallback טבלאי</div>
+      <img src="docs/design/followup.jpg" alt="מסך Follow-up — עיצוב Stitch">
     </div>
 
   </section>
@@ -1019,16 +806,16 @@ const PHASES = [
       {t:"checkpoint 5 — פריסת Desktop ומפרט Dataviz ב-DESIGN.md", s:"done", u:"2026-09-10", e:"docs/DESIGN.md SS3.4 מגדיר פריסת Desktop בלבד לששת המסכים; SS4.1 מגדיר SVG יחסי ו-fallback טבלאי נגיש לארבע התצוגות החיות. זהו היקף התצוגה היחיד בפאזה. ראיית checkpoint 6 המאוחרת: pytest tests/test_design_tokens.py -- 9 עברו; pytest מלא -- 780 עברו; git diff --check נקי."},
       {t:"checkpoint 6 — ניסוח D9 לכל מסך תוצאה/תובנה ולכל גרף עסקי, מטריצת שש העמודות, ומסע המשתמש בן שבעת השלבים", s:"done", u:"2026-09-11", e:"docs/DESIGN.md SS6-SS8 נכתבו. SS6.1: מטריצת שש העמודות לשמונת יעדי D9 הנעולים (Overview/P2/P3/P4/P4S/Budget Simulator/שני גרפי Follow-up); P4 ו-calls_to_closed אינם מחמש שאלות המייסדת ובכל זאת מקבלים שורה, כמפורש בפתיח. בדיקה 9 עברה מ-skipped ל-passed בפועל -- אומתה בפרסר האמיתי (_extract_markdown_table): 8 שורות, 6 תאים כל שורה, אפס תא ריק, מזהה יעד יחיד לשורה. SS6.2: מסקנת Follow-up (SPEC.md מסקנת P5) מצוטטת מילה במילה פעם אחת -- אומת מכנית מול המקור. SS6.3: הערות מימוש (split_conformal/sigmoid/target_definition/bootstrap_percentile) הופרדו מארבע העמודות המוצגות -- נסרק מכנית, אפס מונחים בעמודות המשתמש. SS7: מפת שדות D11, 17 מופעים/13 שמות טכניים ייחודיים, שני תת-סעיפים בלי מיזוג. SS8: מסע שבעת השלבים הועבר מ-PHASE10.md SSיג ללא ניסוח מחדש. אומת: pytest tests/test_design_tokens.py -- 9 עברו (מ-8/1); pytest מלא -- 780 עברו, 0 דולג (מ-779/1); git diff --check נקי; שלושה probes שליליים מחייבים (הסרת שורה, מזהה כפול, תא ריק) -- כולם נתפסים. ⚠ תוקן אחרי ביקורת עצמאית -- שלוש סטיות מהבריף: (1) שורת calls_to_closed ענתה על B46b עם נתון 48% במקום שני הממוצעים בפועל (mean_calls_to_closed_closed_eq_1=5.65 / closed_ge_2=3.35, findings.json) -- תוקן, 48%/1,519 נשאר במשמעות בלבד, מקור הראיה קיבל את מפתחות findings.json המדויקים. (2) שתי שורות ad_budget ב-D11: הבריף מגדיר Monthly advertising spend (הוצאה בפועל, לא תקציב מתוכנן) -- תווית ל'הוצאה חודשית על פרסום', יחידה ל'ש״ח לחודש'. (3) customer_acquisition_cost: הבריף מגדיר Cost per acquired customer (עלות ממוצעת ללקוח, לא עלות כוללת) -- תווית ל'עלות ממוצעת לרכישת לקוח', יחידה ל'ש״ח ללקוח'. אומת מחדש: pytest tests/test_design_tokens.py -- 9 עברו, git diff --check נקי."},
 {t:"checkpoint 7 — כתיבה ל-Stitch, כפופה לאישור מפורש ונפרד", s:"done", u:"2026-09-11", e:"האישור ניתן; פרויקט FunnelIQ ב-Stitch מכיל את ששת מסכי היעד המתוכננים, והכפילויות הוסרו."},
-{t:"checkpoint 8 — בחינת פלט Stitch; כל שינוי מוחזר למקור הקנוני, בדיקות מורצות מחדש", s:"in_progress", u:"2026-09-13", e:"10A נסגרה (ביקורת Claude עצמאית התקבלה ואושרה). ה־checkpoint עצמו טרם התחיל: נדרשת בדיקה מסודרת של ששת מסכי Stitch מול DESIGN.md המעודכן (פרט למסך P4S ולטופס התחזית המשותף) לפני כל תיקון או ייצוא."},
-      {t:"checkpoint 9 — ייצוא צילומי מסכים + מטריצת כיסוי מלאה ב-docs/DESIGN.md", s:"not_started"},
-      {t:"checkpoint 10 — בדיקה חזותית ידנית", s:"not_started"},
-      {t:"checkpoint 11 — החלפת המוקאפ ההיסטורי ב-ROADMAP בנכסים הקנוניים", s:"not_started"},
-      {t:"checkpoint 12 — ביקורת קוד + סריקת סודות → push → PR → CI → מיזוג, כל שלב באישור נפרד", s:"not_started"}
+{t:"checkpoint 8 — בחינת פלט Stitch; כל שינוי מוחזר למקור הקנוני, בדיקות מורצות מחדש", s:"done", u:"2026-09-13", e:"10A נסגרה (ביקורת Claude עצמאית התקבלה ואושרה). ששת מסכי Stitch נבדקו ותוקנו מול DESIGN.md/IA.md המעודכנים: טופס משותף (כותרת 13→12+ערך מחושב, ארבע תוויות/יחידות שגויות, input-summary עם ערך מחושב, input-details מתקפל, נקה טופס, footer ריק הוסר, הסתייגות P4 מלאה, select-on-focus), Budget Simulator (footer, וטו 100x500, model-details יחיד, קנה מידה+whiskers אמיתיים), Follow-up (אוכלוסיית calls_to_closed 3,163→3,318, ציטוט CP4-D מלא, footer), Overview (כפתור רענון נתונים מטעה הוסר לפי הוראת CP7), Login (9 פערים מול app/static/index.html: תוויות, autocomplete, placeholder מרמז, שכחת-סיסמה, זכור-אותי, קישור יצירת-קשר, footer/SSL -- כולם תוקנו, בלי טענה שAuth/session פועלים במוקאפ). גישה ד': select-on-focus הורחב לטופס המשותף ואומת; סדר Tab נבדק כמוקאפ סטטי (tabindex=-1 רק על not_closed); הצהרת מועד המדידה הקיימת ('כל הנתונים נמדדים בתום מחזור הקמפיין') מכסה במלואה את DESIGN.md §7.1 לכל 13 השדות -- לא נדרש tooltip נוסף. P4S: תיקון שני סבבים -- פרומפט ראשון הסיר (P4S) מה-h1 ושני תגי SUPER-CLIENT אך מחק בטעות גם 'גרסת מודל: {model_version}' (רגרסיה, זהה לתקלה קודמת באותו checkpoint); נתפס ב-diff לפני עדכון סטטוס, תוקן בפרומפט שני. אימות סופי מול diff מלא: SUPER-CLIENT=0, (P4S) ב-h1=0 (title הבלתי-נוגע כמבוקש עדיין מציגו), model_version=1, פרמטרים=0, שדות=4 -- שני שינויים בדיוק מהבסיס. כל שינוי אומת בנפרד מול ה-HTML המיוצא (list_screens+הורדה+diff), לא מול עץ נגישות. פירוט מלא ב-PHASE10.md §טו."},
+      {t:"checkpoint 9 — ייצוא צילומי מסכים + מטריצת כיסוי מלאה ב-docs/DESIGN.md", s:"done", u:"2026-09-13", e:"שישה נכסים (login/overview/shared-form/p4s/budget-simulator/followup.jpg) יוצאו ל-docs/design/ ברזולוציה מקורית (1379-1775px, לא thumbnail 512px); p4s.jpg הוחלף לגרסה הסופית אחרי סגירת checkpoint 8. מטריצת כיסוי נכתבה ב-DESIGN.md §9; קריטריון 30 נוסח מחדש (PHASE10.md §ט): ששת צילומי מסלול התקין מכוסים חזותית; שבעת מצבי ה-runtime (loading/error/empty/401/403/OOD/כשל חלקי) ומצב ה-prefill של P4S נדחים לפאזה 11 ואינם מכוסים חזותית בפאזה 10, בהכרעת סקופ מפורשת של המשתמש -- לא מגבלה טכנית. pytest tests/test_design_tokens.py -- 9/9. ממצא נלווה עדיין פתוח: מסך Login מציג IQ Funnel הפוך במקום FunnelIQ -- מועמד ל-checkpoint 10, אינו חוסם. ⛔ אין push/PR/merge."},
+      {t:"checkpoint 10 — בדיקה חזותית ידנית", s:"done", u:"2026-09-13", e:"צ'קליסט D3ב + קריטריונים 16-18/31-37 על ששת נכסי docs/design/*.jpg. אחד-עשר ממצאים בסך הכול לאורך ארבעה סבבי ביקורת עצמאית + side-effect אחד -- כולם תוקנו ואומתו ב-HTML בפועל (פירוט מלא ב-PHASE10.md SSח שורה 10): שדות טופס משותף, מספרי Follow-up, שבירת % ב-Overview, צבע+שפת תגי רמת-ראיות בטבלת הסימולטור, שתי כותרות אנגליות ב-Follow-up, breadcrumb בשני מסכים, לוגו כחול אחיד + אייקון הוסר משלושה מסכים, toggle/רכיבים ריקים הוסרו מ-Overview/P4S, ותוויות 'evidence: high/medium' בתרשים הסימולטור תורגמו ל'רמת ראיות: גבוהה/בינונית'. ⚠ שתי הצהרות 'done' קודמות התבררו כמוקדמות מדי -- הסבב הרביעי אימת תוכן HTML מלא, לא רק חיפוש class ספציפי. ששת נכסי docs/design/*.jpg הוחלפו בפעם הרביעית. pytest tests/test_roadmap_render.py tests/test_requirements_traceability.py -- 14/14. ⛔ אין push/PR/merge."},
+      {t:"checkpoint 11 — החלפת המוקאפ ההיסטורי ב-ROADMAP בנכסים הקנוניים", s:"done", u:"2026-09-13", e:"לשונית 'דוגמת ממשק' ב-ROADMAP.html: המוקאפ הידני שקדם לפאזה 8A (login-card מזויף, כרטיסי P2/P3/P4 עם נתונים בדויים, SVG יד-מצויר ל-Follow-up, מסך OOD נפרד -- ללא Overview וללא P4S) הוסר לגמרי -- הוחלף בשישה תגי img לצילומי docs/design/*.jpg הקנוניים (login/overview/shared-form/p4s/budget-simulator/followup), ברזולוציה מקורית. אפס markup חזותי כפול: אין עוד login-card/predict-card/strategy-row/funnel-wrap מזויפים לצד הצילומים. נוקו גם כל כללי ה-CSS השייכים בלעדית למוקאפ (tag/login-card/predict-*/badge*/funnel-*/table.fallback/strategy-*/alert-box) -- כל selector אומת ב-grep כבעל 0 מופעים לפני מחיקה; mock-note/mock-screen (בשימוש בכרטיסי הצילום) ו-phase-note (בשימוש פעיל ב-JS) נבדקו ונשארו. נתיבים אומתו (כל שישה קבצי docs/design/*.jpg קיימים בפועל), git diff --check נקי, תחביר ה-JS (node --check על ה-script) תקין, pytest tests/test_roadmap_render.py tests/test_requirements_traceability.py -- 14/14."},
+      {t:"checkpoint 12 — ביקורת וסריקה → commit → push → PR → CI → merge, כל שלב באישור נפרד", s:"in_progress", u:"2026-09-13", e:"שלב 1/6 (ביקורת קוד + סריקת סודות + בדיקות) הושלם באישור נפרד. Diff נסקר במלואו מול a3d5674 (3 קבצים: ROADMAP.html/DESIGN.md/PHASE10.md, אפס שינוי ב-app/, tests/, REQUIREMENTS.md, IA.md) -- לא נמצא ממצא הדורש תיקון. סריקת סודות: grep על דפוסי מפתח/טוקן/סיסמה נפוצים בכל ה-diff -- 0 סודות שמישים (דפוסי החיפוש עצמם, כמילות מפתח, מופיעים ביומן הביקורת הזה ואינם סוד); login.jpg נבדק חזותית -- שדות ריקים בלבד. tests/test_design_tokens.py + tests/test_roadmap_render.py + tests/test_requirements_traceability.py -- 23/23. git diff --check נקי, node --check על ה-JS תקין. אין מודלים/Holdout הורצו. שלב 2/6 (commit) הושלם באישור נפרד: commit על feat/design, 9 קבצים (3 שונו + 6 docs/design/*.jpg חדשים), 331 insertions(+)/286 deletions(-). Co-Authored-By בלבד בהודעת ה-commit, ללא Claude-Session (ריפו ציבורי). תוקן: תיעוד שלב 2/6 נכתב אחרי ה-commit ונשאר לא-מקומט -- אימות עצמאי תפס זאת; תוקן ב-git commit --amend (כולל תיעוד זה), SHA אינו מוקלד כאן כי משתנה ב-amend, עץ עבודה נקי ו-ahead 1 מול origin/feat/design אחרי ה-amend. ⛔ אין push/PR/merge -- כל אחד מארבעת השלבים הבאים (push, PR, CI, merge) דורש אישור נפרד."}
     ],
     accept:{product:"tokens.css + docs/DESIGN.md + צילומי מסכים; אפס עריכה בקבצים הקיימים ב-app/static (index.html, app.js, style.css) ואפס שינוי בחוזה ה-API",
       test:"בדיקות אוטומטיות לניגודיות ולסגירוּת מבנית עוברות; בדיקה חזותית ידנית ל-RTL, היררכיה, אי-הסתמכות על צבע, פריסת Desktop והתאמת ההמלצה לראיות",
       evidence:"pytest + צ'קליסט ידני + צילומי מסך + ייצוא Stitch (בכפוף לאישור כתיבה נפרד)"},
-    note:"תכנון מפורט ב-docs/planning/PHASE10.md — D1–D11, 12 checkpoints לביצוע ולפניהם checkpoint 0 כשער פתיחה, 37 קריטריוני קבלה. planning_status: outline_only ⇒ planning_in_progress ⇒ approved_for_execution (אישור משתמש סופי, 10.09.2026). ✅ checkpoint 0 (שער פתיחה) בוצע: PR #25 (מסמכי התכנון) מוזג ל-main (merge commit ef289f5, CI ירוק), ענף feat/design נפתח מ-main הנקי. execution_status: not_started ⇒ in_progress. אישור התכנון אינו הוראת ביצוע ואינו אישור לכתיבה ל-Stitch — שניהם דורשים הוראה מפורשת ונפרדת. **ההכרעות:** D1 — אפס דרישות בריף נסגרות ואין owner=10, אך הפאזה תורמת חזותית ל-21 דרישות ומסומנת בהן contributor=10. ⚠ זו הייתה טעות חוסמת שנתפסה בסבב החמישי: הטענה שאין contributor=10 סתרה את CLAUDE.md, שמגדיר contributors כדרישות שהפאזה נוגעת בהן חלקית. במרשם השתנתה עמודת contributors בלבד, ב-21 שורות, ולא owner/status/evidence; שער חזותי פנימי שמאפשר את פאזה 11. D2 — Stitch נשאר כ-reference חזותי בלבד: ה-markup אינו מיובא, מקור האמת הוא tokens.css ו-DESIGN.md, וסדר עבודה בן שישה שלבים מחייב כתיבה חזרה למקור והרצה חוזרת של הבדיקות. D3 — שלוש שכבות אימות: תשע בדיקות אוטומטיות ב-tests/test_design_tokens.py, בדיקה חזותית ידנית על התוצר הסטטי,ובדיקות UI חיות (מקלדת, focus, קורא מסך, session, 401/403) שנדחות לפאזות 11–12. D4 — Login: אין שינוי במבנה, בתוכן, ב-Auth וב-session; המראה נכלל במערכת האחידה ומיושם בפאזה 11. פאזה 10 אינה עורכת אף קובץ קיים ב-app/static; בתכנון אפס שינוי שם, ובביצוע מותרת הוספת tokens.css בלבד, בלי חיווט לממשק. D5 — גבול 10↔11: ערכים ומפרט מול קוד וחיווט. D6 — שלושה מקורות אמת: tokens.css לערכים, DESIGN.md לכללים, צילומי Stitch כראיית עיצוב בלבד. D7 — סנכרון עובדות P4S, ובתוכו הזנה ידנית כמסלול ראשי ו-prefill כעזר שאינו תנאי לשליחה (D7ב), ומונה דור עצמאי למסך P4S (D7ג). D8 — מסך שישי עצמאי ל-P4S, ו-Overview כאינדקס חמש שאלות המייסדת המובילות לארבעה מסכי יעד. D9 — רכיב סיכום והמלצה בארבע שכבות לכל מסך תוצאה/תובנה ולכל גרף עסקי, גלוי מיד, מתבנית דטרמיניסטית על תגובת הבקשה הנוכחית ועל עובדות היסטוריות בנכס תצוגה גרסאי; אין LLM בזמן ריצה, אין ניסוח סיבתי ואין הבטחת תוצאה. D10 — סמנטיקת צבע: positive/negative שמורים לתוצאה שנצפתה בנתונים, ⛔ ותחזית או הסתברות — P2, P3, P4, P4S ורווח צפוי ב-P6 — לעולם אינה נצבעת בהם; uncertainty ו-evidence מתארים ודאות ותמיכת נתונים, וצבע אינו הקריטריון היחיד לקטגוריית נטייה. D11 — מפת שדות: לכל שדה קלט תווית עסקית בעברית, שם טכני משני, יחידה, מועד מדידה והסבר קצר — כדי שאדם זר יוכל למלא ידנית את ארבעת שדות P4S. **B59** אינו נסגר בפאזה 12: הוא מכיל מסע חי (12) ו-README/B1 (13), ועובר ל-done רק בשער שאחרי פאזה 13 בצירוף שתי הראיות. **Dataviz** — ארבע תצוגות חיות (המרה לפי טייר, דירוג אסטרטגיות, נשירה, התפלגות calls_to_closed כגרף עמודות) ושתי משפחות offline. **סנכרון נלווה:** IA.md תוקן בכל הסעיפים הרלוונטיים ו-SPEC.md בשישה סעיפים (§ מסכי יעד · § Prefill (בגרסה דאז חובה; כעת עזר אופציונלי) · § Dataviz · הפלטה הסמנטית D10 · מפת שדות הקלט D11 · ניסוח שאלת המייסדת הראשונה); לשונית המוקאפ סומנה היסטורית וקודמת ל-P4S. ⚠ התכנון עבר תשעה סבבי ביקורת Codex — כל הממצאים תוקנו; היומן המלא ב-docs/planning/PHASE10.md §ב וב-docs/planning/codex-review.md. ⚠ **אושר בביקורת Codex ללא ממצאים נוספים, והמשתמש אישר סופית 10.09.2026** — planning_status: planning_in_progress ⇒ approved_for_execution. ✅ המשתמש נתן הוראת ביצוע נפרדת ומפורשת 10.09.2026 (פרוטוקול האישור הכפול על פקודות git נפרדות): push → PR #25 → CI → מיזוג (ef289f5) → checkpoint 0 (ענף feat/design נפתח). execution_status: not_started ⇒ in_progress. הטענה בדבר 12 checkpoints שנותרו תיארה את מצב checkpoint 0 בלבד. **מעמד נוכחי:** checkpoints 1–7 הושלמו; checkpoint 8 ממתין לסגירת 10A לפני המשך Stitch; 9–12 טרם התחילו."},
+    note:"תכנון מפורט ב-docs/planning/PHASE10.md — D1–D11, 12 checkpoints לביצוע ולפניהם checkpoint 0 כשער פתיחה, 37 קריטריוני קבלה. planning_status: outline_only ⇒ planning_in_progress ⇒ approved_for_execution (אישור משתמש סופי, 10.09.2026). ✅ checkpoint 0 (שער פתיחה) בוצע: PR #25 (מסמכי התכנון) מוזג ל-main (merge commit ef289f5, CI ירוק), ענף feat/design נפתח מ-main הנקי. execution_status: not_started ⇒ in_progress. אישור התכנון אינו הוראת ביצוע ואינו אישור לכתיבה ל-Stitch — שניהם דורשים הוראה מפורשת ונפרדת. **ההכרעות:** D1 — אפס דרישות בריף נסגרות ואין owner=10, אך הפאזה תורמת חזותית ל-21 דרישות ומסומנת בהן contributor=10. ⚠ זו הייתה טעות חוסמת שנתפסה בסבב החמישי: הטענה שאין contributor=10 סתרה את CLAUDE.md, שמגדיר contributors כדרישות שהפאזה נוגעת בהן חלקית. במרשם השתנתה עמודת contributors בלבד, ב-21 שורות, ולא owner/status/evidence; שער חזותי פנימי שמאפשר את פאזה 11. D2 — Stitch נשאר כ-reference חזותי בלבד: ה-markup אינו מיובא, מקור האמת הוא tokens.css ו-DESIGN.md, וסדר עבודה בן שישה שלבים מחייב כתיבה חזרה למקור והרצה חוזרת של הבדיקות. D3 — שלוש שכבות אימות: תשע בדיקות אוטומטיות ב-tests/test_design_tokens.py, בדיקה חזותית ידנית על התוצר הסטטי,ובדיקות UI חיות (מקלדת, focus, קורא מסך, session, 401/403) שנדחות לפאזות 11–12. D4 — Login: אין שינוי במבנה, בתוכן, ב-Auth וב-session; המראה נכלל במערכת האחידה ומיושם בפאזה 11. פאזה 10 אינה עורכת אף קובץ קיים ב-app/static; בתכנון אפס שינוי שם, ובביצוע מותרת הוספת tokens.css בלבד, בלי חיווט לממשק. D5 — גבול 10↔11: ערכים ומפרט מול קוד וחיווט. D6 — שלושה מקורות אמת: tokens.css לערכים, DESIGN.md לכללים, צילומי Stitch כראיית עיצוב בלבד. D7 — סנכרון עובדות P4S, ובתוכו הזנה ידנית כמסלול ראשי ו-prefill כעזר שאינו תנאי לשליחה (D7ב), ומונה דור עצמאי למסך P4S (D7ג). D8 — מסך שישי עצמאי ל-P4S, ו-Overview כאינדקס חמש שאלות המייסדת המובילות לארבעה מסכי יעד. D9 — רכיב סיכום והמלצה בארבע שכבות לכל מסך תוצאה/תובנה ולכל גרף עסקי, גלוי מיד, מתבנית דטרמיניסטית על תגובת הבקשה הנוכחית ועל עובדות היסטוריות בנכס תצוגה גרסאי; אין LLM בזמן ריצה, אין ניסוח סיבתי ואין הבטחת תוצאה. D10 — סמנטיקת צבע: positive/negative שמורים לתוצאה שנצפתה בנתונים, ⛔ ותחזית או הסתברות — P2, P3, P4, P4S ורווח צפוי ב-P6 — לעולם אינה נצבעת בהם; uncertainty ו-evidence מתארים ודאות ותמיכת נתונים, וצבע אינו הקריטריון היחיד לקטגוריית נטייה. D11 — מפת שדות: לכל שדה קלט תווית עסקית בעברית, שם טכני משני, יחידה, מועד מדידה והסבר קצר — כדי שאדם זר יוכל למלא ידנית את ארבעת שדות P4S. **B59** אינו נסגר בפאזה 12: הוא מכיל מסע חי (12) ו-README/B1 (13), ועובר ל-done רק בשער שאחרי פאזה 13 בצירוף שתי הראיות. **Dataviz** — ארבע תצוגות חיות (המרה לפי טייר, דירוג אסטרטגיות, נשירה, התפלגות calls_to_closed כגרף עמודות) ושתי משפחות offline. **סנכרון נלווה:** IA.md תוקן בכל הסעיפים הרלוונטיים ו-SPEC.md בשישה סעיפים (§ מסכי יעד · § Prefill (בגרסה דאז חובה; כעת עזר אופציונלי) · § Dataviz · הפלטה הסמנטית D10 · מפת שדות הקלט D11 · ניסוח שאלת המייסדת הראשונה); לשונית המוקאפ סומנה היסטורית וקודמת ל-P4S. ⚠ התכנון עבר תשעה סבבי ביקורת Codex — כל הממצאים תוקנו; היומן המלא ב-docs/planning/PHASE10.md §ב וב-docs/planning/codex-review.md. ⚠ **אושר בביקורת Codex ללא ממצאים נוספים, והמשתמש אישר סופית 10.09.2026** — planning_status: planning_in_progress ⇒ approved_for_execution. ✅ המשתמש נתן הוראת ביצוע נפרדת ומפורשת 10.09.2026 (פרוטוקול האישור הכפול על פקודות git נפרדות): push → PR #25 → CI → מיזוג (ef289f5) → checkpoint 0 (ענף feat/design נפתח). execution_status: not_started ⇒ in_progress. הטענה בדבר 12 checkpoints שנותרו תיארה את מצב checkpoint 0 בלבד. **מעמד נוכחי:** checkpoints 1–11 הושלמו (P4S נסגר בשני סבבי תיקון Stitch; checkpoint 10 נסגר אחרי ארבעה סבבי ביקורת עצמאית; checkpoint 11 החליף את לשונית המוקאפ הידני בששת צילומי docs/design/*.jpg הקנוניים, ר' §טו ב-PHASE10.md); checkpoint 12 טרם התחיל."},
   { num:"10A", name:"יישור רוחבי מול הבריף והנתונים", branch:"fix/phase10a-alignment", execution_status:"done", planning_status:"approved_for_execution",
     items:[
       {t:"CP0 — אישור ובסיס עבודה מבוקר", s:"done", u:"2026-09-11", e:"המשתמש אישר ביצוע מדורג; ענף fix/phase10a-alignment נפתח מ־7081c873 תוך שימור כל השינויים המקומיים וגבולות הבעלות תועדו"},
@@ -1047,7 +834,7 @@ const PHASES = [
     accept:{product:"מקורות תכנון ועקיבות עקביים; משמעות, זמן ויחידות מוגדרים; הוראות המשך ניתנות לביצוע",
       test:"18 תנאי קבלה ו־15 מקרי הפרכה ב־PHASE10A; אין חוסם לא מוכרע; בדיקות לפי השינוי בלבד",
       evidence:"מרשם יחיד, diff, יומן CP0–CP11 ואישור משתמש; ביקורת Claude עצמאית התקבלה ואושרה"},
-    note:"התוכנית אושרה לביצוע 11.09.2026 והמשתמש ביקש התקדמות בחלקים קטנים: לכל היותר checkpoint אחד בסבב, ושלב גדול מפוצל גם בתוכו. ROADMAP ויומן 10A מתעדכנים מיד בסגירת כל CP. CP0–CP9 נסגרו. CP4 חשף את כשל פרופילי החציון ב־P6 ונעל את P5 על closed>0; CP5 נעל קלט פשוט וקיפול; CP6 נעל מקור מדויק לכל פלט, נכס facts מצומצם, ביטול stale ומסלולי A/B/C בלי לשנות חוזי API. CP7 סנכרן את מקורות התכן והמרשם, ו־CP8 נעל חוזה המשך עד ההגשה. CP9 ביצע מן המקור המקובע 1c70ca8 את ארבעת התיקונים: CatBoost פעיל ל־P4S, פרופילי train נצפים ל־P6, אוכלוסיית closed>0 ל־calls_to_closed ונכס business_facts. ‏789 בדיקות עברו; P2/P3/P4/P6 joblib/meta נשמרו. המגבלות מתועדות: CatBoost חלש מעט מ־Logistic ההיסטורי ו־100x500 אינה המלצה; אם מבצעים ניסוי, החלופה הזהירה היא 25x2000. הספירה הפעילה: 41 done / 15 planned / 15 gap / 1 N/A / 1 parent. CP10 הושלם: שתי ביקורות Codex ו־15 מקרי הפרכה תועדו ותוקנו ממצאים; 21 בדיקות ממוקדות עברו. CP11 הושלם: ביקורת Claude עצמאית בוצעה, שני ממצאים קלים תוקנו (CLAUDE.md self-reference, הרצת test_design_tokens.py — 9/9), והמשתמש אישר במפורש את סגירת 10A. פאזה 10 checkpoint 8 חוזר לתור: בדיקת ששת מסכי Stitch מול DESIGN.md המעודכן (בפרט מסך P4S — \"רוכש ידוע\" ולא \"לקוח חדש\" — וטופס התחזית המשותף — 12 שדות + not_closed מחושב) טרם בוצעה. פאזות 11–13 נשארות תכנון־על עד שעריהן."},
+    note:"התוכנית אושרה לביצוע 11.09.2026 והמשתמש ביקש התקדמות בחלקים קטנים: לכל היותר checkpoint אחד בסבב, ושלב גדול מפוצל גם בתוכו. ROADMAP ויומן 10A מתעדכנים מיד בסגירת כל CP. CP0–CP9 נסגרו. CP4 חשף את כשל פרופילי החציון ב־P6 ונעל את P5 על closed>0; CP5 נעל קלט פשוט וקיפול; CP6 נעל מקור מדויק לכל פלט, נכס facts מצומצם, ביטול stale ומסלולי A/B/C בלי לשנות חוזי API. CP7 סנכרן את מקורות התכן והמרשם, ו־CP8 נעל חוזה המשך עד ההגשה. CP9 ביצע מן המקור המקובע 1c70ca8 את ארבעת התיקונים: CatBoost פעיל ל־P4S, פרופילי train נצפים ל־P6, אוכלוסיית closed>0 ל־calls_to_closed ונכס business_facts. ‏789 בדיקות עברו; P2/P3/P4/P6 joblib/meta נשמרו. המגבלות מתועדות: CatBoost חלש מעט מ־Logistic ההיסטורי ו־100x500 אינה המלצה; אם מבצעים ניסוי, החלופה הזהירה היא 25x2000. הספירה הפעילה: 41 done / 15 planned / 15 gap / 1 N/A / 1 parent. CP10 הושלם: שתי ביקורות Codex ו־15 מקרי הפרכה תועדו ותוקנו ממצאים; 21 בדיקות ממוקדות עברו. CP11 הושלם: ביקורת Claude עצמאית בוצעה, שני ממצאים קלים תוקנו (CLAUDE.md self-reference, הרצת test_design_tokens.py — 9/9), והמשתמש אישר במפורש את סגירת 10A. פאזה 10 checkpoint 8 חזר לתור והושלם: בדיקה מלאה מול DESIGN.md/IA.md המעודכנים (בפרט מסך P4S — \"רוכש ידוע\" ולא \"לקוח חדש\" — וטופס התחזית המשותף — 12 שדות + not_closed מחושב) בוצעה ואומתה על כל ששת המסכים (טופס משותף, P4S, Budget Simulator, Follow-up, Overview, Login) — פירוט ביומן checkpoint 8, PHASE10.md §טו. גישה ד׳ נבדקה במלואה: select-on-focus הורחב ואומת, סדר Tab נבדק כמוקאפ סטטי, הצהרת מועד המדידה מכסה את כל 13 השדות ללא צורך ב-tooltip נוסף. checkpoint 8: done. checkpoint 9 (ייצוא נכסים + מטריצת כיסוי) הושלם גם הוא: שישה נכסי תמונה ב-docs/design/, ומטריצת כיסוי ב-DESIGN.md §9 בהכרעת סקופ מפורשת -- מצבים התלויים ב-API חי (loading/error/empty/401/403/OOD/כשל חלקי) ומצב ה-prefill של P4S מפנים לטבלאות §2/IA.md הכתובות במקום לתמונה מומצאת, בלי וריאנטי Stitch חדשים. checkpoint 9: done. checkpoint 10 (בדיקה חזותית ידנית) done -- אחד-עשר ממצאים + side-effect אחד תוקנו ואומתו לאורך ארבעה סבבי ביקורת עצמאית (ר' פאזה 10 §ח שורה 10 ב-PHASE10.md). checkpoint 11 done -- לשונית 'דוגמת ממשק' ב-ROADMAP.html הוחלפה: המוקאפ הידני שקדם ל-8A הוסר, ששת צילומי docs/design/*.jpg הקנוניים הוצגו במקומו, אפס markup כפול. פאזה 12 נשארת תכנון־על עד שעריה."},
   { num:11, name:"דשבורד", branch:"feat/dashboard", execution_status:"not_started", planning_status:"outline_only",
     items:["שישה מסכי RTL עם קלט עצמאי ו-prefill אופציונלי","חיווט שבעת הנתיבים ונכס העובדות","הרשאות, OOD, כשל חלקי, קיפול וביטול תשובה ישנה"],
     accept:{product:"דשבורד מחובר שמציג את חמש היכולות העסקיות בשפה גנרית",
@@ -1127,9 +914,10 @@ function gateHtml(p, next){
       'פאזה 11 תיפתח רק לאחר השלמת פאזה 10 ושער המעבר שלה.</div></div>';
   }
   if(p.num === '10A' && p.execution_status === 'done'){
-    return '<div class="gate-box"><h4>10A נסגרה — checkpoint 8 בפאזה 10 ממתין לבדיקת מסכים</h4>' +
-      '<div>ביקורת Claude עצמאית התקבלה ואושרה על ידי המשתמש (13.09.2026). checkpoint 8 עדיין לא התחיל בפועל: ' +
-      'נדרשת בדיקה מסודרת של ששת מסכי Stitch מול DESIGN.md המעודכן לפני כל תיקון או ייצוא.</div></div>';
+    return '<div class="gate-box"><h4>10A נסגרה — checkpoints 8–11 בפאזה 10 done</h4>' +
+      '<div>ביקורת Claude עצמאית התקבלה ואושרה על ידי המשתמש (13.09.2026). checkpoint 8: כל ששת מסכי Stitch ' +
+      'נבדקו ותוקנו מול DESIGN.md המעודכן, כולל תיקון P4S (h1 + תגי SUPER-CLIENT) בשני סבבים. ' +
+      'checkpoint 9 (ייצוא + מטריצת כיסוי) הושלם. checkpoint 10 (בדיקה חזותית ידנית) הושלם -- 11 ממצאים + side-effect אחד תוקנו ואומתו לאורך ארבעה סבבים. checkpoint 11 הושלם -- לשונית המוקאפ הוחלפה בששת הצילומים הקנוניים. הבא בתור: checkpoint 12 (טרם התחיל).</div></div>';
   }
   if(!next){
     return '<div class="gate-box"><h4>שער מעבר — אין פאזה הבאה</h4>' +
