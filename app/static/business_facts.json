@@ -1,4 +1,18 @@
 {
+  "budget_backtest": {
+    "2000": {
+      "actual_mean_per_customer": 20650.882352941175,
+      "n_holdout_at_level": 85,
+      "n_train_at_level": 322,
+      "predicted_per_customer": 21238.124664360617
+    },
+    "500": {
+      "actual_mean_per_customer": 918.6470588235294,
+      "n_holdout_at_level": 17,
+      "n_train_at_level": 92,
+      "predicted_per_customer": 7895.935916363534
+    }
+  },
   "followup_context": {
     "mean_calls_closed_eq_1": 5.652941176470589,
     "mean_calls_closed_ge_2": 3.3525641025641026,
@@ -32,6 +46,7 @@
   "schema_version": 1,
   "source_csv_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa",
   "source_keys": {
+    "budget_backtest": "models/metrics.json.P6_backtest",
     "followup_context": "docs/findings.json.calls_to_closed",
     "ltv": "models/metrics.json.global_feature_importance.P2",
     "super_customer_profile": "models/metrics.json.super_customer_profile"

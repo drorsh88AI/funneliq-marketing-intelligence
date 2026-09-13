@@ -125,7 +125,7 @@ B57/B60/B65 ואת רכיב התיעוד
 | **B28** | §05.2 | "Expose the prediction through your app." | חשיפת חיזוי ה-LTV באפליקציה | 9 | 10, 11, 10A | 12 | planned | ראיית ביניים נשמרת: `/api/predict/ltv` חי ומאומת מול הארטיפקט ו־JWT (PHASE9 ק' 75). 10A/CP5 נעל זרימת קלט עצמאית/דוגמה; CP6 מיפה את התוצאה ל־`LtvPrediction.point_estimate/lower_bound/upper_bound` ואת OOD ל־`in_training_domain/warnings[]`. המימוש והמסע עדיין חסרים וייסגרו בפאזות 11–12 |
 | **B29a** | §05.2 | "Should cumulative_profit be a feature here? Justify it." | הצדקה כתובה להחרגת `cumulative_profit` מ-P2 | 5 | 6, 13, 10A | 12 | done | `docs/planning/PHASE5.md` D2 · `docs/feature_matrix.md:66` — `Excluded` ב-P2/P3/P4, *"תוצאה מאוחרת/מצטברת… ברשימת הדליפה המפורשת בכולן"* · commit `339736b` — *"feat(phase5): checkpoint 6 — app/features.py, feature_matrix.md, test_features.py"* |
 | **B29b** | §05.2 | "Which features dominate, and do the three models agree?" | השוואה כתובה בין שלושת המודלים | 13 | 6, 10A | 12 | gap | נוסח מאומת הוכן ב־`SPEC.md` §ראיות ותשובות CP4-A: `calls_to_closed` ראשון בשלושתם; יחידות importance אינן בנות־השוואה. חסרה הטמעה ב־REPORT |
-| **B29c** | §05.2 | "In two sentences, what's the strongest lever on customer longevity, and what should Northbound do about it?" | שני משפטים: מנוף + המלצה | 13 | 6, 10, 10A | 12 | gap | שני המשפטים הוכנו ב־`SPEC.md` §ראיות ותשובות CP4-A. CP6 קבע שנכס התצוגה ישמור `ltv.rank_1_by_algorithm` לכל שלושת המודלים ויפיק `ltv.dominant_feature` רק אם שלושתם זהים, עם גיבובי CSV ו־metrics; עדיין חסרות יצירת הנכס והטמעה ב־REPORT/ממשק |
+| **B29c** | §05.2 | "In two sentences, what's the strongest lever on customer longevity, and what should Northbound do about it?" | שני משפטים: מנוף + המלצה | 13 | 6, 10, 10A | 12 | gap | שני המשפטים הוכנו ב־`SPEC.md` §ראיות ותשובות CP4-A. CP6 קבע שנכס התצוגה ישמור `ltv.rank_1_by_algorithm` לכל שלושת המודלים ויפיק `ltv.dominant_feature` רק אם שלושתם זהים, עם גיבובי CSV ו־metrics; הנכס נוצר ב־CP9 ומכיל את שלושת הדירוגים וגיבוב metrics; נותרה הטמעה ב־REPORT/ממשק בפאזות 13/11 |
 
 ## §05 חבילה 3
 
@@ -169,7 +169,7 @@ B57/B60/B65 ואת רכיב התיעוד
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
 | **B48** | §05.6 | "a model that predicts cumulative_profit" | מודל שמנבא רווח מצטבר | 6 | 10A | 12 | done | `models/P6.joblib` (linear); `metrics.json.P6_holdout` — mae 3,678.9, rmse 4,590.9, r2 0.7961 |
-| **B49** | §05.6 | "used to simulate allocation strategies built from campaign sizes the data actually covers (₪500–₪20,000)" | סימולציה בטווח שהנתונים מכסים | 6 | 10A | 12 | done | CP9 בנה מחדש `models/P6_simulation.json` בארבע הרמות 500–20,000 ובארבע אסטרטגיות שסכומן 50,000; כל פרופיל מצביע ל־`profile_source_row_id` שנצפה ב־train |
+| **B49** | §05.6 | "used to simulate allocation strategies built from campaign sizes the data actually covers (₪500–₪20,000)" | סימולציה בטווח שהנתונים מכסים | 6 | 10A | 12 | done | CP9 בנה מחדש `models/P6_simulation.json` בחמש הרמות 500, 2000, 5000, 10000 ו־20000 ובארבע אסטרטגיות שסכומן 50,000; כל פרופיל מצביע ל־`profile_source_row_id` שנצפה ב־train |
 | **B50** | §05.6 | "and a recommendation for which maximizes expected total profit" | המלצה איזו ממקסמת רווח | 11 | 6, 9, 10, 13, 10A | 12 | planned | הסימולציה המתוקנת מדרגת `100x500` ראשונה, אך טווחה חופף ל־`25x2000` וה־backtest ברמת 500 חושף הערכת־יתר חריפה; לכן אין המלצת הקצאה קבועה, ורק ניסוי מבוקר יוצג בפאזה 11 |
 | **B51** | §05.6 | "Your simulator only knows each campaign's budget, so decide how to fill in the other features (a typical funnel profile per budget level is one reasonable approach)." | החלטה מתועדת על מילוי הפיצ'רים | 6 | 10A | 12 | done | `scripts/train.py::compute_budget_profiles`: בכל תקציב נבחרת שורת train נצפית במינימום L1 מנורמל־IQR מחציוני הקבוצה, ללא היעד ועם `source_row_id` כשובר שוויון; `metrics.json.P6_profile_method` |
 | **B52** | §05.6 | "Expose the simulator in your app." | חשיפת הסימולטור | 9 | 10, 11, 10A | 12 | planned | `/api/simulate/budget` מחזיר את `P6_simulation.json` המתוקן כלוקאפ GET ללא body; חוזה ה־API עבר בבדיקות. נשאר ממשק בפאזה 11 ואימות מסע בפאזה 12 |
@@ -210,4 +210,4 @@ B57/B60/B65 ואת רכיב התיעוד
 
 ## סיכום כמותי
 
-**73 דרישות אטומיות** (B1–B65 עם פיצולים, בניכוי B47 שהוסר): `done` 39 · `planned` 15 · `gap` 17 · `N/A` 1 · `parent` 1.
+**73 דרישות אטומיות** (B1–B65 עם פיצולים, בניכוי B47 שהוסר): `done` 41 · `planned` 15 · `gap` 15 · `N/A` 1 · `parent` 1.

@@ -1628,7 +1628,7 @@ def compute_budget_profiles(train_df: pd.DataFrame, levels: list[float]) -> dict
 def simulate_strategies(pipeline, profiles: dict) -> dict[str, float | None]:
     """Sums the pipeline's prediction across every allocation in each
     of the four strategies: ad_budget = the allocation's own exact
-    level, every other feature at that level's median (D8א). All
+    level, every other feature from that level's observed train profile. All
     allocations at the same level share an identical profile, so the
     model is called once per distinct level, not once per allocation.
     A strategy needing any unavailable level (compute_budget_profiles

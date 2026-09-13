@@ -50,6 +50,7 @@ def build_business_facts(metrics: dict, findings: dict, model_versions: dict,
             "ltv": "models/metrics.json.global_feature_importance.P2",
             "super_customer_profile": "models/metrics.json.super_customer_profile",
             "followup_context": "docs/findings.json.calls_to_closed",
+            "budget_backtest": "models/metrics.json.P6_backtest",
         },
         "ltv": {
             "rank_1_by_algorithm": rank_1,
@@ -66,6 +67,13 @@ def build_business_facts(metrics: dict, findings: dict, model_versions: dict,
             "population_definition": "closed>0",
             "mean_calls_closed_eq_1": calls["mean_calls_to_closed_closed_eq_1"],
             "mean_calls_closed_ge_2": calls["mean_calls_to_closed_closed_ge_2"],
+        },
+        "budget_backtest": {
+            level: {key: metrics["P6_backtest"][level][key] for key in (
+                "predicted_per_customer", "actual_mean_per_customer",
+                "n_train_at_level", "n_holdout_at_level",
+            )}
+            for level in ("500", "2000")
         },
     }
 

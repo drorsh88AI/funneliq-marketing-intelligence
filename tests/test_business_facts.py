@@ -7,6 +7,12 @@ from scripts.business_facts import build_business_facts, write_business_facts
 
 def _inputs():
     metrics = {
+        "P6_backtest": {
+            level: {"predicted_per_customer": 800.0, "actual_mean_per_customer": 100.0,
+                    "n_train_at_level": 90, "n_holdout_at_level": 17,
+                    "profile_source_row_id": 123}
+            for level in ("500", "2000")
+        },
         "global_feature_importance": {"P2": {
             "catboost": {"numeric__calls_to_closed": 9.0, "numeric__ad_budget": 1.0},
             "lightgbm": {"numeric__calls_to_closed": 8.0, "numeric__ad_budget": 2.0},
@@ -39,6 +45,9 @@ def test_business_facts_is_minimal_and_marks_consensus():
     assert facts["followup_context"]["population_definition"] == "closed>0"
     assert "P2" not in facts  # no full metrics blocks
     assert "distribution" not in json.dumps(facts)
+    assert set(facts["budget_backtest"]) == {"500", "2000"}
+    assert facts["budget_backtest"]["500"]["predicted_per_customer"] == 800.0
+    assert "profile_source_row_id" not in json.dumps(facts)
 
 
 def test_business_facts_does_not_claim_consensus_when_one_model_differs():
