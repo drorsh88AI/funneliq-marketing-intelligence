@@ -63,7 +63,14 @@ from scripts import load_data as load_data_module  # noqa: E402
 # module-level matplotlib.use("Agg") + fixed svg.hashsalt (PHASE5.md D9)
 # must run first, so checkpoint 13's SVGs are headless and deterministic
 # too, without a second (redundant) backend/hashsalt setup here.
-from scripts.analysis import _write_svg_with_description, super_customer_profile  # noqa: E402
+from scripts.analysis import (  # noqa: E402
+    _write_svg_with_description,
+    build_results,
+    super_customer_profile,
+    write_findings_json,
+    write_findings_md,
+    write_svgs,
+)
 
 import matplotlib.pyplot as plt  # noqa: E402
 
@@ -1583,28 +1590,45 @@ def strategy_totals() -> dict[str, int]:
 
 
 def compute_budget_profiles(train_df: pd.DataFrame, levels: list[float]) -> dict[float, dict]:
-    """D8א: the median profile for an EXACT ad_budget level, computed
-    from train_df's own rows only -- a bootstrap resample's rows, or
-    the real train set for the point estimate -- never from a tier or
-    the full population. A level with zero matching rows in this
-    train_df is reported unavailable (profile=None) -- never
-    completed from a tier or the population (D8א's documented edge
-    case), and the caller must not pretend otherwise."""
-    feature_cols = list(DERIVED_FROM_PROFILE["P6"])
+    """Choose one observed multivariate train row at each exact budget.
+
+    The representative minimizes normalized L1 distance from the
+    within-level marginal medians. IQR is the scale; a zero IQR uses 1.
+    The distance uses only P6 input features, never cumulative_profit.
+    source_row_id breaks ties deterministically and provides provenance.
+    Copying one observed row preserves the funnel identities that the old
+    independent-median profile could violate. A missing level remains
+    unavailable and is never filled from another budget or population.
+    """
+    feature_cols = [c for c in model_feature_columns("P6") if c != "ad_budget"]
+    if "source_row_id" not in train_df.columns:
+        raise ValueError("P6 profile selection requires source_row_id provenance")
     out = {}
     for level in levels:
         rows = train_df[train_df["ad_budget"] == level]
         if len(rows) == 0:
-            out[level] = {"profile": None, "n": 0}
+            out[level] = {"profile": None, "n": 0, "source_row_id": None}
         else:
-            out[level] = {"profile": {c: float(rows[c].median()) for c in feature_cols}, "n": int(len(rows))}
+            center = rows[feature_cols].median()
+            scale = rows[feature_cols].quantile(0.75) - rows[feature_cols].quantile(0.25)
+            scale = scale.mask(scale == 0, 1.0)
+            distance = ((rows[feature_cols] - center).abs() / scale).sum(axis=1)
+            ranked = rows.assign(_profile_distance=distance).sort_values(
+                ["_profile_distance", "source_row_id"], kind="mergesort"
+            )
+            selected = ranked.iloc[0]
+            out[level] = {
+                "profile": {c: float(selected[c]) for c in feature_cols},
+                "n": int(len(rows)),
+                "source_row_id": int(selected["source_row_id"]),
+            }
     return out
 
 
 def simulate_strategies(pipeline, profiles: dict) -> dict[str, float | None]:
     """Sums the pipeline's prediction across every allocation in each
     of the four strategies: ad_budget = the allocation's own exact
-    level, every other feature at that level's median (D8א). All
+    level, every other feature from that level's observed train profile. All
     allocations at the same level share an identical profile, so the
     model is called once per distinct level, not once per allocation.
     A strategy needing any unavailable level (compute_budget_profiles
@@ -1666,7 +1690,13 @@ def p6_bootstrap_simulation(df: pd.DataFrame, p6_results: dict, winner: str,
             "upper": upper,
             "interval_method": "bootstrap_percentile",
             "n_bootstrap_used": len(values),
-            "levels": {str(level): {"n": point_profiles[level]["n"]} for level, _ in STRATEGY_ALLOCATIONS[name]},
+            "levels": {
+                str(level): {
+                    "n": point_profiles[level]["n"],
+                    "profile_source_row_id": point_profiles[level]["source_row_id"],
+                }
+                for level, _ in STRATEGY_ALLOCATIONS[name]
+            },
         }
     return result
 
@@ -2331,7 +2361,9 @@ def holdout_evaluate_p6(df: pd.DataFrame, p6_results: dict, winner: str) -> dict
     }
 
 
-def holdout_evaluate_p4s(df: pd.DataFrame, p4s_results: dict, winner: str) -> dict:
+def holdout_evaluate_p4s(
+    df: pd.DataFrame, p4s_results: dict, winner: str, *, calibration: dict | None = None,
+) -> dict:
     """PHASE8A.md checkpoint 7 -- P4S's single Holdout opening.
     Deliberately NOT reusing holdout_evaluate_p3_p4: P4S needs a
     budget_tier breakdown with n/base_rate/Brier and a null-with-reason
@@ -2345,7 +2377,7 @@ def holdout_evaluate_p4s(df: pd.DataFrame, p4s_results: dict, winner: str) -> di
     holdout_df = _holdout_frame(df, task)
     y_true = target_values(holdout_df, task).to_numpy()
 
-    cal_result = calibrate_task_winner(task, df, p4s_results, winner)
+    cal_result = calibration or calibrate_task_winner(task, df, p4s_results, winner)
     calibrator = cal_result["calibrator"]
     if calibrator is None:
         raise RuntimeError(
@@ -2402,6 +2434,50 @@ def holdout_evaluate_p4s(df: pd.DataFrame, p4s_results: dict, winner: str) -> di
         "dummy_holdout": dummy_metrics,
         "majority_baseline_population_pct": 1.0 - BASE_RATE["P4S"],
     }
+
+
+def phase10a_p4s_catboost_metrics(df: pd.DataFrame, metrics: dict) -> dict:
+    """Return CP9's P4S metrics update after one disclosed Holdout read.
+
+    CatBoost's already-frozen P4S CV parameters are reused verbatim: no
+    search, comparison or threshold is run after seeing Holdout. The old
+    Logistic selection/calibration/Holdout evidence is retained once as
+    audit history. The external prediction contract is unaffected.
+    """
+    if "catboost" not in metrics.get("P4S", {}):
+        raise ValueError("P4S CatBoost CV evidence is missing")
+    if metrics["P4S"]["catboost"].get("best_params") != {
+        "model__depth": 6,
+        "model__iterations": 400,
+        "model__learning_rate": 0.01,
+    }:
+        raise ValueError("P4S CatBoost parameters differ from the frozen CP5 result")
+
+    updated = json.loads(json.dumps(metrics))
+    if "P4S_pre_cp9_audit" not in updated:
+        updated["P4S_pre_cp9_audit"] = {
+            "selection": updated["P4S_selection"],
+            "calibration": updated["P4S_calibration"],
+            "holdout": updated["P4S_holdout"],
+        }
+
+    calibration = calibrate_task_winner("P4S", df, updated["P4S"], "catboost")
+    if calibration["calibration_status"] != "calibrated":
+        raise RuntimeError(f"P4S CatBoost calibration failed: {calibration.get('error')}")
+    holdout = holdout_evaluate_p4s(
+        df, updated["P4S"], "catboost", calibration=calibration,
+    )
+    updated["P4S_selection"] = {
+        "eligible": updated["P4S_pre_cp9_audit"]["selection"]["eligible"],
+        "winner": "catboost",
+        "cv_rule_winner": updated["P4S_pre_cp9_audit"]["selection"]["winner"],
+        "override_reason": "brief_requires_a_dedicated_catboost_super_customer_model",
+    }
+    updated["P4S_calibration"] = {
+        key: value for key, value in calibration.items() if key != "calibrator"
+    }
+    updated["P4S_holdout"] = holdout
+    return updated
 
 
 def p4_sensitivity_holdout_comparison(df: pd.DataFrame, p4_results: dict, winner: str) -> dict:
@@ -2467,6 +2543,41 @@ def p6_backtest(df: pd.DataFrame, p6_results: dict, winner: str) -> dict:
             "actual_mean_per_customer": float(actual_rows[TARGET["P6"]].mean()) if len(actual_rows) else None,
             "n_holdout_at_level": int(len(actual_rows)),
             "n_train_at_level": profile["n"],
+            "profile_source_row_id": profile["source_row_id"],
+        }
+    return out
+
+
+def p6_backtest_from_frozen_actuals(
+    df: pd.DataFrame, p6_results: dict, winner: str, frozen_backtest: dict,
+) -> dict:
+    """Rebuild P6 predictions without reopening its frozen Holdout.
+
+    Only train-derived predictions and profile provenance are recomputed.
+    The observed Holdout mean and count are copied from the prior metrics
+    block, whose keys must match every locked strategy level exactly.
+    """
+    expected = {str(level) for level in STRATEGY_LEVELS}
+    if set(frozen_backtest) != expected:
+        raise ValueError("frozen P6 backtest levels do not match STRATEGY_LEVELS")
+
+    train_df = build_task_train_frame(df, "P6")
+    pipeline = build_fitted_candidate("P6", winner, p6_results, df, train_df=train_df)
+    profiles = compute_budget_profiles(train_df, STRATEGY_LEVELS)
+    out = {}
+    for level in STRATEGY_LEVELS:
+        key = str(level)
+        old = frozen_backtest[key]
+        if "actual_mean_per_customer" not in old or "n_holdout_at_level" not in old:
+            raise ValueError(f"frozen P6 backtest level {key} lacks Holdout evidence")
+        profile = profiles[level]
+        row = {**profile["profile"], "ad_budget": level}
+        out[key] = {
+            "predicted_per_customer": float(pipeline.predict(pd.DataFrame([row]))[0]),
+            "actual_mean_per_customer": old["actual_mean_per_customer"],
+            "n_holdout_at_level": old["n_holdout_at_level"],
+            "n_train_at_level": profile["n"],
+            "profile_source_row_id": profile["source_row_id"],
         }
     return out
 
@@ -2892,6 +3003,127 @@ def _run_p4s() -> None:
           f"sha256={artifact_summary['artifact_sha256'][:12]}...")
 
 
+def _run_phase10a_cp9() -> None:
+    """Apply only CP9's approved data/model repairs in one isolated run."""
+    project_root = Path(__file__).resolve().parent.parent
+    source_paths = ["app", "scripts"]
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain", "--", *source_paths],
+        capture_output=True, text=True, check=True, cwd=project_root,
+    ).stdout.strip()
+    if dirty:
+        raise RuntimeError(
+            "CP9 source must be committed before artifact generation so model_version is reproducible:\n"
+            + dirty
+        )
+    source_git_sha = git_sha7()
+    if source_git_sha == "unknown":
+        raise RuntimeError("CP9 artifact generation requires an identifiable git commit")
+
+    protected_names = [
+        f"{task}.{suffix}"
+        for task in ("P2", "P3", "P4", "P6")
+        for suffix in ("joblib", "meta.json")
+    ]
+    protected_before = {
+        name: _sha256_file(project_root / "models" / name) for name in protected_names
+    }
+
+    csv_path = project_root / "funnel_marketing_data.csv"
+    df = load_and_verify_csv(csv_path)
+    old_metrics = read_metrics_json(project_root / "models" / "metrics.json")
+
+    p6_winner = old_metrics["P6_selection"]["winner"]
+    p6_simulation = p6_bootstrap_simulation(df, old_metrics["P6"], p6_winner)
+    updated_metrics = phase10a_p4s_catboost_metrics(df, old_metrics)
+    updated_metrics["P6_strategy_ranking"] = strategy_ranking_verdict(p6_simulation)
+    updated_metrics["P6_backtest"] = p6_backtest_from_frozen_actuals(
+        df, old_metrics["P6"], p6_winner, old_metrics["P6_backtest"],
+    )
+    updated_metrics["P6_profile_method"] = {
+        "name": "observed_exact_budget_medoid",
+        "distance": "normalized_l1_from_within_level_medians",
+        "scale": "within_level_iqr_or_1_when_zero",
+        "tie_break": "lowest_source_row_id",
+        "fit_source": "train",
+        "target_used": False,
+    }
+
+    analysis_results = build_results(df, csv_path)
+
+    with tempfile.TemporaryDirectory() as tmp_name:
+        tmp_root = Path(tmp_name)
+        tmp_models = tmp_root / "models"
+        tmp_docs = tmp_root / "docs"
+        tmp_static = tmp_root / "app" / "static"
+        tmp_models.mkdir(parents=True)
+        tmp_docs.mkdir(parents=True)
+        tmp_static.mkdir(parents=True)
+
+        write_metrics_json(updated_metrics, tmp_models / "metrics.json")
+        write_metrics_json(p6_simulation, tmp_models / "P6_simulation.json")
+        p4s_summary = write_p4s_artifact(df, updated_metrics, tmp_models)
+
+        write_findings_json(analysis_results, tmp_docs / "findings.json")
+        write_svgs(analysis_results, tmp_docs)
+        write_findings_md(analysis_results, tmp_docs, tmp_docs / "FINDINGS.md")
+
+        from scripts.business_facts import build_business_facts, write_business_facts
+
+        versions = {
+            task: read_metrics_json(project_root / "models" / f"{task}.meta.json")["model_version"]
+            for task in ("P2", "P3", "P4", "P6")
+        }
+        versions["P4S"] = read_metrics_json(tmp_models / "P4S.meta.json")["model_version"]
+        facts = build_business_facts(
+            updated_metrics,
+            analysis_results,
+            versions,
+            source_csv_sha256=load_data_module.EXPECTED_SHA256,
+            metrics_sha256=_sha256_file(tmp_models / "metrics.json"),
+        )
+        write_business_facts(facts, tmp_static / "business_facts.json")
+
+        run_metadata_path = project_root / "models" / "run_metadata.json"
+        run_metadata = read_metrics_json(run_metadata_path)
+        run_metadata["phase10a_cp9"] = {
+            "timestamp_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "source_git_sha": source_git_sha,
+            "p4s": p4s_summary,
+            "p6_profile_method": updated_metrics["P6_profile_method"],
+            "protected_artifact_hashes": protected_before,
+        }
+        write_metrics_json(run_metadata, tmp_models / "run_metadata.json")
+
+        replacements = {
+            tmp_models / "metrics.json": project_root / "models" / "metrics.json",
+            tmp_models / "P6_simulation.json": project_root / "models" / "P6_simulation.json",
+            tmp_models / "P4S.joblib": project_root / "models" / "P4S.joblib",
+            tmp_models / "P4S.meta.json": project_root / "models" / "P4S.meta.json",
+            tmp_models / "run_metadata.json": run_metadata_path,
+            tmp_docs / "findings.json": project_root / "docs" / "findings.json",
+            tmp_docs / "FINDINGS.md": project_root / "docs" / "FINDINGS.md",
+            tmp_static / "business_facts.json": project_root / "app" / "static" / "business_facts.json",
+        }
+        for svg_name in (
+            "funnel_dropoff.svg", "ad_budget_leads_curve.svg", "budget_tier_conversion.svg",
+            "calls_to_closed_distribution.svg", "correlations_cumulative_profit.svg",
+        ):
+            replacements[tmp_docs / svg_name] = project_root / "docs" / svg_name
+        for source, destination in replacements.items():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source.read_bytes())
+
+    protected_after = {
+        name: _sha256_file(project_root / "models" / name) for name in protected_names
+    }
+    if protected_after != protected_before:
+        raise RuntimeError("CP9 changed a protected P2/P3/P4/P6 artifact")
+    print(f"CP9 complete from source {source_git_sha}: P4S={p4s_summary['model_version']}")
+    print(f"P6 ranking={updated_metrics['P6_strategy_ranking']['ranked']}")
+    print(f"protected hashes unchanged={protected_after == protected_before}")
+
+
 if __name__ == "__main__":
     # D22: --build-artifacts is checkpoint 15's ENTIRE, separate entry
     # point -- it must return before a single line of the full-pipeline
@@ -2904,6 +3136,10 @@ if __name__ == "__main__":
     _real_module = importlib.import_module("scripts.train")
     _add_budget_tier = _real_module._add_budget_tier
     _Winsorizer = _real_module._Winsorizer
+
+    if "--phase10a-cp9" in sys.argv:
+        _run_phase10a_cp9()
+        raise SystemExit(0)
 
     if "--run-p4s" in sys.argv:
         # PHASE8A.md D21: P4S's entire isolated entry point -- returns

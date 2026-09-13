@@ -3,51 +3,56 @@
     "interval_method": "bootstrap_percentile",
     "levels": {
       "500": {
-        "n": 92
+        "n": 92,
+        "profile_source_row_id": 1074
       }
     },
-    "lower": 404267.53867413726,
+    "lower": 379299.0785522176,
     "n_bootstrap_used": 1000,
-    "point": 626861.153448799,
-    "upper": 715278.9053232085
+    "point": 789593.5916363534,
+    "upper": 856633.6030869988
   },
   "10x5000": {
     "interval_method": "bootstrap_percentile",
     "levels": {
       "5000": {
-        "n": 249
+        "n": 249,
+        "profile_source_row_id": 2351
       }
     },
-    "lower": 221525.58026441332,
+    "lower": 177031.169367353,
     "n_bootstrap_used": 1000,
-    "point": 239169.33716905638,
-    "upper": 251791.1928514032
+    "point": 227214.4820486609,
+    "upper": 261079.13110849136
   },
   "25x2000": {
     "interval_method": "bootstrap_percentile",
     "levels": {
       "2000": {
-        "n": 322
+        "n": 322,
+        "profile_source_row_id": 880
       }
     },
-    "lower": 519701.0493656785,
+    "lower": 519334.93407887896,
     "n_bootstrap_used": 1000,
-    "point": 531884.8764616682,
-    "upper": 546399.1305835987
+    "point": 530953.1166090154,
+    "upper": 549755.7905599724
   },
   "2x20000_1x10000": {
     "interval_method": "bootstrap_percentile",
     "levels": {
       "10000": {
-        "n": 161
+        "n": 161,
+        "profile_source_row_id": 1773
       },
       "20000": {
-        "n": 57
+        "n": 57,
+        "profile_source_row_id": 532
       }
     },
-    "lower": 1465.2012150863766,
+    "lower": 477.4781328408176,
     "n_bootstrap_used": 1000,
-    "point": 6898.0852850490455,
-    "upper": 9632.295324548502
+    "point": 7641.754626645002,
+    "upper": 13980.533951990228
   }
 }

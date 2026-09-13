@@ -40,6 +40,35 @@
     "sklearn": "1.9.0",
     "xgboost": "3.4.1"
   },
+  "phase10a_cp9": {
+    "p4s": {
+      "artifact_sha256": "aba37602cf12a8d81ca2c165f8680388ccc15f0b9aae19c3c851aa955666a534",
+      "model_version": "P4S-catboost-20260912-1c70ca8",
+      "predict_seconds": 0.0027846499998122453,
+      "rss_bytes": 214470656,
+      "winner": "catboost"
+    },
+    "p6_profile_method": {
+      "distance": "normalized_l1_from_within_level_medians",
+      "fit_source": "train",
+      "name": "observed_exact_budget_medoid",
+      "scale": "within_level_iqr_or_1_when_zero",
+      "target_used": false,
+      "tie_break": "lowest_source_row_id"
+    },
+    "protected_artifact_hashes": {
+      "P2.joblib": "101576ba359c2ec862cecb3b3e5e738a0a8c7e9c6cc31fe8da388c21ff62201f",
+      "P2.meta.json": "bc622326d7e82582b9c275cfa1c063b85b163545b77e6632696a2372b9ff1ca7",
+      "P3.joblib": "a169f6b139c2c8f544f93a54f80baf309b8971bd71feab022b9f5675264d398a",
+      "P3.meta.json": "5cea13068b941262914553ea64c0e1fa4ce7e1d023d51f144089df89f9e4dbbb",
+      "P4.joblib": "57a7a54f67406b6c5f4746449e6d776a00e5e45dfc66928c63a6238805b09598",
+      "P4.meta.json": "d526ca32522ac71e4480514494f5a0ae6f1c7b1aeb1ffb209840483439450f7f",
+      "P6.joblib": "2364e4f0b722b444b26fac9390c33e53f234fc6d69f80091640ad0a6fd790519",
+      "P6.meta.json": "fd716ad1b24a4e357f33ba17533154c3864fedd030b925dd0100995763aaa1e3"
+    },
+    "source_git_sha": "1c70ca8",
+    "timestamp_utc": "2026-09-12T18:41:04.076291+00:00"
+  },
   "platform": "win32",
   "timestamp_utc": "2026-09-05T13:56:31.056662+00:00"
 }

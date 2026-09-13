@@ -8,9 +8,63 @@
 > חייב להימצא מילולית בטקסט הגלוי של הבריף, לכל דרישה יש בעלים יחיד, ולכל דרישה `done`
 > יש ראיה. מזהה `B47` הוסר במפורש (סעיף אחרון) ואינו יתום — הוא לא נמחק בשתיקה.
 >
-> **מקרא סטטוס:** `done` בוצע ומאומת · `planned` בעלים ידוע, טרם בוצע · `gap` נתון קיים
-> אך הכתיבה חסרה · `N/A` אופציונלי בבריף ונדחה ביודעין · `parent` דרישת-על שאינה נסגרת
+> **מקרא סטטוס:** `done` בוצע ומאומת · `planned` בעלים ידוע, טרם בוצע · `gap` כתיבה,
+> מימוש או הצדקה חסרים/לא תקפים · `N/A` אופציונלי בבריף ונדחה ביודעין · `parent` דרישת-על שאינה נסגרת
 > עצמאית — ר' הילדים בעמודת הראיה.
+
+## ביקורת רוחבית 10A — בביצוע, 11.09.2026
+
+[PHASE10A.md](PHASE10A.md) מגדירה בדיקה חוזרת של כל 73 השורות מול הבריף והראיות,
+במיוחד משמעות הקלט, מועד החיזוי, יחידות הרווח וההבדל בין API למסע משתמש.
+המרשם הזה נשאר מקור העקיבות היחיד. תורם `10A` מציין נגיעה רוחבית בתוכנית
+שאושרה לביצוע, לא השלמת הדרישה. CP0–CP3 נסגרו לאחר שביקורת הביניים נעלה את
+אוכלוסיית B46b ל־`closed>0`; CP4 הושלם בארבעה חלקים A–D.
+
+**CP1 נסגר ב־12.09.2026:** כל 73 השורות נקראו מול הציטוט בבריף והראיה בפועל.
+שלושה סעיפי חשיפה (B28/B36/B52) הוחזרו ל־`planned`: ה־API החי נשמר כראיית
+ביניים, אך אין עדיין מסע משתמש בדשבורד. חמישה סעיפים הוחזרו ל־`gap`:
+B18/B22/B23/B24 חסרים תשובת כתיבה מלאה ב־FINDINGS. B63 חזרה ל־`done`
+ב־CP2 לאחר שהוגדר תנאי שימוש שאינו טוען לחיזוי לפני רכישה: רוכש ידוע,
+חלון גיוס חודשי סגור ומעקב 1 שהושלם, לצד גילוי שאין בקובץ ראיית זמן.
+**תיקון ביקורת CP0–CP3, 12.09.2026:** שלושה סטטוסים שסומנו `done` הקדימו את
+הראיה הכתובה. B31 טרם כוללת החלטה מנומקת אם טיפול באי־איזון מוצדק; B33 מכילה
+ערך baseline בארטיפקט אך טרם דווחה לצד חמשת מדדי P3; B46b נשענת על
+`purchased=1`, אף שנוסח הבריף "deals that eventually closed" עשוי לדרוש
+`closed>0`. בקובץ יש 3,163 רשומות בראשונה ו־3,318 בשנייה, כולל 155 רשומות
+`closed>0 AND purchased=0`. אוכלוסיית B46b ננעלה ל־`closed>0`; היא נשארת
+`gap` עד כתיבת התשובה ב־CP4 ותיקון המימוש מתוכנן ב־CP6/CP9.
+הספירה לאחר ביקורת CP0–CP3 הייתה 39 `done`, 15 `planned`, 17 `gap`, אחת
+`N/A` ואחת `parent`. **עדכון CP4-A, 12.09.2026:** B31 נסגרה לאחר שנכתבה
+הכרעה מנומקת נגד weighting במודל P3 הנפרס. B29b/B29c/B32/B33/B37a–d קיבלו
+נוסחים וראיות מוכנים, אך נשארו `gap` עד הטמעה ב־REPORT כנדרש בתוצר הסופי.
+**עדכון CP4-C, ‏12.09.2026:** B49 ו־B51 הוחזרו מ־`done` ל־`gap` לאחר
+שבדיקת train-only הוכיחה שפרופילי החציון של P6 מפרים זהויות מקור בארבע מחמש
+רמות התקציב. **עדכון CP4-D, ‏12.09.2026:** B46b נסגרה לאחר שנכתבה תשובה
+מחייבת על אוכלוסיית `closed>0`: חציון 3, שכיח 2, ממוצע 3.706 ו־1,595/3,318
+רשומות עם ממוצע 4+ שיחות. פער ה־API והארטיפקטים נשאר מתועד לתיקון CP9 ואינו
+מבטל את השלמת דרישת הכתיבה שבבעלות פאזה 5. הספירה הפעילה: 39 `done`,
+15 `planned`, 17 `gap`, אחת `N/A` ואחת `parent`.
+שינוי סטטוס אינו מוחק את העבודה שכבר בוצעה; הוא מתקן מה עוד נדרש לסגירה.
+
+**עדכון CP7, ‏12.09.2026:** המרשם סונכרן מול SPEC, חוזי המסך ומסמכי הפאזות.
+לא נמצאה הצדקה לשינוי סטטוס נוסף: שלושת נתיבי החיזוי/סימולציה נשארים
+`planned` עד חשיפה בדשבורד, B49/B51 נשארים `gap` עד תיקון P6, ו־B41 נשארת
+`planned` עד פריסת CatBoost ל־P4S והצגתו. הספירה נשארת 39 `done`, ‏15
+`planned`, ‏17 `gap`, אחת `N/A` ואחת `parent`.
+
+**עדכון CP8, ‏12.09.2026:** נקבע מסלול סגירה לכל דרישה פתוחה בלי לשנות
+סטטוס: CP9 של 10A מטפל ב־B49/B51 ובחסמי B41/B50/B52/B53a/B53b; פאזה 11
+מממשת B10/B28/B36/B41/B45/B50/B52/B56 ותורמת ל־B55b/B59; פאזה 12
+מאמתת את המסע החי ומספקת ראיית קבלה; ופאזה 13 משלימה את B1/B6/B18/
+B22/B23/B24/B29b/B29c/B32/B33/B37a/B37b/B37c/B37d/B43/B53a/B53b/
+B57/B60/B65 ואת רכיב התיעוד
+של B59. ‏B54 נשארת parent ו־B58 נשארת N/A. הספירה אינה משתנה.
+
+**עדכון CP9, ‏12.09.2026:** שלושת חסמי המימוש תוקנו. Follow-up קורא ומאמת
+את אוכלוסיית `closed>0`; ‏P4S נפרס כ־CatBoost ייעודי מגרסת המקור `1c70ca8`
+תוך שמירת תוצאות Logistic ההיסטוריות; ו־P6 נבנה מחדש מפרופיל train נצפה
+ודטרמיניסטי בלי לפתוח שוב את ה־Holdout. ‏B49 ו־B51 נסגרו ל־`done`.
+הספירה הפעילה: 41 `done`, ‏15 `planned`, ‏15 `gap`, אחת `N/A` ואחת `parent`.
 
 ## §04 GitHub
 
@@ -36,30 +90,30 @@
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
 | **B9** | §04 | "Build a login screen using Supabase Auth (email + password at minimum)." | מסך התחברות email+password | 4 | — | 12 | done | `app/static/index.html` + `app.js`; 11 בדיקות ב-`test_auth.py` |
-| **B10** | §04 | "Handle the session properly: an unauthenticated visitor sees only the login screen; a signed-in user reaches the dashboard and predictions; sign-out works and clears the session." | ניהול session מלא כולל גישה לדשבורד ולחיזויים | 11 | 4, 10 | 12 | planned | לוגין/יציאה קיימים מפאזה 4 |
+| **B10** | §04 | "Handle the session properly: an unauthenticated visitor sees only the login screen; a signed-in user reaches the dashboard and predictions; sign-out works and clears the session." | ניהול session מלא כולל גישה לדשבורד ולחיזויים | 11 | 4, 10, 10A | 12 | planned | לוגין/יציאה קיימים מפאזה 4 |
 | **B11** | §04 | "Use the public anon key in the browser for the login flow — never expose the service key client-side. Keep any privileged operations server-side." | anon בדפדפן, service לעולם לא בצד לקוח | 4 | 9 | 12 | done | `test_config.py` — `"sb_secret" not in response.text`; `render.yaml` ללא `SUPABASE_SECRET_KEY` |
 
 ## §04 פריסה
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
-| **B13** | §04 | "Deploy your service to Railway so it's reachable at a public URL." | השירות זמין ב-URL ציבורי | 2 | — | 12 | done | ר' B64; `render.yaml` |
+| **B13** | §04 | "Deploy your service to Railway so it's reachable at a public URL." | השירות זמין ב-URL ציבורי | 2 | — | 12 | done | Render לפי B64; `https://funneliq.onrender.com/health` החזיר 200 בבדיקות פאזה 2 ופאזה 9 |
 | **B14** | §04 | "Secrets (Supabase keys, config) are set as Railway environment variables, never hard-coded." | secrets כמשתני סביבה | 2 | — | 12 | done | `render.yaml` `sync:false` לשני שדות בלבד |
-| **B15** | §04 | "Connect the Railway service to your GitHub repo so pushes trigger a redeploy." | push מפעיל redeploy | 2 | — | 12 | done | `autoDeployTrigger: commit`, `branch: main` |
-| **B16** | §04 | "Expose a health-check endpoint and confirm the deployment survives a restart." | health-check + שרידות restart | 2 | — | 12 | done | `/health` ב-`app/main.py`; `healthCheckPath: /health` |
+| **B15** | §04 | "Connect the Railway service to your GitHub repo so pushes trigger a redeploy." | push מפעיל redeploy | 2 | — | 12 | done | `render.yaml`: `autoDeployTrigger: commit`, `branch: main`; `PHASE2.md` §ג — מיזוג PR #7 יצר deploy אוטומטי ל־`9d7a975` |
+| **B16** | §04 | "Expose a health-check endpoint and confirm the deployment survives a restart." | health-check + שרידות restart | 2 | — | 12 | done | `/health` ב־`app/main.py`; `render.yaml` `healthCheckPath: /health`; `PHASE2.md` §ד — restart יזום וחזרה ל־200 לאחר כ־7 שניות |
 
 ## §05 חבילה 1
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
-| **B17** | §05.1 | "a short written findings note (in the README or a /docs file)" | מסמך ממצאים כתוב | 5 | 13 | 12 | done | `docs/FINDINGS.md` |
-| **B18** | §05.1 | "covering missing-value handling" | טיפול בערכים חסרים מתועד | 5 | — | 12 | done | `findings.json.missing_values` — 3,500 שורות, 4+29+33 |
-| **B19** | §05.1 | "a correlation analysis against cumulative_profit" | קורלציה מול `cumulative_profit` | 5 | — | 12 | done | `findings.json.correlations` — 17 עמודות |
-| **B20** | §05.1 | "the shape of the ad_budget → num_leads relationship" | צורת הקשר תקציב→לידים | 5 | — | 12 | done | `findings.json.ad_budget_leads_curve` (16 רמות); `ad_budget_leads_curve.svg` |
-| **B21** | §05.1 | "and conversion rate (closed / num_leads) across budget tiers — Low (≤1500), Mid (2000–5000), High (>5000)." | שיעור המרה לפי שלושת הטיירים | 5 | 9, 10, 11 | 12 | done | `docs/findings.json.budget_tiers` — Low **0.04524** (4.5%, n=780) · Mid **0.08220** (8.2%, n=1,717) · High **0.05433** (5.4%, n=1,003) · gap n=0 |
-| **B22** | §05.1 | "How many rows are incomplete, and how did you handle them?" | תשובה כתובה | 5 | 13 | 12 | done | `FINDINGS.md` §חסרים |
-| **B23** | §05.1 | "Does more budget buy proportionally more leads, or do you see diminishing returns?" | תשובה כתובה | 5 | 13 | 12 | done | `FINDINGS.md`; `ad_budget_leads_curve.svg` |
-| **B24** | §05.1 | "Which budget tier converts best — and does that surprise you?" | תשובה כתובה | 5 | 10, 13 | 12 | done | `FINDINGS.md` — Mid 8.2%, לא הגבוה |
+| **B17** | §05.1 | "a short written findings note (in the README or a /docs file)" | מסמך ממצאים כתוב | 5 | 13, 10A | 12 | done | `docs/FINDINGS.md` |
+| **B18** | §05.1 | "covering missing-value handling" | טיפול בערכים חסרים מתועד | 5 | 10A | 12 | gap | `findings.json.missing_values` מכיל 4/29/33; `FINDINGS.md` סופר חסרים אך אינו מסביר באופן מלא כיצד טופלו |
+| **B19** | §05.1 | "a correlation analysis against cumulative_profit" | קורלציה מול `cumulative_profit` | 5 | 10A | 12 | done | `findings.json.correlations` — 17 עמודות |
+| **B20** | §05.1 | "the shape of the ad_budget → num_leads relationship" | צורת הקשר תקציב→לידים | 5 | 10A | 12 | done | `findings.json.ad_budget_leads_curve` (16 רמות); `ad_budget_leads_curve.svg` |
+| **B21** | §05.1 | "and conversion rate (closed / num_leads) across budget tiers — Low (≤1500), Mid (2000–5000), High (>5000)." | שיעור המרה לפי שלושת הטיירים | 5 | 9, 10, 11, 10A | 12 | done | `docs/findings.json.budget_tiers` — Low **0.04524** (4.5%, n=780) · Mid **0.08220** (8.2%, n=1,717) · High **0.05433** (5.4%, n=1,003) · gap n=0 |
+| **B22** | §05.1 | "How many rows are incomplete, and how did you handle them?" | תשובה כתובה | 5 | 13, 10A | 12 | gap | `FINDINGS.md` מציין 33 שורות לא־שלמות, אך תשובת הטיפול הכללית חסרה |
+| **B23** | §05.1 | "Does more budget buy proportionally more leads, or do you see diminishing returns?" | תשובה כתובה | 5 | 13, 10A | 12 | gap | העקומה קיימת ב־`ad_budget_leads_curve.svg`; `FINDINGS.md` מתאר אותה אך נמנע ממסקנת proportional/diminishing returns |
+| **B24** | §05.1 | "Which budget tier converts best — and does that surprise you?" | תשובה כתובה | 5 | 10, 13, 10A | 12 | gap | `FINDINGS.md` מוכיח ש־Mid מוביל עם 8.2%; ההסבר האם ומדוע התוצאה מפתיעה חסר |
 
 ## §05 חבילה 2
 
@@ -68,71 +122,71 @@
 | **B25** | §05.2 | "three trained models — XGBoost, LightGBM, and CatBoost" | שלושת המודלים אומנו | 6 | — | 12 | done | `metrics.json.P2_selection.eligible = [catboost, lightgbm, xgboost]` |
 | **B26** | §05.2 | "compared with 5-fold cross-validation on RMSE and R²" | השוואה ב-5-fold CV על RMSE ו-R² | 6 | — | 12 | done | `metrics.json.P2` — `mean_rmse`, `mean_r2` לכל אלגוריתם |
 | **B27** | §05.2 | "Extract and compare feature importances across all three." | חילוץ importance לשלושת המודלים | 6 | 13 | 12 | done | `docs/feature_importance_P2.svg` + `metrics.json.global_feature_importance.P2` — אומת: `catboost`, `lightgbm`, `xgboost` |
-| **B28** | §05.2 | "Expose the prediction through your app." | חשיפת חיזוי ה-LTV באפליקציה | 9 | 10, 11 | 12 | done | `/api/predict/ltv` ממומש ונבדק מול הארטיפקט (checkpoint 5). **ראיה חיה בוצעה** (ק' 75, 2026-09-10, מול Render אחרי מיזוג `b176eab`): `demo-northbound` → 200 עם קלט תקין. ⚠ זו ראיית שכבת API בלבד — מסך/מסע משתמש עצמאי שייכים לפאזות 10–12 (PHASE9.md ק' 75 מפורש) |
-| **B29a** | §05.2 | "Should cumulative_profit be a feature here? Justify it." | הצדקה כתובה להחרגת `cumulative_profit` מ-P2 | 5 | 6, 13 | 12 | done | `docs/planning/PHASE5.md` D2 · `docs/feature_matrix.md:66` — `Excluded` ב-P2/P3/P4, *"תוצאה מאוחרת/מצטברת… ברשימת הדליפה המפורשת בכולן"* · commit `339736b` — *"feat(phase5): checkpoint 6 — app/features.py, feature_matrix.md, test_features.py"* |
-| **B29b** | §05.2 | "Which features dominate, and do the three models agree?" | השוואה כתובה בין שלושת המודלים | 13 | 6 | 12 | gap | הנתון ב-B27; הכתיבה חסרה |
-| **B29c** | §05.2 | "In two sentences, what's the strongest lever on customer longevity, and what should Northbound do about it?" | שני משפטים: מנוף + המלצה | 13 | 6, 10 | 12 | gap | — |
+| **B28** | §05.2 | "Expose the prediction through your app." | חשיפת חיזוי ה-LTV באפליקציה | 9 | 10, 11, 10A | 12 | planned | ראיית ביניים נשמרת: `/api/predict/ltv` חי ומאומת מול הארטיפקט ו־JWT (PHASE9 ק' 75). 10A/CP5 נעל זרימת קלט עצמאית/דוגמה; CP6 מיפה את התוצאה ל־`LtvPrediction.point_estimate/lower_bound/upper_bound` ואת OOD ל־`in_training_domain/warnings[]`. המימוש והמסע עדיין חסרים וייסגרו בפאזות 11–12 |
+| **B29a** | §05.2 | "Should cumulative_profit be a feature here? Justify it." | הצדקה כתובה להחרגת `cumulative_profit` מ-P2 | 5 | 6, 13, 10A | 12 | done | `docs/planning/PHASE5.md` D2 · `docs/feature_matrix.md:66` — `Excluded` ב-P2/P3/P4, *"תוצאה מאוחרת/מצטברת… ברשימת הדליפה המפורשת בכולן"* · commit `339736b` — *"feat(phase5): checkpoint 6 — app/features.py, feature_matrix.md, test_features.py"* |
+| **B29b** | §05.2 | "Which features dominate, and do the three models agree?" | השוואה כתובה בין שלושת המודלים | 13 | 6, 10A | 12 | gap | נוסח מאומת הוכן ב־`SPEC.md` §ראיות ותשובות CP4-A: `calls_to_closed` ראשון בשלושתם; יחידות importance אינן בנות־השוואה. חסרה הטמעה ב־REPORT |
+| **B29c** | §05.2 | "In two sentences, what's the strongest lever on customer longevity, and what should Northbound do about it?" | שני משפטים: מנוף + המלצה | 13 | 6, 10, 10A | 12 | gap | שני המשפטים הוכנו ב־`SPEC.md` §ראיות ותשובות CP4-A. CP6 קבע שנכס התצוגה ישמור `ltv.rank_1_by_algorithm` לכל שלושת המודלים ויפיק `ltv.dominant_feature` רק אם שלושתם זהים, עם גיבובי CSV ו־metrics; הנכס נוצר ב־CP9 ומכיל את שלושת הדירוגים וגיבוב metrics; נותרה הטמעה ב־REPORT/ממשק בפאזות 13/11 |
 
 ## §05 חבילה 3
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
 | **B30** | §05.3 | "three classifiers with 5-fold stratified CV" | שלושה מסווגים ב-CV מרובד | 6 | — | 12 | done | `metrics.json.P3_selection.eligible = [catboost, lightgbm, xgboost]`; `metrics.json.P3` עם `fold_scores` בני 5 |
-| **B31** | §05.3 | "Check the class balance first and decide whether class-imbalance handling (e.g. scale_pos_weight or class weights) is warranted — justify either way." | בדיקת איזון + החלטה מנומקת | 6 | 13 | 12 | done | `metrics.json.P3_weighted_comparison` |
-| **B32** | §05.3 | "Report Accuracy, Precision, Recall, F1 and ROC-AUC, alongside the majority-class baseline." | דיווח חמשת המדדים | 13 | 6 | 12 | gap | `P3_holdout` — acc 0.7615, f1 0.7722, prec 0.6919, rec 0.8737, auc 0.7894 |
-| **B33** | §05.3 | "alongside the majority-class baseline" | דיווח מול baseline הרוב | 6 | 11, 13 | 12 | done | `metrics.json.P3.dummy.mean_accuracy = 0.53656` |
-| **B34** | §05.3 | "Plot importances for your best model." | גרף importance למנצח | 6 | 13 | 12 | done | `docs/feature_importance_P3.svg` |
-| **B35** | §05.3 | "Design a simple business rule (e.g. "if LTV > X and CAC < Y, flag for outreach") and compare it against your model's predictions" | כלל עסקי + השוואה למודל | 6 | 13 | 12 | done | `metrics.json.P3_manual_rules` — `ltv_months>23.0`, `cac<1000.0` |
-| **B36** | §02 | "Each answer must be reachable through your deployed, signed-in application — not just printed once in a notebook cell." | חיזוי ה-upsell נגיש דרך האפליקציה | 9 | 10, 11 | 12 | done | `/api/predict/upsell` ממומש ונבדק (checkpoint 5); ⚠ חבילה 3 אינה נושאת שורת expose, המקור §02. **ראיה חיה בוצעה** (ק' 75, 2026-09-10, מול Render אחרי מיזוג `b176eab`): `demo-northbound` (מחובר, JWT אמיתי) → 200 עם קלט תקין — התנאי המילולי "reachable through your deployed, signed-in application" מתקיים ברמת ה-API; מסך משתמש שייך לפאזה 11 |
-| **B37a** | §05.3 | "Is accuracy a sufficient metric here?" | תשובה כתובה | 13 | 6 | 12 | gap | — |
-| **B37b** | §05.3 | "What does the majority-class baseline score, and how much does your model add?" | תשובה כתובה | 13 | 6 | 12 | gap | — |
-| **B37c** | §05.3 | "Is upsell driven by one feature or a combination?" | תשובה כתובה | 13 | 6 | 12 | gap | — |
-| **B37d** | §05.3 | "where does the rule win or lose?" | תשובה כתובה | 13 | 6 | 12 | gap | — |
+| **B31** | §05.3 | "Check the class balance first and decide whether class-imbalance handling (e.g. scale_pos_weight or class weights) is warranted — justify either way." | בדיקת איזון + החלטה מנומקת | 6 | 13, 10A | 12 | done | `SPEC.md` §ראיות ותשובות CP4-A: 46.35%/53.65%, יחס משקל ≈1.16; ב־XGBoost הנפרס weighting הוריד ROC-AUC ‏0.79357→0.79281, ולכן אינו מוצדק |
+| **B32** | §05.3 | "Report Accuracy, Precision, Recall, F1 and ROC-AUC, alongside the majority-class baseline." | דיווח חמשת המדדים | 13 | 6, 10A | 12 | gap | טבלת חמשת המדדים מול baseline הוכנה ב־`SPEC.md` §ראיות ותשובות CP4-A; חסרה הטמעה בחבילת הדוח הסופית |
+| **B33** | §05.3 | "alongside the majority-class baseline" | דיווח מול baseline הרוב | 6 | 11, 13, 10A | 12 | gap | baseline רוב באותו Holdout חושב כ־53.71% ונכתב לצד חמשת המדדים ב־`SPEC.md` §CP4-A; נשאר gap עד הטמעה בפועל ב־REPORT לצד B32 |
+| **B34** | §05.3 | "Plot importances for your best model." | גרף importance למנצח | 6 | 13, 10A | 12 | done | `docs/feature_importance_P3.svg` |
+| **B35** | §05.3 | "Design a simple business rule (e.g. "if LTV > X and CAC < Y, flag for outreach") and compare it against your model's predictions" | כלל עסקי + השוואה למודל | 6 | 13, 10A | 12 | done | `metrics.json.P3_manual_rules` — `ltv_months>23.0`, `cac<1000.0` |
+| **B36** | §02 | "Each answer must be reachable through your deployed, signed-in application — not just printed once in a notebook cell." | חיזוי ה-upsell נגיש דרך האפליקציה | 9 | 10, 11, 10A | 12 | planned | ראיית ביניים נשמרת: `/api/predict/upsell` חי ומאומת עם JWT (PHASE9 ק' 75). 10A/CP6 מיפה את הפלט העסקי ל־`event_probability/base_rate/propensity_band` והוציא Accuracy/Precision/Recall שאינם בחוזה הדפדפן; החשיפה עדיין חסרה עד פאזות 11–12 |
+| **B37a** | §05.3 | "Is accuracy a sufficient metric here?" | תשובה כתובה | 13 | 6, 10A | 12 | gap | תשובה מאומתת ב־`SPEC.md` §CP4-A: לא; baseline משיג 53.71% ואינו מזהה חיובי. חסרה הטמעה ב־REPORT |
+| **B37b** | §05.3 | "What does the majority-class baseline score, and how much does your model add?" | תשובה כתובה | 13 | 6, 10A | 12 | gap | `SPEC.md` §CP4-A: ‏53.71% מול 76.15%, תוספת 22.43 נקודות אחוז; חסרה הטמעה ב־REPORT |
+| **B37c** | §05.3 | "Is upsell driven by one feature or a combination?" | תשובה כתובה | 13 | 6, 10A | 12 | gap | `SPEC.md` §CP4-A: `calls_to_closed` דומיננטי, CAC שני ותרומות קטנות נוספות; חסרה הטמעה ב־REPORT |
+| **B37d** | §05.3 | "where does the rule win or lose?" | תשובה כתובה | 13 | 6, 10A | 12 | gap | `SPEC.md` §CP4-A: כלל הבריף פשוט ו־Precision=72.33% אך Recall=27.08% ואינו זמין בזמן; הכלל התפעולי Recall=12.47%; חסרה הטמעה ב־REPORT |
 
 ## §05 חבילה 4
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
-| **B38** | §05.4 | "Build: a CatBoost classifier" | מסווג CatBoost נבנה | 6 | 13 | 12 | done | `PHASE6.md:693–695` — *"P4 — הזוכה Logistic (זכאי, מנצח CatBoost בפשטות)"*; `metrics.json.P4_selection`; One-SE + RSS ב-`train.py:1196`, לפני ה-Holdout |
-| **B39** | §05.4 | "engineer a categorical budget-tier feature (Low/Mid/High) and let CatBoost handle it natively" | `budget_tier` בטיפול נייטיב | 6 | — | 12 | done | `train.py:243` `build_preprocessing_steps(encode_budget_tier=False)` |
-| **B40** | §05.4 | "with hyperparameter tuning (search over learning rate, depth, and iterations)" | כוונון שלושת הצירים | 6 | — | 12 | done | `train.py:526` `catboost_param_distributions()` |
-| **B41** | §05.4 | "Then build a scoring pipeline: given a new customer's early funnel data, output a 0–100 likelihood of becoming a super customer, served by your app." | ציון 0–100 ללקוח-על, מוגש באפליקציה | 8A | 9, 10, 11 | 12 | planned | סתירה בבריף מול `Target: referred`; הרחבה שמרנית |
-| **B42** | §05.4 | "Profile the super customers (referred = Yes, upsell = 1, long tenure): what share of total profit do they represent, and what's their average acquisition cost?" | פרופיל: אחוז רווח + CAC | 6 | 10, 13 | 12 | done | `metrics.json.super_customer_profile` — n=529, 33.61% מהרווח, CAC 990.7 מול 1,437.5 (חיסכון 31.1%) |
-| **B43** | §05.4 | "How could Northbound spot them earlier?" | תשובה כתובה | 13 | 8A, 10 | 12 | gap | `P4_early_funnel` + P4S |
+| **B38** | §05.4 | "Build: a CatBoost classifier" | מסווג CatBoost נבנה | 6 | 13, 10A | 12 | done | `PHASE6.md:693–695` — *"P4 — הזוכה Logistic (זכאי, מנצח CatBoost בפשטות)"*; `metrics.json.P4_selection`; One-SE + RSS ב-`train.py:1196`, לפני ה-Holdout |
+| **B39** | §05.4 | "engineer a categorical budget-tier feature (Low/Mid/High) and let CatBoost handle it natively" | `budget_tier` בטיפול נייטיב | 6 | 10A | 12 | done | `train.py:243` `build_preprocessing_steps(encode_budget_tier=False)` |
+| **B40** | §05.4 | "with hyperparameter tuning (search over learning rate, depth, and iterations)" | כוונון שלושת הצירים | 6 | 10A | 12 | done | `train.py:526` `catboost_param_distributions()` |
+| **B41** | §05.4 | "Then build a scoring pipeline: given a new customer's early funnel data, output a 0–100 likelihood of becoming a super customer, served by your app." | ציון 0–100 ללקוח-על, מוגש באפליקציה | 8A | 9, 10, 11, 10A | 12 | planned | CP9 פרס CatBoost ייעודי ליעד P4S עם ארבעת הקלטים: `P4S-catboost-20260912-1c70ca8`; ה־API מחזיר אותו באותה סכמה. Logistic נשמר להשוואה. נשארה חשיפת הציון 0–100 במסע הדשבורד בפאזה 11 ואימות בפאזה 12 |
+| **B42** | §05.4 | "Profile the super customers (referred = Yes, upsell = 1, long tenure): what share of total profit do they represent, and what's their average acquisition cost?" | פרופיל: אחוז רווח + CAC | 6 | 10, 13, 10A | 12 | done | `metrics.json.super_customer_profile` — n=529, 33.61% מהרווח, CAC 990.7 מול 1,437.5 (חיסכון 31.1%); CP9 הפיק העתק מצומצם וגרסאי ב־`app/static/business_facts.json` |
+| **B43** | §05.4 | "How could Northbound spot them earlier?" | תשובה כתובה | 13 | 8A, 10, 10A | 12 | gap | CP9 מדד CatBoost: Holdout ROC-AUC=0.8014, PR-AUC=0.3420 ו־Recall=0 בסף 0.5, חלש מ־Logistic ההיסטורי (0.8187/0.3779). לכן ארבעת האותות משמשים רק ציון רציף לבדיקה ידנית של רוכש ידוע לאחר מעקב 1 וסגירת החלון; נשארה הטמעה ב־REPORT בפאזה 13 |
 
 ## §05 חבילה 5
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
-| **B44** | §05.5 | "the dropout rate at each follow-up stage (followup_1→followup_5), visualized" | נשירה בכל שלב, ויזואלית | 5 | 9, 10, 11 | 12 | done | `findings.json.funnel_dropoff` — 21.7/25.7/18.6/10.4/29.2%; `funnel_dropoff.svg` |
-| **B45** | §05.5 | "plus a data-driven recommendation surfaced in the dashboard" | המלצה מוצגת בדשבורד | 11 | 5, 9, 10 | 12 | planned | טקסט מ-SPEC §מסקנת P5 |
-| **B46a** | §05.5 | "At which stage does dropout behave unexpectedly?" | תשובה כתובה | 5 | 10, 13 | 12 | done | `funnel_dropoff.followup_4 = 0.10372` — הנמוך ביותר |
-| **B46b** | §05.5 | "For deals that eventually closed, how many follow-ups did they typically take?" | תשובה כתובה | 5 | 10, 13 | 12 | done | `findings.json.calls_to_closed.mean_calls_to_closed_closed_ge_2 = 3.348`; `closed_eq_1 = 5.650` ⚠ `calls_to_closed` הוא **ממוצע ברמת רשומה**, ⛔ לא היסטוריית שיחות פר-עסקה (PHASE0) |
-| **B46c** | §05.5 | "Should Northbound change its follow-up policy — yes or no, and why?" | תשובה כתובה | 5 | 10, 13 | 12 | done | `FINDINGS.md` §מסקנת P5 |
+| **B44** | §05.5 | "the dropout rate at each follow-up stage (followup_1→followup_5), visualized" | נשירה בכל שלב, ויזואלית | 5 | 9, 10, 11, 10A | 12 | done | `findings.json.funnel_dropoff` — 21.7/25.7/18.6/10.4/29.2%; `funnel_dropoff.svg` |
+| **B45** | §05.5 | "plus a data-driven recommendation surfaced in the dashboard" | המלצה מוצגת בדשבורד | 11 | 5, 9, 10, 10A | 12 | planned | טקסט מ־`SPEC.md` §הכרעת CP4-D; CP5 נעל פעולה/מגבלה גלויות, ו־CP6 נעל שהמלצה משולבת תלויה בשני חלקי `FollowupResponse` התקינים וללא fallback קבוע. החשיפה בדשבורד טרם בוצעה |
+| **B46a** | §05.5 | "At which stage does dropout behave unexpectedly?" | תשובה כתובה | 5 | 10, 13, 10A | 12 | done | `funnel_dropoff.followup_4 = 0.10372` — הנמוך ביותר |
+| **B46b** | §05.5 | "For deals that eventually closed, how many follow-ups did they typically take?" | תשובה כתובה | 5 | 10, 13, 10A | 12 | done | `SPEC.md` §הכרעת CP4-D ו־`docs/findings.json.calls_to_closed`: באוכלוסיית `closed>0` ‏(3,318) החציון 3, השכיח 2, הממוצע 3.706 ו־1,595 (48.07%) עם ממוצע 4+; CP9 יישר את ה־API לאותה אוכלוסייה עם עימוד וספירה עצמאית |
+| **B46c** | §05.5 | "Should Northbound change its follow-up policy — yes or no, and why?" | תשובה כתובה | 5 | 10, 13, 10A | 12 | done | `SPEC.md` §הכרעת CP4-D ו־`FINDINGS.md` §מסקנת P5 — לא לעצירה אוטומטית; להמשיך מבוקר ולמדוד עלות ושיעור סגירה שולי |
 
 ## §05 חבילה 6
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
-| **B48** | §05.6 | "a model that predicts cumulative_profit" | מודל שמנבא רווח מצטבר | 6 | — | 12 | done | `models/P6.joblib` (linear); `metrics.json.P6_holdout` — mae 3,678.9, rmse 4,590.9, r2 0.7961 |
-| **B49** | §05.6 | "used to simulate allocation strategies built from campaign sizes the data actually covers (₪500–₪20,000)" | סימולציה בטווח שהנתונים מכסים | 6 | — | 12 | done | `models/P6_simulation.json` — ארבע אסטרטגיות |
-| **B50** | §05.6 | "and a recommendation for which maximizes expected total profit" | המלצה איזו ממקסמת רווח | 11 | 6, 9, 10, 13 | 12 | planned | ניסוח §8 בחלק א |
-| **B51** | §05.6 | "Your simulator only knows each campaign's budget, so decide how to fill in the other features (a typical funnel profile per budget level is one reasonable approach)." | החלטה מתועדת על מילוי הפיצ'רים | 6 | — | 12 | done | פרופיל חציוני לפי טייר; `feature_matrix.md` `Derived` ב-P6 |
-| **B52** | §05.6 | "Expose the simulator in your app." | חשיפת הסימולטור | 9 | 10, 11 | 12 | done | `/api/simulate/budget` ממומש כלוקאפ טהור על `P6_simulation.json` (checkpoint 8, D11) — `P6.joblib` אינו נטען בשום מסלול. **ראיה חיה בוצעה** (ק' 75, 2026-09-10, מול Render אחרי מיזוג `b176eab`): `demo-northbound` → 200 |
-| **B53a** | §05.6 | "Based on what your model learned about diminishing returns, does concentrating or spreading spend win?" | תשובה כתובה | 13 | 6, 10 | 12 | gap | ניתן לענות חד-משמעית |
-| **B53b** | §05.6 | "What would you tell the founder to do next month?" | תשובה כתובה | 13 | 6, 10 | 12 | gap | — |
+| **B48** | §05.6 | "a model that predicts cumulative_profit" | מודל שמנבא רווח מצטבר | 6 | 10A | 12 | done | `models/P6.joblib` (linear); `metrics.json.P6_holdout` — mae 3,678.9, rmse 4,590.9, r2 0.7961 |
+| **B49** | §05.6 | "used to simulate allocation strategies built from campaign sizes the data actually covers (₪500–₪20,000)" | סימולציה בטווח שהנתונים מכסים | 6 | 10A | 12 | done | CP9 בנה מחדש `models/P6_simulation.json` בחמש הרמות 500, 2000, 5000, 10000 ו־20000 ובארבע אסטרטגיות שסכומן 50,000; כל פרופיל מצביע ל־`profile_source_row_id` שנצפה ב־train |
+| **B50** | §05.6 | "and a recommendation for which maximizes expected total profit" | המלצה איזו ממקסמת רווח | 11 | 6, 9, 10, 13, 10A | 12 | planned | הסימולציה המתוקנת מדרגת `100x500` ראשונה, אך טווחה חופף ל־`25x2000` וה־backtest ברמת 500 חושף הערכת־יתר חריפה; לכן אין המלצת הקצאה קבועה, ורק ניסוי מבוקר יוצג בפאזה 11 |
+| **B51** | §05.6 | "Your simulator only knows each campaign's budget, so decide how to fill in the other features (a typical funnel profile per budget level is one reasonable approach)." | החלטה מתועדת על מילוי הפיצ'רים | 6 | 10A | 12 | done | `scripts/train.py::compute_budget_profiles`: בכל תקציב נבחרת שורת train נצפית במינימום L1 מנורמל־IQR מחציוני הקבוצה, ללא היעד ועם `source_row_id` כשובר שוויון; `metrics.json.P6_profile_method` |
+| **B52** | §05.6 | "Expose the simulator in your app." | חשיפת הסימולטור | 9 | 10, 11, 10A | 12 | planned | `/api/simulate/budget` מחזיר את `P6_simulation.json` המתוקן כלוקאפ GET ללא body; חוזה ה־API עבר בבדיקות. נשאר ממשק בפאזה 11 ואימות מסע בפאזה 12 |
+| **B53a** | §05.6 | "Based on what your model learned about diminishing returns, does concentrating or spreading spend win?" | תשובה כתובה | 13 | 6, 10, 10A | 12 | gap | CP9: `100x500` מדורגת ראשונה (789,594) ו־`25x2000` שנייה (530,953), אך הטווחים חופפים וה־backtest ברמת 500 רחוק מאוד מהתחזית. אין הוכחה שפיזור קיצוני מנצח; נשארה הטמעה ב־REPORT |
+| **B53b** | §05.6 | "What would you tell the founder to do next month?" | תשובה כתובה | 13 | 6, 10, 10A | 12 | gap | ההמלצה המתוקנת: לא להעביר 50,000 ש״ח ל־100 קמפיינים על סמך המודל; אם בוחנים אחת מארבע החלופות, לבצע פיילוט מוגבל בדפוס `25x2000` ולמדוד רווח מצטבר באותו אופק. נשארה הטמעה ב־REPORT |
 
 ## §06 מה תבנה
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
 | **B54** | §06 | "A public GitHub repository — code, README.md, schema.sql, a CI workflow, and a commit history that shows how you worked." | חבילת ה-repo | parent | — | — | parent | ⛔ אינו נסגר עצמאית → B1, B2, B5, B6 |
-| **B55a** | §06 | "A live application URL on Railway — a real link you can share that actually answers the founder's questions." | URL ציבורי חי | 2 | — | 12 | done | פאזה 2 checkpoint 14; Render לפי B64 |
-| **B55b** | §06 | "A live application URL on Railway — a real link you can share that actually answers the founder's questions." | האפליקציה הפרוסה **עונה בפועל** לשאלות המייסדת | 12 | 9, 10, 11, 13 | 12 | planned | ⚠ ה-URL חי (B55a) אך התוכן העסקי טרם קיים |
-| **B56** | §06 | "A login-gated dashboard — a real Supabase Auth sign-in screen, not an open page, so the app behaves like the internal tool it's meant to be." | דשבורד מאחורי לוגין | 11 | 4, 10 | 12 | planned | — |
-| **B57** | §06 | "A short write-up (nice to keep as REPORT.md) capturing your findings and the business recommendations from the work packages" | `REPORT.md` עם ממצאים והמלצות | 13 | 5, 6 | 12 | planned | אינו קיים (אומת) |
+| **B55a** | §06 | "A live application URL on Railway — a real link you can share that actually answers the founder's questions." | URL ציבורי חי | 2 | — | 12 | done | `https://funneliq.onrender.com` חי; Render לפי B64; אימותים מתועדים ב־PHASE2 וב־PHASE9 |
+| **B55b** | §06 | "A live application URL on Railway — a real link you can share that actually answers the founder's questions." | האפליקציה הפרוסה **עונה בפועל** לשאלות המייסדת | 12 | 9, 10, 11, 13, 10A | 12 | planned | ⚠ ה-URL חי (B55a). 10A/CP5 מיפה את חמש התשובות לכרטיסי יכולת גנריים בלי לחשוף את ניסוח המשימה; התוכן והמימוש החי טרם קיימים |
+| **B56** | §06 | "A login-gated dashboard — a real Supabase Auth sign-in screen, not an open page, so the app behaves like the internal tool it's meant to be." | דשבורד מאחורי לוגין | 11 | 4, 10, 10A | 12 | planned | — |
+| **B57** | §06 | "A short write-up (nice to keep as REPORT.md) capturing your findings and the business recommendations from the work packages" | `REPORT.md` עם ממצאים והמלצות | 13 | 5, 6, 10A | 12 | planned | אינו קיים (אומת) |
 | **B58** | §06 | "A quick demo — an optional 3–5 minute screen-recording of the deployed app in action." | הקלטת דמו | — | — | — | N/A | אופציונלי בבריף; נדחה ביודעין ב-SPEC |
-| **B59** | §06 | "A stranger can open your live URL, sign in, get a prediction for a new customer, see the follow-up and budget insights, and read your recommendations — without you touching anything. Your repo tells them how it was built and how to run it themselves." | רף הסיום מקצה לקצה | 12 | 9, 10, 11, 13 | 12 | planned | מתח "לקוח חדש" מרוכך ב-8A |
+| **B59** | §06 | "A stranger can open your live URL, sign in, get a prediction for a new customer, see the follow-up and budget insights, and read your recommendations — without you touching anything. Your repo tells them how it was built and how to run it themselves." | רף הסיום מקצה לקצה | 12 | 9, 10, 11, 13, 10A | 12 | planned | 10A/CP5 נעל הזנה עצמאית שאינה תלויה ב־prefill, אישורי הקשר ותוצאות עם פעולה/מגבלה גלויות. עדיין נדרשים מסע דפדפן בפאזה 12 ו־README בפאזה 13; API חי ומוקאפ אינם סוגרים את הרף |
 
 ## §07 עקרונות
 
@@ -141,7 +195,7 @@
 | **B60** | §07 | "Reproducibility. Anyone (including future-you) should be able to clone the repo, follow the README, and stand it up. Pin your dependencies." | שחזוריות + הצמדה | 13 | 1 | 12 | planned | `requirements.txt` מוצמד; README חסר |
 | **B61** | §07 | "Secrets stay secret. Everything sensitive goes in environment variables and is excluded by .gitignore — never commit an API key or .env." | secrets ב-env ומוחרגים | 1 | 2, 4 | 12 | done | `.gitignore` · `.env.example` שמות בלבד · **`PHASE4.md:371`** — `.env` מוחרג ואינו tracked · **`PHASE4.md:372`** — סריקת `sb_secret_`/`eyJhbGciOi` על עץ העבודה, כל היסטוריית הגיט בכל הענפים, וגוף+תגובות PR #14; אפס ערכים אמיתיים |
 | **B62** | §07 | "Anon key in the browser, service key on the server. The login screen uses Supabase's public anon key; the service-role key never leaves your backend." | הפרדת המפתחות | 4 | 9 | 12 | done | `app/static/app.js:46-50` — `config.supabase_publishable_key` → `createClient`; `app/auth.py:31` — `SUPABASE_PUBLISHABLE_KEY` בלבד; `tests/test_config.py`. ⚠ ה-publishable key מחליף את ה-anon key בנוסח החדש; ה-secret key אינו נדרש ב-runtime ונשאר ב-`scripts/*.py` |
-| **B63** | §07 | "No leakage without justification. If you include a feature that looks like an outcome, write down why it's legitimately available at prediction time." | הצדקה כתובה לכל פיצ'ר תוצאה-לכאורה | 8A | 5, 6 | 12 | done | `docs/planning/PHASE8A.md` §ד (מפת אינטגרציה) + §א/§ג D1-D2: `referred`/`upsell`/`ltv_months`/`cumulative_profit` מוחרגים כרכיבי-יעד או תוצאה מאוחרת; ארבעת `EARLY_FUNNEL_FEATURES` מתועדים כזמינים לפני רכישה (אותות משפך מוקדמים בלבד, עד `followup_1`) |
+| **B63** | §07 | "No leakage without justification. If you include a feature that looks like an outcome, write down why it's legitimately available at prediction time." | הצדקה כתובה לכל פיצ'ר תוצאה-לכאורה | 8A | 5, 6, 10A | 12 | done | `SPEC.md` § נקודות חיזוי + `docs/feature_matrix.md` §§ נקודות חיזוי/חוזה משמעות וזמן — P4S מוגבל לרוכש ידוע לאחר סגירת חלון גיוס חודשי והשלמת מעקב 1; ארבעת הערכים זמינים לפי תנאי ההפעלה. נכתב במפורש שאין תאריכים שמוכיחים סדר זמן, ולכן ההצדקה היא חוזה שימוש גלוי ולא טענת תיקוף אמפירי |
 | **B64** | §07 | "Render or Fly.io are drop-in substitutes for this pillar if you prefer." | היתר לחלופת פריסה | 2 | — | 12 | done | **ההיתר להכרעת Render** |
 | **B65** | §07 | "Credit what you borrow. Note snippets from docs or tutorials in comments or the README." | קרדיט למקורות שאולים | 13 | 4 | 12 | planned | ⚠ SRI מוכיח שלמות קובץ, ⛔ לא קרדיט |
 
@@ -156,4 +210,4 @@
 
 ## סיכום כמותי
 
-**73 דרישות אטומיות** (B1–B65 עם פיצולים, בניכוי B47 שהוסר): `done` 43 · `planned` 18 · `gap` 10 · `N/A` 1 · `parent` 1.
+**73 דרישות אטומיות** (B1–B65 עם פיצולים, בניכוי B47 שהוסר): `done` 41 · `planned` 15 · `gap` 15 · `N/A` 1 · `parent` 1.

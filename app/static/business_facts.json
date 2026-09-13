@@ -1,0 +1,64 @@
+{
+  "budget_backtest": {
+    "2000": {
+      "actual_mean_per_customer": 20650.882352941175,
+      "n_holdout_at_level": 85,
+      "n_train_at_level": 322,
+      "predicted_per_customer": 21238.124664360617
+    },
+    "500": {
+      "actual_mean_per_customer": 918.6470588235294,
+      "n_holdout_at_level": 17,
+      "n_train_at_level": 92,
+      "predicted_per_customer": 7895.935916363534
+    }
+  },
+  "followup_context": {
+    "mean_calls_closed_eq_1": 5.652941176470589,
+    "mean_calls_closed_ge_2": 3.3525641025641026,
+    "population_definition": "closed>0"
+  },
+  "ltv": {
+    "dominant_feature": "calls_to_closed",
+    "rank_1_by_algorithm": {
+      "catboost": {
+        "feature": "calls_to_closed",
+        "importance": 96.04030384295318
+      },
+      "lightgbm": {
+        "feature": "calls_to_closed",
+        "importance": 317.0
+      },
+      "xgboost": {
+        "feature": "calls_to_closed",
+        "importance": 0.9675718545913696
+      }
+    }
+  },
+  "metrics_sha256": "8af98f45f595a830b26055be5eab053c85c43c6fc6d97732c45b34b9f3166723",
+  "model_versions": {
+    "P2": "P2-catboost-20260905-4ddf09d",
+    "P3": "P3-xgboost-20260905-4ddf09d",
+    "P4": "P4-logistic-20260905-4ddf09d",
+    "P4S": "P4S-catboost-20260912-1c70ca8",
+    "P6": "P6-linear-20260905-4ddf09d"
+  },
+  "schema_version": 1,
+  "source_csv_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa",
+  "source_keys": {
+    "budget_backtest": "models/metrics.json.P6_backtest",
+    "followup_context": "docs/findings.json.calls_to_closed",
+    "ltv": "models/metrics.json.global_feature_importance.P2",
+    "super_customer_profile": "models/metrics.json.super_customer_profile"
+  },
+  "super_customer_profile": {
+    "cac_population_mean": 1437.4587417009168,
+    "cac_savings_pct": 0.31079142938335447,
+    "cac_super_mean": 990.7088846880907,
+    "n_purchased": 3163,
+    "n_super": 529,
+    "pct_of_purchased": 0.16724628517230478,
+    "pct_of_total_profit": 0.336098052363554,
+    "population_definition": "purchased=1 AND referred=Yes AND upsell=1 AND ltv_months>=34"
+  }
+}

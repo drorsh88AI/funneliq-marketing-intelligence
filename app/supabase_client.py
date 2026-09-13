@@ -53,6 +53,7 @@ def _build_client(token: str) -> Client:
 
 def fetch_all_rows(
     client: Client, table: str, columns: str, *, filters: dict | None = None,
+    gt_filters: dict | None = None,
     order_col: str = "source_row_id", page_size: int = 1000,
 ) -> list[dict]:
     """IA.md §7.1: pages through PostgREST's default 1000-row cap --
@@ -64,18 +65,21 @@ def fetch_all_rows(
     case (phase 3) -- adopted and adapted here (columns/filters/D19's
     .retry(False)), not reinvented from scratch, and never called as
     scripts/verify_data_contract.py's own version unchanged, which would
-    fetch all 20 columns with no `purchased` filter.
+    fetch all 20 columns with no caller-selected filter.
 
     ⛔ Every caller needing more than one page (checkpoint 9's
     calls_to_closed distribution) MUST go through this, not a second
     ad-hoc loop -- that duplication is exactly what IA.md §7.1 forbids."""
     filters = filters or {}
+    gt_filters = gt_filters or {}
     rows: list[dict] = []
     offset = 0
     while True:
         query = client.table(table).select(columns).order(order_col)
         for key, value in filters.items():
             query = query.eq(key, value)
+        for key, value in gt_filters.items():
+            query = query.gt(key, value)
         response = query.range(offset, offset + page_size - 1).retry(False).execute()
         batch = response.data
         rows.extend(batch)
@@ -85,11 +89,14 @@ def fetch_all_rows(
     return rows
 
 
-def independent_purchased_count(client: Client) -> int:
-    """IA.md §7.1: an independent count of `purchased = 1`, used to
-    validate the paginated calls_to_closed distribution (checkpoint 9)
-    against a SEPARATE source -- never against len(rows) from the same
-    paginated fetch, which is circular and would let a silent truncation
+def independent_filtered_count(
+    client: Client, *, filters: dict | None = None, gt_filters: dict | None = None,
+) -> int:
+    """Independent exact count for the same filters as a paginated fetch.
+
+    IA.md §7.1 requires the calls_to_closed distribution to close against
+    a SEPARATE query, never against len(rows) from the paginated fetch,
+    which is circular and would let a silent truncation
     pass. `.range(0, 0)` returns at most one row (max_rows=1000 already
     bounds it further); only `response.count` is read. `.retry(False)`
     (D19) and deliberately not `head=True` -- a documented postgrest
@@ -97,16 +104,18 @@ def independent_purchased_count(client: Client) -> int:
     not "HEAD") means HEAD requests are never retried the same way GET
     is, which would make this call behave asymmetrically under a 503
     compared to every other query in this module."""
-    response = (
-        client.table("funnel_records")
-        .select("source_row_id", count="exact")
-        .eq("purchased", 1)
-        .order("source_row_id")
-        .range(0, 0)
-        .retry(False)
-        .execute()
-    )
+    query = client.table("funnel_records").select("source_row_id", count="exact")
+    for key, value in (filters or {}).items():
+        query = query.eq(key, value)
+    for key, value in (gt_filters or {}).items():
+        query = query.gt(key, value)
+    response = query.order("source_row_id").range(0, 0).retry(False).execute()
     return response.count
+
+
+def independent_purchased_count(client: Client) -> int:
+    """Backward-compatible wrapper for the original purchased=1 count."""
+    return independent_filtered_count(client, filters={"purchased": 1})
 
 
 def get_user_client(token: str = Depends(access_token)) -> Iterator[Client]:
