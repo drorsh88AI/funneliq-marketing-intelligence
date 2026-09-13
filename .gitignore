@@ -30,5 +30,10 @@ catboost_info/
 .DS_Store
 Thumbs.db
 
+# Personal notes and working files — not project deliverables
+.obsidian/
+*.docx
+~$*
+
 # Claude Code — personal local overrides (not team policy)
 .claude/settings.local.json
