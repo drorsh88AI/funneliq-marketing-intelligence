@@ -187,7 +187,16 @@ function buildOnce() {
   const contextLabel = el("label");
   const contextCheckbox = el("input", { type: "checkbox" });
   contextCheckbox.addEventListener("change", (e) => {
-    form.contextConfirmed = e.target.checked;
+    // IA.md §9.4: "המונה עולה ב: ... שינוי אישור ההקשר ..." -- listed
+    // alongside a field edit and requesting a different example
+    // (both already fixed in the previous review round). This
+    // specific trigger was missed then; same fix, same reasoning.
+    const next = e.target.checked;
+    if (next === form.contextConfirmed) { updateDynamic(); return; } // no real change -- nothing to invalidate
+    form.contextConfirmed = next;
+    sharedGen.bump();
+    submitState = "idle";
+    submitResults = null;
     updateDynamic();
   });
   contextLabel.appendChild(contextCheckbox);
