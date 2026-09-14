@@ -16,7 +16,11 @@
 
 let epoch = 0;
 let current = null; // the last known Supabase Session, or null
-let businessBlocked = false;
+let businessBlocked = true; // blocked until the FIRST 200 (checkpoint 2
+                             // finding: this defaulted to false, which
+                             // is wrong before bootstrap has ever
+                             // reached 200 at all -- api.js relies on
+                             // this as one of its two send-time gates)
 const listeners = new Set();
 
 /** Same session, by the two documented top-level fields this whole
@@ -55,10 +59,11 @@ export function isCurrentEpoch(responseEpoch) {
   return responseEpoch === epoch;
 }
 
-/** Set by bootstrap.js on every /api/me result: true on 503/500 (new
- * business calls wait for a successful retry), false on 200. Read by
- * the future api.js module (checkpoint 2) before firing a business
- * request -- checkpoint 1 only owns the flag itself, not a consumer. */
+/** Set by bootstrap.js (and by applyAuthResult() above) on every
+ * /api/me result: starts true (nothing has succeeded yet), true again
+ * on 401/403/503/500, false only on 200. Read by api.js before firing
+ * any business request -- session.js owns the flag, api.js is its
+ * only consumer. */
 export function isBusinessBlocked() {
   return businessBlocked;
 }
@@ -67,19 +72,32 @@ export function setBusinessBlocked(value) {
   businessBlocked = Boolean(value);
 }
 
-/** Explicit transition driven by OUR OWN /api/me result, not by
- * supabase-js's onAuthStateChange -- there is no Session-object change
- * to compare here, just an authorization outcome:
+/** Explicit transition driven by OUR OWN /api/me (or any business-call,
+ * see api.js) result, not by supabase-js's onAuthStateChange -- there
+ * is no Session-object change to compare here, just an authorization
+ * outcome:
  *   - 401: no/invalid/expired token -> epoch raise + state clear
- *     (IA.md §9.3; the form content is explicitly NOT kept).
+ *     (IA.md §9.3; the form content is explicitly NOT kept). `current`
+ *     is set to null: there is, by definition, no valid session left.
  *   - 403: valid token, wrong/missing organization -> epoch raise +
  *     state clear (forbidden-notice shows no data at all, so any
  *     stale form state is moot, but the epoch still must rise to
- *     cancel whatever business request was in flight).
- * 503/500 never call this -- see P11-D14 "שני צירים נפרדים": neither
- * flag is set for infra/config trouble, on purpose. */
+ *     cancel whatever business request was in flight). `current` is
+ *     NOT cleared -- the underlying Supabase session genuinely is
+ *     still valid, only unauthorized for this app.
+ * Both set businessBlocked -- checkpoint 2 finding: neither branch
+ * touched it originally, so api.js's isBusinessBlocked() gate would
+ * have stayed false straight through a 401, letting further business
+ * calls fire with a session this module itself already considers
+ * invalid.
+ * 503/500 never call this -- see P11-D14 "שני צירים נפרדים": epoch and
+ * state-clear stay untouched for infra/config trouble, on purpose
+ * (businessBlocked is instead set directly by whoever saw the 503/500
+ * -- bootstrap.js's verify(), for the shell-wide bootstrap check). */
 export function applyAuthResult(kind) {
   if (kind === "401" || kind === "403") {
+    if (kind === "401") current = null;
+    businessBlocked = true;
     epoch += 1;
     notify({ session: current, epoch, epochRaised: true, stateCleared: true, reason: kind });
   }
@@ -143,6 +161,6 @@ export function applySessionChange(eventName, nextSession) {
 export function resetForTest() {
   epoch = 0;
   current = null;
-  businessBlocked = false;
+  businessBlocked = true;
   listeners.clear();
 }

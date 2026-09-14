@@ -62,6 +62,23 @@ button {
   font-size: var(--font-size-sm);
 }
 
+/* ---- panel-loading / panel-empty (checkpoint 2 primitives, status.js).
+   panel-loading is role="status" -- same muted treatment as #loading,
+   smaller since it renders WITHIN a screen, not full-page. panel-empty
+   carries no role (DESIGN.md's own table: "—") -- informative, not an
+   alert. ---- */
+.panel-loading {
+  color: var(--color-muted);
+  padding: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.panel-empty {
+  color: var(--color-muted);
+  padding: var(--space-4);
+  font-size: var(--font-size-base);
+}
+
 /* ---- Login (screen 1) -- structure/content unchanged from phase 4
    (DESIGN.md D4), styling only. ---- */
 #login-section {

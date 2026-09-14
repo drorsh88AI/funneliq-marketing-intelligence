@@ -5,9 +5,18 @@
 // router (./js/router.js, P11-D6) to the DOM. No business data is
 // fetched from here -- screens 2-6 are empty placeholders until
 // checkpoints 3-8 fill them in.
+//
+// Checkpoint 2 addition: api.js's own 401/403 (any business call can
+// hit either, not just bootstrap's /api/me -- current_user is the
+// shared dependency) is routed through the SAME onAuthState handler
+// bootstrap.js already drives, via api.setAuthFailureHandler() below --
+// one state machine, not two independent ones to keep in sync.
 
 import * as bootstrapAuth from "./js/bootstrap.js";
 import * as router from "./js/router.js";
+import * as api from "./js/api.js";
+import * as supabasePrefill from "./js/supabase-prefill.js";
+import * as facts from "./js/facts.js";
 
 const els = {
   loading: document.getElementById("loading"),
@@ -97,6 +106,10 @@ function onAuthState(state) {
       els.appMain.hidden = false;
       els.userEmail.textContent = state.user.email;
       router.start(showRoute);
+      // IA.md §11: business_facts.json "נטען ומרונדר רק אחרי session
+      // תקין" -- fire-and-forget is correct here (init() is a no-op on
+      // a second call), never awaited/blocking the shell itself.
+      facts.init();
       break;
 
     case "401":
@@ -149,8 +162,20 @@ async function main() {
     bootstrapAuth.retry();
   });
 
+  // Registered before init() starts: a business call routed through
+  // api.js's own 401/403 handling reuses this same onAuthState, so
+  // Login/forbidden-notice is driven identically whether the failure
+  // came from bootstrap's /api/me or from a later business call.
+  api.setAuthFailureHandler(onAuthState);
+
   const client = await bootstrapAuth.init(onAuthState);
   if (!client) return; // config-error already shown by onAuthState
+
+  // supabase-prefill.js reuses this SAME client (never a second one,
+  // and there is no service key in the browser to build one with) --
+  // registering it here only stores the reference; no request fires
+  // until a screen checkpoint (4/6) actually calls a fetch* function.
+  supabasePrefill.init(client);
 
   els.loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
