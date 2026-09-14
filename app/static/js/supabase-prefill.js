@@ -10,6 +10,23 @@
 // "בורר ה-prefill: מבחר מוגבל ומסודר מותר... ⛔ אין להציגו כרשימה מלאה".
 // Any aggregate over funnel_records (e.g. Follow-up's calls_to_closed
 // distribution) is computed server-side, behind api.js, not here.
+//
+// Fixed after an independent review of 903a217 found this module
+// bypassed BOTH of api.js's own safety gates entirely -- it is a
+// second door into session-scoped data and must respect the exact
+// same two invariants api.js does, not a weaker version of them:
+//   - "no business call before a 200 from /api/me": refuses to query
+//     at all while session.isBusinessBlocked() is true or there is no
+//     session, exactly like api.js's own call().
+//   - P11-D14: "כל בקשה לוכדת epoch... תוצאה מיושנת אינה מרונדרת" --
+//     captures session.getEpoch() before querying, and discards
+//     (reason: "stale") whatever Supabase returns -- data OR error
+//     alike -- if the epoch has moved on by the time it resolves. A
+//     sign-out or session-change firing while a prefill query is still
+//     in flight must never let a PREVIOUS session's rows reach a form
+//     after the user is no longer that session.
+
+import * as session from "./session.js";
 
 const PREFILL_LIMIT = 1000; // IA.md §11's cap on any single funnel_records query
 const SHARED_FORM_COLUMNS = [
@@ -32,15 +49,30 @@ export function init(supabaseClient) {
   client = supabaseClient;
 }
 
-/** Result shape: { ok: true, data: row[] } | { ok: false, reason } */
+/** Result shape:
+ *   { ok: true, data: row[] }
+ *   { ok: false, reason: "not-initialized" }  -- init() never called
+ *   { ok: false, reason: "blocked" }           -- refused before querying
+ *   { ok: false, reason: "stale" }             -- discarded (epoch moved on)
+ *   { ok: false, reason: "error", error }      -- Supabase itself returned an error
+ */
 async function fetchPrefill(columns) {
   if (!client) return { ok: false, reason: "not-initialized" };
+  if (!session.getSession() || session.isBusinessBlocked()) {
+    return { ok: false, reason: "blocked" };
+  }
+
+  const epochAtSend = session.getEpoch();
   const { data, error } = await client
     .from("funnel_records")
     .select(columns)
     .eq("purchased", 1)
     .order("source_row_id", { ascending: true })
     .limit(PREFILL_LIMIT);
+
+  if (!session.isCurrentEpoch(epochAtSend)) {
+    return { ok: false, reason: "stale" };
+  }
   if (error) return { ok: false, reason: "error", error };
   return { ok: true, data: data ?? [] };
 }
