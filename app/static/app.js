@@ -17,6 +17,7 @@ import * as router from "./js/router.js";
 import * as api from "./js/api.js";
 import * as supabasePrefill from "./js/supabase-prefill.js";
 import * as facts from "./js/facts.js";
+import * as overviewScreen from "./js/screens/overview.js";
 
 const els = {
   loading: document.getElementById("loading"),
@@ -79,6 +80,9 @@ function showRoute(route) {
   }
   for (const section of els.appMain.querySelectorAll("[data-screen]")) {
     section.hidden = section.id !== activeId;
+  }
+  if (route === "overview") {
+    overviewScreen.show(document.getElementById("screen-overview"), router.navigate);
   }
 }
 

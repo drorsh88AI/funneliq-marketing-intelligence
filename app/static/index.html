@@ -76,12 +76,9 @@
   </div>
 
   <main id="app-main" hidden>
-    <!-- Placeholder containers for checkpoints 3, 4-5, 6, 7, 8. Empty on
-         purpose in checkpoint 1 -- the router and shell mechanics are
-         this checkpoint's job, not screen content. -->
-    <section id="screen-overview" data-screen="overview" hidden>
-      <p class="screen-placeholder">מסך זה ייבנה ב-checkpoint 3.</p>
-    </section>
+    <!-- Placeholder containers for checkpoints 4-5, 6, 7, 8. -->
+    <!-- Populated by js/screens/overview.js on first navigation -- see app.js's showRoute(). -->
+    <section id="screen-overview" data-screen="overview" hidden></section>
     <section id="screen-predict" data-screen="predict" hidden>
       <p class="screen-placeholder">מסך זה ייבנה ב-checkpoints 4–5.</p>
     </section>

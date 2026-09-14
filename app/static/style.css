@@ -206,3 +206,156 @@ button {
   color: var(--color-muted);
   font-size: var(--font-size-sm);
 }
+
+/* ---- capability-index (checkpoint 3, DESIGN.md, IA.md §2 D8) ---- */
+.capability-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.capability-card {
+  text-align: start;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.capability-card:hover {
+  box-shadow: var(--shadow-popover);
+}
+
+.capability-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-base);
+}
+
+.capability-card p {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.capability-limitation {
+  color: var(--color-muted) !important;
+  font-size: var(--font-size-xs) !important;
+}
+
+/* ---- tier-table (checkpoint 3, IA.md §2.1) ---- */
+.tier-table-wrap {
+  overflow-x: auto; /* DESIGN.md §4.1: its own scroll container, never the page body */
+  margin-bottom: var(--space-6);
+}
+
+.tier-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.tier-table th,
+.tier-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tier-table tbody tr:nth-child(1) { background: var(--color-tier-1-bg); color: var(--color-tier-1-fg); }
+.tier-table tbody tr:nth-child(2) { background: var(--color-tier-2-bg); color: var(--color-tier-2-fg); }
+.tier-table tbody tr:nth-child(3) { background: var(--color-tier-3-bg); color: var(--color-tier-3-fg); }
+
+/* gap row (IA.md §2.1): visually distinct, never colored as a fourth
+   ramp step -- color-tier-* is a THREE-step ramp by definition. */
+.tier-row-gap {
+  background: transparent !important;
+  color: var(--color-text) !important;
+  font-style: italic;
+}
+
+/* ---- chart-live (checkpoint 3, DESIGN.md §4/§4.1) ---- */
+.chart-live {
+  margin-bottom: var(--space-6);
+}
+
+.chart-live-svg {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: block;
+}
+
+.chart-grid-line {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.chart-bar {
+  fill: var(--color-primary);
+}
+
+.chart-axis-label {
+  fill: var(--color-muted);
+  font-size: 10px;
+  font-family: var(--font-family);
+}
+
+.chart-fallback-table {
+  overflow-x: auto;
+  margin-top: var(--space-2);
+}
+
+.chart-fallback-table table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.chart-fallback-table th,
+.chart-fallback-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+/* ---- summary-recommendation (checkpoint 3, PHASE10.md D9) ---- */
+.summary-recommendation {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.summary-layer {
+  margin-bottom: var(--space-3);
+}
+
+.summary-layer:last-child {
+  margin-bottom: 0;
+}
+
+.summary-layer-label {
+  display: block;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-muted);
+  margin-bottom: var(--space-1);
+}
+
+.summary-layer-text {
+  margin: 0;
+  font-size: var(--font-size-base);
+}
+
+.summary-layer-answer .summary-layer-text {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+}
+
+/* "חשוב לדעת" -- DESIGN.md: "model-disclaimer לשכבת 'חשוב לדעת'". */
+.summary-layer-caveat .summary-layer-text {
+  color: var(--model-disclaimer-fg);
+  font-size: var(--model-disclaimer-font-size);
+}
