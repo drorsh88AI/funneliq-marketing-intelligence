@@ -18,6 +18,7 @@ import * as api from "./js/api.js";
 import * as supabasePrefill from "./js/supabase-prefill.js";
 import * as facts from "./js/facts.js";
 import * as overviewScreen from "./js/screens/overview.js";
+import * as predictScreen from "./js/screens/predict.js";
 
 const els = {
   loading: document.getElementById("loading"),
@@ -83,6 +84,9 @@ function showRoute(route) {
   }
   if (route === "overview") {
     overviewScreen.show(document.getElementById("screen-overview"), router.navigate);
+  }
+  if (route === "predict") {
+    predictScreen.show(document.getElementById("screen-predict"));
   }
 }
 
