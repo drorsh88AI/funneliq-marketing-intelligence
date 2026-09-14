@@ -1410,17 +1410,30 @@ Project 1/                       ← git init כאן
 │  ├─ features.py                # רשימות פיצ'רים per-task
 │  ├─ predict.py                 # טעינה עצלה + ולידציה מול הסכמה השמורה
 │  ├─ insights.py                # follow-up + tiers מנתוני Supabase
-│  └─ static/{index.html, app.js, style.css}   ← עברית, RTL
+│  └─ static/
+│     ├─ index.html, style.css   ← עברית, RTL — מסך יחיד (פאזה 11, D1)
+│     ├─ app.js                  # entry point
+│     └─ js/                     # מודולי ES: router, session, api, ... (פאזה 11, D2)
 ├─ scripts/{load_data.py, analysis.py, train.py}
 ├─ models/                       # Pipeline + metadata לכל משימה
 ├─ docs/                         # FINDINGS.md, feature_matrix.md, metrics.json, גרפים
-├─ tests/
+├─ tests/                        # pytest — CI, ⛔ ללא Playwright (ר' e2e/)
+├─ e2e/                          # Playwright — מקומי בלבד, ⛔ לא נאסף ב-CI (פאזה 11, D7)
 ├─ supabase/{config.toml, migrations/}   # migration לסכמה+RLS+grants · migration ל-2 views
 ├─ requirements.txt
+├─ requirements-e2e.txt          # Playwright, -r requirements.txt + גרסה נעולה — test-only (פאזה 11, D7)
+├─ pytest.ini                    # testpaths = tests — מבודד את e2e/ מאיסוף CI (פאזה 11)
 ├─ render.yaml · .env.example · .gitignore
 ├─ README.md (EN) · REPORT.md (HE)
 └─ FunnelIQ_Assignment.html   (funnel_marketing_data.csv — מקומי, ignored, לא ב-repo)
 ```
+
+⚠ **שלושה נתיבים חדשים בפאזה 11, נפרדים בעץ הריפו ⛔ אינם קינון זה של זה:**
+`app/static/js/` (מודולי frontend, נטענים בדפדפן) · `requirements-e2e.txt`
+בשורש (תלות בדיקה, ⛔ לא ב-`requirements.txt` של Render) · `e2e/` בשורש
+(⛔ לא `tests/e2e/` — `pytest.ini` עם `testpaths = tests` מבטיח ש-
+`python -m pytest -q` הקיים ב-CI ממשיך לאסוף רק את `tests/`). פירוט מלא:
+`docs/planning/PHASE11.md` §ו.
 
 **ארטיפקט = Pipeline מלא, לא מודל חשוף.** כל ארטיפקט שומר preprocessing + מודל,
 ולצידו metadata: **סדר עמודות, טיפוסים, target, snapshot, אוכלוסייה,
