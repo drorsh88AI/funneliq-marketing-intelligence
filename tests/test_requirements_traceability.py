@@ -46,7 +46,7 @@ _EXPECTED_IDS = frozenset({
     "B44", "B45", "B46a", "B46b", "B46c",
     "B48", "B49", "B50", "B51", "B52", "B53a", "B53b",
     "B54", "B55a", "B55b", "B56", "B57", "B58", "B59",
-    "B60", "B61", "B62", "B63", "B64", "B65",
+    "B60", "B61", "B62", "B63", "B64", "B65", "B66",
 })
 
 # Same idea for the status distribution: a snapshot, not a formula. If a
@@ -56,7 +56,7 @@ _EXPECTED_IDS = frozenset({
 # anything.
 _EXPECTED_STATUS_COUNTS = {
     "done": 41,
-    "planned": 15,
+    "planned": 16,
     "gap": 15,
     "N/A": 1,
     "parent": 1,
