@@ -3,45 +3,103 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FunnelIQ &mdash; התחברות</title>
+<title>FunnelIQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<main>
-  <div id="loading" role="status">טוען&hellip;</div>
+<div id="loading" role="status">טוען&hellip;</div>
 
-  <div id="config-error" class="error" role="alert" hidden>
-    שגיאה בטעינת ההגדרות. נסו לרענן את הדף.
+<div id="config-error" class="panel-error" role="alert" hidden>
+  שגיאה בטעינת ההגדרות. נסו לרענן את הדף.
+</div>
+
+<!-- Login (screen 1) -- structure, content and auth logic unchanged from
+     phase 4 (DESIGN.md D4); only the visual styling now comes from
+     tokens.css. Deliberately OUTSIDE authenticated-shell: there is no
+     session yet, and there is no nav-back into it from the shell. -->
+<main id="login-section" hidden>
+  <div id="session-expired-notice" class="panel-error" role="alert" hidden>
+    ההתחברות פגה. התחברו מחדש.
+  </div>
+  <h1>FunnelIQ</h1>
+  <form id="login-form" novalidate>
+    <div class="field">
+      <label for="email">אימייל</label>
+      <input id="email" name="email" type="email" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="password">סיסמה</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <div id="login-error" class="error" role="alert" aria-live="polite" hidden></div>
+    <button type="submit">התחברות</button>
+  </form>
+</main>
+
+<!-- authenticated-shell (DESIGN.md 1.4) -- wraps screens 2-6 only, after
+     a 200 from /api/me (P11-D13). app-nav + sign-out-control live in its
+     header and are present in EVERY sub-state below, including
+     forbidden-notice (403) -- sign-out-control is "always available in
+     the connected wrapper" per DESIGN.md's own row for it. -->
+<div id="authenticated-shell" hidden>
+  <header id="app-header">
+    <nav id="app-nav" aria-label="ניווט ראשי">
+      <a href="#/overview" data-route="overview">סקירה כללית</a>
+      <a href="#/predict" data-route="predict">תחזיות</a>
+      <a href="#/super-customer" data-route="super-customer">ציון לקוח־על</a>
+      <a href="#/budget" data-route="budget">תקציב</a>
+      <a href="#/followup" data-route="followup">מעקב שיחות</a>
+    </nav>
+    <div id="shell-user-info">
+      <span id="user-email"></span>
+      <button id="signout-button" type="button">התנתקות</button>
+    </div>
+  </header>
+
+  <!-- 403: no data, no retry, no route back to Login (IA.md 9.3 / DESIGN.md 2.6). -->
+  <div id="forbidden-notice" class="panel-error" role="alert" hidden>
+    אין לכם הרשאת גישה למערכת הזו. פנו למנהל הארגון שלכם.
   </div>
 
-  <section id="login-section" hidden>
-    <h1>FunnelIQ</h1>
-    <form id="login-form" novalidate>
-      <div class="field">
-        <label for="email">אימייל</label>
-        <input id="email" name="email" type="email" autocomplete="username" required>
-      </div>
-      <div class="field">
-        <label for="password">סיסמה</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-      </div>
-      <div id="login-error" class="error" role="alert" aria-live="polite" hidden></div>
-      <button type="submit">התחברות</button>
-    </form>
-  </section>
+  <!-- 503/500 from /api/me: session stays, no forced sign-out. On first
+       bootstrap this replaces app-main entirely (nothing to preserve
+       yet); on a later re-verify (e.g. TOKEN_REFRESHED) with content
+       already on screen it is shown ALONGSIDE app-main instead, per
+       PHASE11.md falsification case 9ו -- app.js decides which. -->
+  <div id="availability-error" class="panel-error" role="alert" hidden>
+    <p id="availability-error-text"></p>
+    <button id="availability-retry" type="button">ניסיון חוזר</button>
+  </div>
 
-  <section id="shell-section" hidden>
-    <p>מחובר כ־<span id="user-email"></span></p>
-    <button id="signout-button" type="button">התנתקות</button>
-  </section>
-</main>
+  <main id="app-main" hidden>
+    <!-- Placeholder containers for checkpoints 3, 4-5, 6, 7, 8. Empty on
+         purpose in checkpoint 1 -- the router and shell mechanics are
+         this checkpoint's job, not screen content. -->
+    <section id="screen-overview" data-screen="overview" hidden>
+      <p class="screen-placeholder">מסך זה ייבנה ב-checkpoint 3.</p>
+    </section>
+    <section id="screen-predict" data-screen="predict" hidden>
+      <p class="screen-placeholder">מסך זה ייבנה ב-checkpoints 4–5.</p>
+    </section>
+    <section id="screen-super-customer" data-screen="super-customer" hidden>
+      <p class="screen-placeholder">מסך זה ייבנה ב-checkpoint 6.</p>
+    </section>
+    <section id="screen-budget" data-screen="budget" hidden>
+      <p class="screen-placeholder">מסך זה ייבנה ב-checkpoint 7.</p>
+    </section>
+    <section id="screen-followup" data-screen="followup" hidden>
+      <p class="screen-placeholder">מסך זה ייבנה ב-checkpoint 8.</p>
+    </section>
+  </main>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.min.js"
         integrity="sha384-WmjsOVSSw3JNqIKfmDU35+uddOzBdP9PlYIWCg7xdnVOesjWVGpRcooOVheFFwH4"
         crossorigin="anonymous"></script>
-<script src="/app.js"></script>
+<script type="module" src="/app.js"></script>
 </body>
 </html>

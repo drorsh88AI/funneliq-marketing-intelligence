@@ -1,8 +1,13 @@
 "use strict";
 
-// FunnelIQ login shell (phase 4, D3). No business data is fetched from the
-// browser here -- that starts in phase 11. This file only: loads Supabase
-// config, checks/watches session state, and drives login/signout.
+// FunnelIQ SPA entry point (phase 11, checkpoint 1, P11-D2). Wires the
+// seven-branch auth bootstrap (./js/bootstrap.js, P11-D13) and the hash
+// router (./js/router.js, P11-D6) to the DOM. No business data is
+// fetched from here -- screens 2-6 are empty placeholders until
+// checkpoints 3-8 fill them in.
+
+import * as bootstrapAuth from "./js/bootstrap.js";
+import * as router from "./js/router.js";
 
 const els = {
   loading: document.getElementById("loading"),
@@ -10,75 +15,145 @@ const els = {
   loginSection: document.getElementById("login-section"),
   loginForm: document.getElementById("login-form"),
   loginError: document.getElementById("login-error"),
-  shellSection: document.getElementById("shell-section"),
+  sessionExpiredNotice: document.getElementById("session-expired-notice"),
+  shell: document.getElementById("authenticated-shell"),
+  appNav: document.getElementById("app-nav"),
   userEmail: document.getElementById("user-email"),
   signoutButton: document.getElementById("signout-button"),
+  forbiddenNotice: document.getElementById("forbidden-notice"),
+  availabilityError: document.getElementById("availability-error"),
+  availabilityErrorText: document.getElementById("availability-error-text"),
+  availabilityRetry: document.getElementById("availability-retry"),
+  appMain: document.getElementById("app-main"),
 };
 
-function show(el) {
-  el.hidden = false;
-}
-function hide(el) {
-  el.hidden = true;
+const AVAILABILITY_TEXT = {
+  "503": "שירות ההתחברות אינו זמין כרגע. נסו שוב בעוד רגע.",
+  "500": "אירעה שגיאה בבדיקת ההרשאה. נסו שוב; אם התקלה נמשכת, פנו לתמיכה.",
+};
+
+const SCREEN_ID_BY_ROUTE = {
+  overview: "screen-overview",
+  predict: "screen-predict",
+  "super-customer": "screen-super-customer",
+  budget: "screen-budget",
+  followup: "screen-followup",
+};
+
+// Distinguishes "never signed in" from "was signed in, then 401'd" --
+// only the latter shows the session-expired banner on the Login screen.
+let hadSessionBefore = false;
+// True once a 200 has ever been reached -- decides whether a later
+// 503/500 replaces app-main (nothing to preserve, still bootstrapping)
+// or layers alongside it (content is already on screen -- falsification
+// case 9ו: a TOKEN_REFRESHED re-verify failure must not tear it down).
+let hasEverShownShell = false;
+
+function hideTopLevel() {
+  els.loading.hidden = true;
+  els.configError.hidden = true;
+  els.loginSection.hidden = true;
+  els.shell.hidden = true;
+  els.forbiddenNotice.hidden = true;
+  els.availabilityError.hidden = true;
 }
 
-function showLogin() {
-  hide(els.loading);
-  hide(els.shellSection);
-  show(els.loginSection);
-}
-
-function showShell(email) {
-  hide(els.loading);
-  hide(els.loginSection);
-  els.userEmail.textContent = email;
-  show(els.shellSection);
-}
-
-async function init() {
-  // One try/catch covers config fetch AND client creation: if the
-  // supabase-js CDN script was blocked or its SRI hash didn't match,
-  // window.supabase is undefined and createClient() throws -- without this,
-  // the page was stuck on "loading" forever with no visible error (A2).
-  let client;
-  try {
-    const response = await fetch("/api/config");
-    if (!response.ok) throw new Error("config request failed");
-    const config = await response.json();
-    client = window.supabase.createClient(
-      config.supabase_url,
-      config.supabase_publishable_key
-    );
-  } catch (err) {
-    hide(els.loading);
-    show(els.configError);
-    return;
-  }
-
-  client.auth.onAuthStateChange((_event, session) => {
-    if (session) {
-      showShell(session.user.email);
+function showRoute(route) {
+  const activeId = SCREEN_ID_BY_ROUTE[route];
+  for (const link of els.appNav.querySelectorAll("a[data-route]")) {
+    if (link.dataset.route === route) {
+      link.setAttribute("aria-current", "page");
     } else {
-      showLogin();
+      link.removeAttribute("aria-current");
     }
+  }
+  for (const section of els.appMain.querySelectorAll("[data-screen]")) {
+    section.hidden = section.id !== activeId;
+  }
+}
+
+function onAuthState(state) {
+  switch (state.kind) {
+    case "config-error":
+      hideTopLevel();
+      els.configError.hidden = false;
+      break;
+
+    case "no-session":
+      router.stop();
+      hideTopLevel();
+      els.loginSection.hidden = false;
+      els.sessionExpiredNotice.hidden = true;
+      hadSessionBefore = false;
+      break;
+
+    case "200":
+      hasEverShownShell = true;
+      hadSessionBefore = true;
+      hideTopLevel();
+      els.shell.hidden = false;
+      els.appMain.hidden = false;
+      els.userEmail.textContent = state.user.email;
+      router.start(showRoute);
+      break;
+
+    case "401":
+      router.stop();
+      hideTopLevel();
+      els.loginSection.hidden = false;
+      els.sessionExpiredNotice.hidden = !hadSessionBefore;
+      hadSessionBefore = false;
+      hasEverShownShell = false;
+      break;
+
+    case "403":
+      router.stop();
+      hideTopLevel();
+      els.shell.hidden = false;
+      els.appMain.hidden = true;
+      els.forbiddenNotice.hidden = false;
+      hasEverShownShell = false;
+      break;
+
+    case "503":
+    case "500":
+      els.availabilityErrorText.textContent = AVAILABILITY_TEXT[state.kind];
+      if (hasEverShownShell) {
+        // Content is already rendered (a later re-verify, e.g. after
+        // TOKEN_REFRESHED) -- leave the shell/nav/screens exactly as
+        // they are and only add the notice alongside them.
+        els.shell.hidden = false;
+        els.availabilityError.hidden = false;
+      } else {
+        // Nothing to preserve yet -- this is the bootstrap-time failure.
+        hideTopLevel();
+        els.shell.hidden = false;
+        els.availabilityError.hidden = false;
+      }
+      break;
+
+    default:
+      break;
+  }
+}
+
+async function main() {
+  els.availabilityRetry.addEventListener("click", () => {
+    bootstrapAuth.retry();
   });
 
-  const { data } = await client.auth.getSession();
-  if (data.session) {
-    showShell(data.session.user.email);
-  } else {
-    showLogin();
-  }
+  const client = await bootstrapAuth.init(onAuthState);
+  if (!client) return; // config-error already shown by onAuthState
 
   els.loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    hide(els.loginError);
+    els.loginError.hidden = true;
     const email = els.loginForm.elements.email.value;
     const password = els.loginForm.elements.password.value;
     const { error } = await client.auth.signInWithPassword({ email, password });
     if (error) {
       els.loginError.textContent = "מייל או סיסמה שגויים";
-      show(els.loginError);
+      els.loginError.hidden = false;
     }
   });
 
@@ -87,4 +162,4 @@ async function init() {
   });
 }
 
-init();
+main();
