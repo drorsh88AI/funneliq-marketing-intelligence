@@ -73,7 +73,19 @@ const gen = generation.createGenerationCounter();
 
 let container = null;
 let navigate = null; // router.navigate -- injected so this module never imports router.js directly
-let attempted = false; // true once a fetch has ever been started
+// "idle": nothing tried yet, or a session/auth transition discarded
+//   the last attempt without ever showing the user anything real --
+//   a later show() retries.
+// "loading" / "loaded" / "error": a real attempt is in flight, or
+//   produced content the user has actually seen -- show() does NOT
+//   silently re-fetch on a mere revisit; "error" offers its own
+//   retry control.
+// Fixed after an independent review found the original single
+// `attempted` boolean latched permanently true even when the result
+// was "blocked"/"stale" (a session transition, not a real answer) --
+// leaving Overview stuck on its loading spinner forever after a
+// sign-out + sign-in cycle, since no later show() would ever retry.
+let screenState = "idle";
 
 function renderCapabilityIndex() {
   const el = document.createElement("div");
@@ -178,22 +190,35 @@ function computeSummary(tiers) {
     answer = `${topLabel} — ${ratesText}`;
   }
 
-  // Monotonic non-decreasing across Low->Mid->High, using only tiers
-  // that are actually present with a real (non-null) rate. Verified
-  // against the project's own frozen dataset (IA.md §1 example: Low
-  // 4.5% / Mid 8.2% / High 5.4%) -- NOT monotonic, so in practice the
-  // "surprising" branch below is what this project's data always
-  // produces. The monotonic branch's text is therefore this module's
-  // own reasonable composition (not a verbatim doc quote -- none
-  // exists for it) for a code path the current dataset cannot reach;
-  // flagged here rather than silently invented.
-  const monotonic = withRate.length === 3 &&
+  // Monotonicity across Low->Mid->High can only be judged with all
+  // THREE numeric rates present. A missing tier or a null
+  // conversion_rate is an absence of evidence, not evidence that the
+  // sequence fails to increase -- fixed after an independent review
+  // found the original two-branch version treated "incomplete" and
+  // "not increasing" as the same thing, which let it declare a
+  // "surprising" finding from data that couldn't actually support it.
+  const complete = withRate.length === 3;
+  const monotonic = complete &&
     withRate[1].conversion_rate >= withRate[0].conversion_rate &&
     withRate[2].conversion_rate >= withRate[1].conversion_rate;
 
-  const meaning = monotonic
-    ? "רצף Low→Mid→High עולה בהתאם לציפייה הפשוטה שהוצאה גבוהה יותר קשורה להמרה גבוהה יותר; אין לטעון להפתעה."
-    : "אם רצף Low→Mid→High אינו עולה, הוצאה גבוהה יותר לא הניבה המרה גבוהה יותר — ממצא מפתיע ביחס לציפייה הפשוטה.";
+  // The monotonic branch's text is this module's own reasonable
+  // composition (not a verbatim doc quote -- none exists for it), for
+  // a code path the project's own frozen dataset cannot reach (IA.md
+  // §1 example: Low 4.5% / Mid 8.2% / High 5.4% -- verified NOT
+  // monotonic). The "insufficient data" branch is likewise this
+  // module's own composition, deliberately factual and free of any
+  // business conclusion (neither "surprising" nor "not surprising" --
+  // there simply isn't enough evidence to say either), per the same
+  // review's explicit instruction not to invent a finding here.
+  let meaning;
+  if (!complete) {
+    meaning = "אין מספיק נתונים ברמות Low/Mid/High כדי לקבוע אם שיעור ההמרה עולה עם רמת ההוצאה.";
+  } else if (monotonic) {
+    meaning = "רצף Low→Mid→High עולה בהתאם לציפייה הפשוטה שהוצאה גבוהה יותר קשורה להמרה גבוהה יותר; אין לטעון להפתעה.";
+  } else {
+    meaning = "אם רצף Low→Mid→High אינו עולה, הוצאה גבוהה יותר לא הניבה המרה גבוהה יותר — ממצא מפתיע ביחס לציפייה הפשוטה.";
+  }
 
   const action = "להשוות את רמת ההוצאה הנוכחית לטבלה לפני שמזיזים כסף, ולבחון את החלופות בסימולטור.";
   const caveat = "ההשוואה מתארת קבוצות בנתונים ההיסטוריים ואינה מוכיחה שהזזת תקציב תשנה את ההמרה.";
@@ -239,15 +264,24 @@ function renderError(message) {
 }
 
 async function load() {
-  attempted = true;
+  screenState = "loading";
   const myGen = gen.bump();
   renderLoading();
 
   const result = await api.insightsBudgetTiers();
-  if (!gen.isCurrent(myGen)) return; // a newer load() call has since started
+  if (!gen.isCurrent(myGen)) return; // a newer load() call has since started -- it owns screenState now
 
   if (!result.ok) {
-    if (result.reason === "blocked" || result.reason === "stale") return; // a session/auth transition is already being handled elsewhere
+    if (result.reason === "blocked" || result.reason === "stale") {
+      // Not a real attempt -- a session/auth transition is already
+      // being handled elsewhere (bootstrap.js / api.js's shared
+      // handler). Nothing real was ever shown, so back to "idle": a
+      // later show() (e.g. after a fresh sign-in reaches 200 again)
+      // retries instead of staying stuck on this loading spinner.
+      screenState = "idle";
+      return;
+    }
+    screenState = "error";
     renderError("שגיאה בטעינת נתוני ההמרה. נסו שוב.");
     return;
   }
@@ -256,22 +290,26 @@ async function load() {
   if (tiers.length === 0) {
     // IA.md §2.2: 200 with zero rows is a data-availability error, NOT
     // an authorization problem and NOT a legitimate "empty" state.
+    screenState = "error";
     renderError("אין כרגע נתוני המרה זמינים. נסו שוב.");
     return;
   }
 
+  screenState = "loaded";
   renderSuccess(tiers);
 }
 
 /** Called by app.js's router the first time (and every time) the
  * overview route is shown. `navigateFn` is router.navigate, injected
  * so this screen module never imports router.js directly. Re-fetches
- * only if it has never successfully attempted before -- a repeat visit
- * to an already-loaded Overview does not re-query the server. */
+ * only from "idle" -- a repeat visit to an already-loaded (or already-
+ * errored, with its own retry control) Overview does not silently
+ * re-query the server; a repeat visit after a discarded blocked/stale
+ * attempt does. */
 export function show(screenContainer, navigateFn) {
   container = screenContainer;
   navigate = navigateFn;
-  if (!attempted) {
+  if (screenState === "idle") {
     load();
   }
 }
