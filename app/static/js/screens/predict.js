@@ -380,14 +380,25 @@ function updateDynamic() {
 function onFieldInput(name, rawValue) {
   const value = rawValue === "" ? null : Number(rawValue);
   form.values[name] = value;
+
+  // IA.md §9.4: the generation counter rises on "שינוי של אחד מ-12
+  // השדות הנערכים" -- UNCONDITIONALLY, for every edit, regardless of
+  // the form's current source. Fixed after an independent review found
+  // this was wrongly gated behind `source === "historical"`: in the
+  // far more common independent/edited cases, editing a field while a
+  // submission was in flight never invalidated it (a stale response
+  // for the OLD input could still render), and editing after a
+  // successful submission left the old result on screen indefinitely.
+  sharedGen.bump();
+  submitState = "idle";
+  submitResults = null;
+
   if (form.source === "historical") {
-    // IA.md §3.3: first edit turns a loaded example into "תרחיש שנערך" --
-    // resets confirmation, cancels any prior result immediately.
+    // Only the SOURCE-LABEL transition itself is conditional on having
+    // come from "historical" -- IA.md §3.3: first edit of a loaded
+    // example turns it into "תרחיש שנערך" and re-requires confirmation.
     form.source = "edited";
     form.contextConfirmed = false;
-    sharedGen.bump();
-    submitState = "idle";
-    submitResults = null;
   }
   updateDynamic(); // never touches the input elements' own .value
 }
