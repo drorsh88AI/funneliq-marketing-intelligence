@@ -10,8 +10,8 @@
 // sign-in/sign-out/token-refresh, goes through verify() before any
 // authenticated content is shown.
 //
-// Two correctness properties, fixed after an independent review of the
-// first draft (a7695db) found both violated:
+// Three correctness properties, fixed across two independent reviews
+// of this file (first of a7695db, then of its own fix in 75aa03c):
 //
 //   1. No dropped events. onAuthStateChange is subscribed BEFORE the
 //      initial getSession() is awaited, so there is no window --
@@ -33,6 +33,17 @@
 //      never raises it, so two overlapping /api/me calls around a
 //      token refresh would otherwise share one epoch and have no way
 //      to tell which response is newer.
+//   3. A late-resolving getSession() snapshot never overrides a real
+//      event. Property 2's `generation` orders verify() calls by when
+//      they STARTED -- but getSession()'s own value is a snapshot from
+//      BEFORE it was even called, so a real event that arrives while
+//      it is still pending is newer information despite starting its
+//      own verify() call earlier (and so getting a LOWER generation).
+//      init() tracks this directly with `sessionEventSeen`: once any
+//      real event has been delivered, getSession()'s eventual result
+//      (success or failure) is discarded outright, never applied to
+//      session.js and never hitting verify() at all. See init()'s own
+//      docstring for the full failure trace this closes.
 
 import * as session from "./session.js";
 
@@ -112,12 +123,32 @@ async function verify(supaSession, eventName) {
 }
 
 /** One-time init: fetch /api/config, build the Supabase client,
- * subscribe to onAuthStateChange, THEN run the first verify() against
+ * subscribe to onAuthStateChange, THEN run the first check against
  * getSession() -- in that order, so no session change delivered while
- * the initial /api/me call is in flight is ever missed (module
- * docstring, property 1). Returns the Supabase client so app.js can
- * wire the login form and sign-out button to it, or null if
- * /api/config, client creation, or the initial getSession() failed. */
+ * getSession() is in flight is ever missed (module docstring,
+ * property 1). Returns the Supabase client so app.js can wire the
+ * login form and sign-out button to it, or null if /api/config, client
+ * creation, or the initial getSession() failed.
+ *
+ * A THIRD property, fixed after an independent review of the
+ * generation-guard fix (75aa03c) found it insufficient on its own:
+ *
+ *   3. getSession()'s return value is a SNAPSHOT taken at the moment it
+ *      was called -- not "the current session" by the time it resolves.
+ *      If a real onAuthStateChange event (SIGNED_IN, SIGNED_OUT, a
+ *      token refresh) arrives while that call is still pending, the
+ *      event is strictly newer information, even though the pending
+ *      getSession() call's own verify() would start LATER (and so get
+ *      a HIGHER `generation`) than the event's. The `generation` guard
+ *      alone does not distinguish "started later" from "describes
+ *      newer reality" -- it would let this late-arriving, stale
+ *      snapshot win and silently revert both session.current and the
+ *      rendered state back to a session that had already been
+ *      superseded. Fixed with a boolean, `sessionEventSeen`, set the
+ *      instant any real event is delivered: once true, getSession()'s
+ *      own result (success OR failure) is discarded outright -- never
+ *      applied to session.js, never handed to verify() -- because a
+ *      real event is always trusted over a snapshot taken before it. */
 export async function init(handler) {
   onState = handler;
 
@@ -132,36 +163,49 @@ export async function init(handler) {
     return null;
   }
 
+  // `window.supabase` is undefined if the CDN request failed or its
+  // SRI hash didn't match -- createClient() then throws a TypeError.
+  // The original phase-4 app.js guarded exactly this (its own comment:
+  // "without this, stuck on loading forever with no visible error");
+  // that guarantee is restored here after being dropped in this
+  // checkpoint's first draft. Nothing else has happened yet at this
+  // point (no subscription exists), so any failure here is
+  // unconditionally fatal.
   try {
-    // `window.supabase` is undefined if the CDN request failed or its
-    // SRI hash didn't match -- createClient() then throws a
-    // TypeError. The original phase-4 app.js guarded exactly this
-    // (its own comment: "without this, stuck on loading forever with
-    // no visible error"); that guarantee is restored here after being
-    // dropped in this checkpoint's first draft.
     client = window.supabase.createClient(
       config.supabase_url,
       config.supabase_publishable_key
     );
-
-    // Subscribed before the getSession() await below -- see module
-    // docstring, property 1. verify() is safe to call more than once
-    // or out of order (property 2), so a possible duplicate initial
-    // delivery from supabase-js costs at most one redundant /api/me
-    // call, never a correctness bug; this design does not need to
-    // assume any specific replay behavior from the library either way
-    // (PHASE11.md P11-D14, "תלות בעובדות לא-מאומתות").
-    client.auth.onAuthStateChange((event, nextSession) => {
-      session.applySessionChange(event, nextSession);
-      verify(nextSession, event);
-    });
-
-    const { data } = await client.auth.getSession();
-    session.applySessionChange("INITIAL", data.session);
-    await verify(data.session, "INITIAL");
   } catch {
     onState({ kind: "config-error", session: null, user: null });
     return null;
+  }
+
+  // Subscribed before the getSession() call below -- see module
+  // docstring, property 1.
+  let sessionEventSeen = false;
+  client.auth.onAuthStateChange((event, nextSession) => {
+    sessionEventSeen = true;
+    session.applySessionChange(event, nextSession);
+    verify(nextSession, event);
+  });
+
+  try {
+    const { data } = await client.auth.getSession();
+    if (!sessionEventSeen) {
+      session.applySessionChange("INITIAL", data.session);
+      await verify(data.session, "INITIAL");
+    }
+    // else: a real event already fired and is already being (or has
+    // already been) verified -- this snapshot predates it and is
+    // discarded whole, per property 3 above.
+  } catch {
+    if (!sessionEventSeen) {
+      onState({ kind: "config-error", session: null, user: null });
+      return null;
+    }
+    // else: a real event already gave a better answer than this
+    // failed, now-irrelevant snapshot attempt.
   }
 
   return client;
