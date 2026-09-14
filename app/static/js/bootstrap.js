@@ -9,12 +9,40 @@
 // Every session change, from the very first load through every later
 // sign-in/sign-out/token-refresh, goes through verify() before any
 // authenticated content is shown.
+//
+// Two correctness properties, fixed after an independent review of the
+// first draft (a7695db) found both violated:
+//
+//   1. No dropped events. onAuthStateChange is subscribed BEFORE the
+//      initial getSession() is awaited, so there is no window --
+//      however short -- with zero listener where a real session change
+//      (a token refresh, a forced sign-out from another tab) could
+//      fire and be silently missed.
+//   2. No stale /api/me response ever wins. Because that subscription
+//      now runs concurrently with the initial check, and because two
+//      later verify() calls (e.g. two TOKEN_REFRESHED deliveries close
+//      together) can themselves resolve in either order, every
+//      verify() call is tagged with a monotonic `generation` at the
+//      moment it STARTS; a response is only acted on if its generation
+//      is still the latest when the response arrives -- checked again
+//      after every `await` inside verify(), including the second one
+//      (parsing a 200 body) a first pass missed. `session epoch`
+//      (P11-D14) is a DIFFERENT counter for a different job (staleness
+//      of BUSINESS responses across explicit resets like sign-out) and
+//      does not by itself solve this -- TOKEN_REFRESHED specifically
+//      never raises it, so two overlapping /api/me calls around a
+//      token refresh would otherwise share one epoch and have no way
+//      to tell which response is newer.
 
 import * as session from "./session.js";
 
 let client = null;
 let onState = null; // supplied by app.js: (state) => void
-let lastSession = undefined; // sentinel: bootstrap has not run yet
+let lastSession = null; // target for retry() -- always the most
+                         // recently STARTED verify()'s input, set
+                         // synchronously so call-order (not completion
+                         // order) decides it.
+let generation = 0;
 
 async function callMe(token) {
   return fetch("/api/me", {
@@ -23,13 +51,20 @@ async function callMe(token) {
 }
 
 /** Runs GET /api/me for a given Supabase session (or reports
- * "no-session" directly, without calling it, when there is none). */
+ * "no-session" directly, without calling it, when there is none).
+ * Discards its own result if a newer verify() call has started before
+ * this one's response (or response body) arrives -- see module
+ * docstring, property 2. */
 async function verify(supaSession, eventName) {
+  const myGen = ++generation;
   lastSession = supaSession;
 
   if (supaSession === null) {
     // IA.md §9.3: no token exists to send, and calling anyway would
     // only produce a confusing, unrequested 401 in the network log.
+    // No `await` has happened yet in this call, so `myGen` cannot be
+    // stale here -- nothing else could have incremented `generation`
+    // between the two synchronous lines above.
     onState({ kind: "no-session", session: null, user: null });
     return;
   }
@@ -38,16 +73,18 @@ async function verify(supaSession, eventName) {
   try {
     response = await callMe(supaSession.access_token);
   } catch {
-    // Network failure reaching our own API -- grouped with 503: infra
-    // trouble, not the caller's fault; session stays, retry is offered.
+    if (myGen !== generation) return; // superseded while the request was in flight
     session.setBusinessBlocked(true);
     onState({ kind: "503", session: supaSession, user: null });
     return;
   }
 
+  if (myGen !== generation) return; // superseded while the request was in flight
+
   if (response.status === 200) {
     session.setBusinessBlocked(false);
     const user = await response.json();
+    if (myGen !== generation) return; // superseded while parsing the body
     onState({ kind: "200", session: supaSession, user });
     return;
   }
@@ -74,12 +111,13 @@ async function verify(supaSession, eventName) {
   onState({ kind: "503", session: supaSession, user: null });
 }
 
-/** One-time init: fetch /api/config, build the Supabase client, run the
- * first verify() against getSession(), then subscribe to
- * onAuthStateChange for every later session change (sign-in, sign-out,
- * token refresh, tab-focus re-delivery -- IA.md §9.3's "כלל האירועים").
- * Returns the Supabase client so app.js can wire the login form and
- * sign-out button to it, or null if /api/config itself failed. */
+/** One-time init: fetch /api/config, build the Supabase client,
+ * subscribe to onAuthStateChange, THEN run the first verify() against
+ * getSession() -- in that order, so no session change delivered while
+ * the initial /api/me call is in flight is ever missed (module
+ * docstring, property 1). Returns the Supabase client so app.js can
+ * wire the login form and sign-out button to it, or null if
+ * /api/config, client creation, or the initial getSession() failed. */
 export async function init(handler) {
   onState = handler;
 
@@ -94,27 +132,37 @@ export async function init(handler) {
     return null;
   }
 
-  client = window.supabase.createClient(
-    config.supabase_url,
-    config.supabase_publishable_key
-  );
+  try {
+    // `window.supabase` is undefined if the CDN request failed or its
+    // SRI hash didn't match -- createClient() then throws a
+    // TypeError. The original phase-4 app.js guarded exactly this
+    // (its own comment: "without this, stuck on loading forever with
+    // no visible error"); that guarantee is restored here after being
+    // dropped in this checkpoint's first draft.
+    client = window.supabase.createClient(
+      config.supabase_url,
+      config.supabase_publishable_key
+    );
 
-  // getSession() runs first, unconditionally, so the very first check
-  // never depends on assuming a particular onAuthStateChange delivery
-  // pattern on subscribe (supabase-js's exact replay behavior across
-  // versions is not something this design pins down as fact -- see
-  // PHASE11.md P11-D14, "תלות בעובדות לא-מאומתות"). The subscription
-  // below is only wired up afterward, and its own de-dupe guard makes
-  // this correct even if a replay of the same session does happen.
-  const { data } = await client.auth.getSession();
-  session.applySessionChange("INITIAL", data.session);
-  await verify(data.session, "INITIAL");
+    // Subscribed before the getSession() await below -- see module
+    // docstring, property 1. verify() is safe to call more than once
+    // or out of order (property 2), so a possible duplicate initial
+    // delivery from supabase-js costs at most one redundant /api/me
+    // call, never a correctness bug; this design does not need to
+    // assume any specific replay behavior from the library either way
+    // (PHASE11.md P11-D14, "תלות בעובדות לא-מאומתות").
+    client.auth.onAuthStateChange((event, nextSession) => {
+      session.applySessionChange(event, nextSession);
+      verify(nextSession, event);
+    });
 
-  client.auth.onAuthStateChange((event, nextSession) => {
-    if (session.isSameSession(lastSession, nextSession)) return;
-    session.applySessionChange(event, nextSession);
-    verify(nextSession, event);
-  });
+    const { data } = await client.auth.getSession();
+    session.applySessionChange("INITIAL", data.session);
+    await verify(data.session, "INITIAL");
+  } catch {
+    onState({ kind: "config-error", session: null, user: null });
+    return null;
+  }
 
   return client;
 }

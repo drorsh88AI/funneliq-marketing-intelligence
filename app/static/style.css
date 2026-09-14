@@ -1,10 +1,10 @@
 /* FunnelIQ -- functional RTL styling, now wired to app/static/tokens.css
    (phase 11, checkpoint 1). tokens.css is the source of truth for
    VALUES (DESIGN.md is the source of truth for which token goes where);
-   nothing here hardcodes a color, size or radius that tokens.css
-   already declares. A small number of purely structural values with no
-   entry in tokens.css (border color, layout breakpoints) stay local,
-   each noted where it appears. */
+   this file hardcodes zero color/font values (PHASE11.md §ד). Two
+   tokens tokens.css lacked entirely -- --color-on-primary and
+   --color-border -- were added there in this same checkpoint rather
+   than hand-typed here; see their definitions for why. */
 
 * {
   box-sizing: border-box;
@@ -57,7 +57,7 @@ button {
   border: none;
   border-radius: var(--radius-sm);
   background: var(--color-primary);
-  color: #ffffff;
+  color: var(--color-on-primary);
   padding: var(--space-2) var(--space-4);
   font-size: var(--font-size-sm);
 }
@@ -87,12 +87,10 @@ button {
   font-weight: 500;
 }
 
-/* --color-border has no tokens.css entry (DESIGN.md's token inventory
-   covers palette/state tokens, not input borders) -- kept local. */
 .field input {
   width: 100%;
   padding: var(--space-3);
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-base);
   font-family: inherit;
@@ -104,7 +102,7 @@ button {
   border: none;
   border-radius: var(--radius-sm);
   background: var(--color-primary);
-  color: #ffffff;
+  color: var(--color-on-primary);
   font-size: var(--font-size-base);
 }
 
@@ -135,7 +133,7 @@ button {
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-6);
-  border-bottom: 1px solid #d1d5db;
+  border-bottom: 1px solid var(--color-border);
 }
 
 /* app-nav: horizontal, the five connected screens side by side
@@ -170,7 +168,7 @@ button {
 /* sign-out-control -- always visible in the connected wrapper,
    including in forbidden-notice (DESIGN.md row for sign-out-control). */
 #signout-button {
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text);

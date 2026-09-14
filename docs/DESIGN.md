@@ -203,6 +203,8 @@ P4S `calibration-badge` נעול ל-`calibrated` בלבד** — `uncalibrated`
 | `--color-text` | טקסט גוף רגיל | — |
 | `--color-bg` | רקע העמוד — הרקע שמולו נבדקים כל מילויי הגרפיקה (בדיקות 2–3) | — |
 | `color-tier-1` · `color-tier-2` · `color-tier-3` (כל אחד זוג `-fg`/`-bg`) | רמות הוצאה נמוכה/בינונית/גבוהה — **סדרה מסודרת** (רמפה עוקבת, לא שלושה גוונים בלתי-קשורים), כרקע `tier-table` בלבד | — |
+| `--color-on-primary` | טקסט/אייקון על משטח מלא ב-`--color-primary` (כפתורי `login-form`/`panel-error`) — נוסף בפאזה 11 checkpoint 1 כשנמצא שאף טוקן קיים לא כיסה זאת בעת חיווט `tokens.css` בפועל | — |
+| `--color-border` | גבול ניטרלי מבני — שדות קלט, חוצצים (`app-header`, `signout-button`). ⚠ **לא** טוקן מצב/סמנטי — אין עליו כלל D10 | — |
 
 ⛔ **כלל D10, חוצה-מסכים:** `prediction-primary` בכל ארבע משימות החיזוי
 (P2/P3/P4/P4S) צורך **תמיד** `--color-uncertain`, **לעולם לא**

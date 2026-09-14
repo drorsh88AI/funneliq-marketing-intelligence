@@ -54,6 +54,7 @@ function hideTopLevel() {
   els.configError.hidden = true;
   els.loginSection.hidden = true;
   els.shell.hidden = true;
+  els.appNav.hidden = true;
   els.forbiddenNotice.hidden = true;
   els.availabilityError.hidden = true;
 }
@@ -92,6 +93,7 @@ function onAuthState(state) {
       hadSessionBefore = true;
       hideTopLevel();
       els.shell.hidden = false;
+      els.appNav.hidden = false;
       els.appMain.hidden = false;
       els.userEmail.textContent = state.user.email;
       router.start(showRoute);
@@ -121,11 +123,16 @@ function onAuthState(state) {
       if (hasEverShownShell) {
         // Content is already rendered (a later re-verify, e.g. after
         // TOKEN_REFRESHED) -- leave the shell/nav/screens exactly as
-        // they are and only add the notice alongside them.
+        // they are (app-nav included -- it was already shown by the
+        // prior "200") and only add the notice alongside them.
         els.shell.hidden = false;
         els.availabilityError.hidden = false;
       } else {
-        // Nothing to preserve yet -- this is the bootstrap-time failure.
+        // Bootstrap-time failure: we do not yet know whether this
+        // visitor is even authorized, so the BLOCKED authenticated-shell
+        // is a minimal one -- sign-out only, ⛔ no app-nav (IA.md §9.3:
+        // "authenticated-shell... חסומים", and nav links to five
+        // screens nobody has confirmed access to would be misleading).
         hideTopLevel();
         els.shell.hidden = false;
         els.availabilityError.hidden = false;
