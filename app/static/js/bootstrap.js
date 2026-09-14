@@ -10,8 +10,9 @@
 // sign-in/sign-out/token-refresh, goes through verify() before any
 // authenticated content is shown.
 //
-// Three correctness properties, fixed across two independent reviews
-// of this file (first of a7695db, then of its own fix in 75aa03c):
+// Four correctness properties, fixed across three independent reviews
+// of this file (a7695db, then its own fix 75aa03c, then checkpoint 2's
+// first real consumer -- api.js in 8ebbd5e -- exposing a fourth gap):
 //
 //   1. No dropped events. onAuthStateChange is subscribed BEFORE the
 //      initial getSession() is awaited, so there is no window --
@@ -44,6 +45,13 @@
 //      (success or failure) is discarded outright, never applied to
 //      session.js and never hitting verify() at all. See init()'s own
 //      docstring for the full failure trace this closes.
+//   4. businessBlocked is true for the ENTIRE duration of any
+//      verification of a non-null session, not just while a request is
+//      actually in flight. Set synchronously at the top of every
+//      verify() call (before any await), and only cleared after a 200
+//      AND its body has been parsed AND the generation check confirms
+//      this call is still current. See verify()'s own docstring for
+//      the exact cross-session reproduction this closes.
 
 import * as session from "./session.js";
 
@@ -65,7 +73,32 @@ async function callMe(token) {
  * "no-session" directly, without calling it, when there is none).
  * Discards its own result if a newer verify() call has started before
  * this one's response (or response body) arrives -- see module
- * docstring, property 2. */
+ * docstring, property 2.
+ *
+ * A FOURTH property, fixed after an independent review of 8ebbd5e
+ * (api.js's own first behavioral test suite) found it violated:
+ *
+ *   4. businessBlocked is true for the ENTIRE duration of any
+ *      verification of a non-null session -- from the synchronous
+ *      instant verify() is called, until a 200 for that SAME,
+ *      still-current call has both arrived AND had its body parsed.
+ *      Properties 1-3 correctly stop a stale RESPONSE from ever being
+ *      rendered or from reverting session.current -- but they said
+ *      nothing about the SEPARATE businessBlocked flag api.js gates
+ *      on, which stayed false from an OLDER session's 200 straight
+ *      through a sign-out and into a brand-new session's own
+ *      not-yet-verified verify() call. Reproduced exactly as
+ *      described: session A gets 200 (businessBlocked=false) -> SIGNED_OUT
+ *      -> SIGNED_IN as a different session B -> B's own /api/me is
+ *      still in flight, but businessBlocked is STILL false from A, so
+ *      a business call fires with B's token before B has ever been
+ *      confirmed. Fixed by setting businessBlocked = true
+ *      SYNCHRONOUSLY at the top of every non-null verify() call
+ *      (before any `await`, so no window exists where it reads stale),
+ *      and moving businessBlocked = false to AFTER both awaits (the
+ *      fetch AND the body parse) and the final generation check --
+ *      never earlier, or a newer verify() starting during THIS call's
+ *      own json() parse could still see the gate open. */
 async function verify(supaSession, eventName) {
   const myGen = ++generation;
   lastSession = supaSession;
@@ -76,16 +109,21 @@ async function verify(supaSession, eventName) {
     // No `await` has happened yet in this call, so `myGen` cannot be
     // stale here -- nothing else could have incremented `generation`
     // between the two synchronous lines above.
+    session.setBusinessBlocked(true);
     onState({ kind: "no-session", session: null, user: null });
     return;
   }
+
+  // Synchronous, before any await (property 4) -- true for the whole
+  // lifetime of this verification, regardless of what session or
+  // response it turns out to belong to.
+  session.setBusinessBlocked(true);
 
   let response;
   try {
     response = await callMe(supaSession.access_token);
   } catch {
     if (myGen !== generation) return; // superseded while the request was in flight
-    session.setBusinessBlocked(true);
     onState({ kind: "503", session: supaSession, user: null });
     return;
   }
@@ -93,9 +131,14 @@ async function verify(supaSession, eventName) {
   if (myGen !== generation) return; // superseded while the request was in flight
 
   if (response.status === 200) {
-    session.setBusinessBlocked(false);
     const user = await response.json();
     if (myGen !== generation) return; // superseded while parsing the body
+    // Only now -- current AND successful AND body-parsed -- is the
+    // gate allowed to open. A newer verify() that started during this
+    // json() parse already re-set businessBlocked=true synchronously
+    // at ITS own start, so there is no window where a stale call's
+    // late-running continuation can still open the gate for it.
+    session.setBusinessBlocked(false);
     onState({ kind: "200", session: supaSession, user });
     return;
   }
