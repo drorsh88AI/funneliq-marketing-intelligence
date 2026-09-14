@@ -99,18 +99,43 @@ let screenState = "idle";
 // sign-in left the OLD session's already-rendered content in the DOM,
 // and a later show() -- seeing "loaded" -- never re-fetched. P11-D5 /
 // P11-D14 require exactly the opposite: sign-out and 401/403 clear all
-// state. Only `stateCleared` events act here (IA.md/P11-D14's "שני
-// צירים נפרדים" -- an epoch-raise WITHOUT a state-clear, e.g. the
-// conservative same-user/different-token SIGNED_IN case, must cancel
-// an in-flight response but must NOT erase content already on
-// screen; api.js's own per-call epoch check already cancels that
-// in-flight response on its own, so nothing further is needed here
-// for that case).
-session.onSessionEvent(({ stateCleared }) => {
-  if (!stateCleared) return;
-  gen.bump(); // invalidate any of THIS screen's own in-flight load(), independent of api.js's epoch check
-  screenState = "idle";
-  if (container) container.replaceChildren();
+// state.
+//
+// A SECOND review found the first fix still incomplete for
+// epochRaised WITHOUT stateCleared (P11-D14's conservative
+// same-user/different-token SIGNED_IN case) while a load() is
+// in-flight. api.js's own per-call epoch check does discard that
+// in-flight request's eventual response -- but discarding a response
+// is not the same as SCHEDULING a replacement: the router's own
+// show() call, which arrives once the NEW session's /api/me confirms
+// 200, finds screenState still "loading" (this module had no reason
+// yet to think otherwise) and defers to the doomed in-flight
+// request -- only for that request to later resolve "stale" with no
+// show() left to trigger a fresh load(). The screen was left on
+// "loading" forever with no active request. Fixed by reacting to the
+// epoch-raise event ITSELF, synchronously, rather than waiting for
+// the eventual stale response: if a load() is currently in flight
+// when a conservative epoch-raise happens, this screen's own
+// generation is bumped and screenState returns to "idle" right then
+// -- so the show() that arrives moments later (once the new session's
+// own /api/me succeeds) finds "idle" and starts a fresh load()
+// immediately, instead of silently doing nothing.
+session.onSessionEvent(({ epochRaised, stateCleared }) => {
+  if (stateCleared) {
+    gen.bump(); // invalidate any of THIS screen's own in-flight load(), independent of api.js's epoch check
+    screenState = "idle";
+    if (container) container.replaceChildren();
+    return;
+  }
+  if (epochRaised && screenState === "loading") {
+    // Nothing real has been shown yet ("loading" never rendered
+    // content) -- no DOM touch here, only state, so the fresh load()
+    // the next show() triggers is free to start clean.
+    gen.bump();
+    screenState = "idle";
+  }
+  // loaded/error + epochRaised-only: no action -- already-rendered
+  // content must survive a conservative epoch raise untouched.
 });
 
 function renderCapabilityIndex() {
