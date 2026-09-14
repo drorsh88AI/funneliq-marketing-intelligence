@@ -17,6 +17,7 @@
 //     this project's frozen dataset), and the fixed action/caveat text.
 
 import * as api from "../api.js";
+import * as session from "../session.js";
 import * as generation from "../generation.js";
 import * as status from "../status.js";
 import * as charts from "../charts.js";
@@ -86,6 +87,31 @@ let navigate = null; // router.navigate -- injected so this module never imports
 // leaving Overview stuck on its loading spinner forever after a
 // sign-out + sign-in cycle, since no later show() would ever retry.
 let screenState = "idle";
+
+// Subscribed exactly ONCE -- this is a top-level (module-evaluation-
+// time) statement, and ES modules are singletons, so this never
+// double-registers no matter how many times show() itself is called.
+//
+// Fixed after an independent review found this screen never listened
+// to session.onSessionEvent() at all: once loaded, `screenState`
+// stayed "loaded" forever, so sign-out/401/403 (which hide the whole
+// shell but do not themselves touch this module) followed by a fresh
+// sign-in left the OLD session's already-rendered content in the DOM,
+// and a later show() -- seeing "loaded" -- never re-fetched. P11-D5 /
+// P11-D14 require exactly the opposite: sign-out and 401/403 clear all
+// state. Only `stateCleared` events act here (IA.md/P11-D14's "שני
+// צירים נפרדים" -- an epoch-raise WITHOUT a state-clear, e.g. the
+// conservative same-user/different-token SIGNED_IN case, must cancel
+// an in-flight response but must NOT erase content already on
+// screen; api.js's own per-call epoch check already cancels that
+// in-flight response on its own, so nothing further is needed here
+// for that case).
+session.onSessionEvent(({ stateCleared }) => {
+  if (!stateCleared) return;
+  gen.bump(); // invalidate any of THIS screen's own in-flight load(), independent of api.js's epoch check
+  screenState = "idle";
+  if (container) container.replaceChildren();
+});
 
 function renderCapabilityIndex() {
   const el = document.createElement("div");
