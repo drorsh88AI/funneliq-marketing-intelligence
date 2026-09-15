@@ -27,13 +27,20 @@ const VIEW_WIDTH = 400;
 const VIEW_HEIGHT = 225; // 16:9
 const PADDING = { top: 16, right: 16, bottom: 32, left: 16 };
 
-/** data: [{ xHebrew, xEnglish, value }], value may be null (N/A -- 0-height bar). */
-export function renderBarChart({ data, xLabel, yLabel, formatValue }) {
+/** data: [{ xHebrew, xEnglish, value, lower?, upper? }], value may be
+ * null (N/A -- 0-height bar). `lower`/`upper`, when given on ANY row,
+ * draw a whisker (a vertical range line + caps) over that bar --
+ * DESIGN.md §4's own shared rule for all four live charts: "טווחי
+ * אי-ודאות ב-whisker עם מקרא טקסטואלי". `legend`, when given, renders
+ * that textual legend as a caption paragraph under the chart -- this is
+ * the "מקרא טקסטואלי" itself, never a second color-coded visual legend. */
+export function renderBarChart({ data, xLabel, yLabel, formatValue, legend, barClassName = "chart-bar" }) {
   const wrapper = document.createElement("div");
   wrapper.className = "chart-live";
 
   const numericValues = data.map((d) => d.value).filter((v) => typeof v === "number");
-  const max = numericValues.length ? Math.max(...numericValues) : 0;
+  const whiskerValues = data.flatMap((d) => [d.lower, d.upper]).filter((v) => typeof v === "number");
+  const max = Math.max(0, ...numericValues, ...whiskerValues);
   const chartMax = max > 0 ? max : 1; // avoid a degenerate 0-height chart
 
   const plotWidth = VIEW_WIDTH - PADDING.left - PADDING.right;
@@ -70,7 +77,7 @@ export function renderBarChart({ data, xLabel, yLabel, formatValue }) {
     rect.setAttribute("y", String(y));
     rect.setAttribute("width", String(barWidth));
     rect.setAttribute("height", String(Math.max(barHeight, 0)));
-    rect.setAttribute("class", "chart-bar");
+    rect.setAttribute("class", barClassName);
     svg.appendChild(rect);
 
     const label = document.createElementNS(SVG_NS, "text");
@@ -80,6 +87,31 @@ export function renderBarChart({ data, xLabel, yLabel, formatValue }) {
     label.setAttribute("class", "chart-axis-label");
     label.textContent = d.xEnglish;
     svg.appendChild(label);
+
+    if (typeof d.lower === "number" && typeof d.upper === "number") {
+      const centerX = x + barWidth / 2;
+      const yLower = PADDING.top + plotHeight - (d.lower / chartMax) * plotHeight;
+      const yUpper = PADDING.top + plotHeight - (d.upper / chartMax) * plotHeight;
+      const capHalfWidth = Math.min(barWidth / 4, 10);
+
+      const whiskerLine = document.createElementNS(SVG_NS, "line");
+      whiskerLine.setAttribute("x1", String(centerX));
+      whiskerLine.setAttribute("x2", String(centerX));
+      whiskerLine.setAttribute("y1", String(yUpper));
+      whiskerLine.setAttribute("y2", String(yLower));
+      whiskerLine.setAttribute("class", "chart-whisker-line");
+      svg.appendChild(whiskerLine);
+
+      for (const yCap of [yLower, yUpper]) {
+        const cap = document.createElementNS(SVG_NS, "line");
+        cap.setAttribute("x1", String(centerX - capHalfWidth));
+        cap.setAttribute("x2", String(centerX + capHalfWidth));
+        cap.setAttribute("y1", String(yCap));
+        cap.setAttribute("y2", String(yCap));
+        cap.setAttribute("class", "chart-whisker-cap");
+        svg.appendChild(cap);
+      }
+    }
   });
 
   wrapper.appendChild(svg);
@@ -116,6 +148,13 @@ export function renderBarChart({ data, xLabel, yLabel, formatValue }) {
   table.appendChild(tbody);
   tableWrap.appendChild(table);
   wrapper.appendChild(tableWrap);
+
+  if (legend) {
+    const legendEl = document.createElement("p");
+    legendEl.className = "chart-legend";
+    legendEl.textContent = legend;
+    wrapper.appendChild(legendEl);
+  }
 
   return wrapper;
 }

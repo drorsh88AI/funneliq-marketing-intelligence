@@ -20,6 +20,7 @@ import * as facts from "./js/facts.js";
 import * as overviewScreen from "./js/screens/overview.js";
 import * as predictScreen from "./js/screens/predict.js";
 import * as superCustomerScreen from "./js/screens/super-customer.js";
+import * as budgetScreen from "./js/screens/budget.js";
 
 const els = {
   loading: document.getElementById("loading"),
@@ -91,6 +92,9 @@ function showRoute(route) {
   }
   if (route === "super-customer") {
     superCustomerScreen.show(document.getElementById("screen-super-customer"));
+  }
+  if (route === "budget") {
+    budgetScreen.show(document.getElementById("screen-budget"));
   }
 }
 
