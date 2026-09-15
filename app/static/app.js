@@ -19,6 +19,7 @@ import * as supabasePrefill from "./js/supabase-prefill.js";
 import * as facts from "./js/facts.js";
 import * as overviewScreen from "./js/screens/overview.js";
 import * as predictScreen from "./js/screens/predict.js";
+import * as superCustomerScreen from "./js/screens/super-customer.js";
 
 const els = {
   loading: document.getElementById("loading"),
@@ -87,6 +88,9 @@ function showRoute(route) {
   }
   if (route === "predict") {
     predictScreen.show(document.getElementById("screen-predict"));
+  }
+  if (route === "super-customer") {
+    superCustomerScreen.show(document.getElementById("screen-super-customer"));
   }
 }
 

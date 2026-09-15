@@ -70,3 +70,45 @@ export function validateSharedForm(values) {
 
   return violations;
 }
+
+// ---------------------------------------------------------------------
+// P4S (checkpoint 6). IA.md §3א.2: the SAME three comparison rules as
+// the shared form (num_leads>0 · leads_answered<=num_leads ·
+// followup_1<=leads_answered, the first link of the shared chain, no
+// further) plus non-negativity -- scoped to only these four fields.
+// Rule 4 (closed vs followup_5) is explicitly "אינו ישים" here (no
+// `closed`/`followup_5` on this screen at all). Message text reused
+// verbatim from the identical shared-form rules above, since the rule
+// itself is textually identical, only the field set is narrower.
+// ---------------------------------------------------------------------
+
+export const SUPER_CUSTOMER_FIELDS = ["ad_budget", "num_leads", "leads_answered", "followup_1"];
+
+export function validateSuperCustomerForm(values) {
+  const violations = [];
+  const v = (name) => values[name];
+  const isFilled = (name) => v(name) !== null && v(name) !== undefined && v(name) !== "";
+
+  const missing = SUPER_CUSTOMER_FIELDS.filter((f) => !isFilled(f));
+  const negative = SUPER_CUSTOMER_FIELDS.filter((f) => isFilled(f) && Number(v(f)) < 0);
+  if (missing.length > 0 || negative.length > 0) {
+    violations.push({
+      rule: 5,
+      message: "יש להשלים ערך חוקי בכל שדה; ערך שלילי אינו חוקי",
+      fields: [...missing, ...negative],
+    });
+    return violations;
+  }
+
+  if (!(Number(v("num_leads")) > 0)) {
+    violations.push({ rule: 1, message: "מספר הלידים חייב להיות גדול מאפס", fields: ["num_leads"] });
+  }
+  if (!(Number(v("leads_answered")) <= Number(v("num_leads")))) {
+    violations.push({ rule: 2, message: "לידים שנענו אינו יכול לעלות על סך הלידים", fields: ["leads_answered", "num_leads"] });
+  }
+  if (!(Number(v("leads_answered")) >= Number(v("followup_1")))) {
+    violations.push({ rule: 3, message: "שלבי המשפך חייבים לרדת או להישאר שווים", fields: ["leads_answered", "followup_1"] });
+  }
+
+  return violations;
+}
