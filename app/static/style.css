@@ -577,6 +577,26 @@ button {
   font-size: var(--font-size-xs);
 }
 
+/* .evidence-high/.evidence-medium: P6's own three-level scale
+   (IA.md §5) -- never reached by P2/P3/P4/P4S's two-level evidence-
+   badge (low/none only), so these rules never existed until checkpoint
+   7's strategy-table became the first consumer. Self-review finding,
+   2026-09-15: tokens.css already defined --evidence-high-bg/-fg and
+   --evidence-medium-bg/-fg since checkpoint 1 (test_design_tokens.py's
+   own orphan-token check only verifies a token is CITED in DESIGN.md,
+   not that style.css actually applies it in a rule -- true here, and
+   the gap slipped past every review round since these two badge states
+   were never actually rendered before). */
+.evidence-badge.evidence-high {
+  background: var(--evidence-high-bg);
+  color: var(--evidence-high-fg);
+}
+
+.evidence-badge.evidence-medium {
+  background: var(--evidence-medium-bg);
+  color: var(--evidence-medium-fg);
+}
+
 .evidence-badge.evidence-low {
   background: var(--evidence-low-bg);
   color: var(--evidence-low-fg);

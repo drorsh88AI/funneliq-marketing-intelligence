@@ -50,6 +50,15 @@ import * as facts from "../facts.js";
 import { renderSummaryRecommendation } from "../summary-recommendation.js";
 
 const EVIDENCE_LABELS = { high: "ראיות גבוהות", medium: "ראיות בינוניות", low: "ראיות נמוכות" };
+// Icon glyphs are this module's own choice (no specific glyph is locked
+// anywhere in the source docs, same as predict.js's own PROPENSITY_BAND
+// icons) -- but DESIGN.md lines 223-225 are UNCONDITIONAL ("בשום מצב")
+// that evidence-badge always carries both text AND an icon, never text
+// alone. Self-review finding, 2026-09-15: the original strategy-table
+// badge had text only -- missed entirely, since predict.js's own
+// evidence-badge only ever renders the "low" state and this file copied
+// just its CSS class naming, not its icon-building structure.
+const EVIDENCE_ICONS = { high: "●", medium: "◐", low: "○" };
 
 const gen = generation.createGenerationCounter();
 
@@ -84,10 +93,20 @@ function el(tag, props = {}, children = []) {
 /** "25×₪2,000" style composition strings, built from the LIVE
  * allocations array -- never a hardcoded strategy_id -> label table,
  * so a future contract value is described correctly rather than
- * silently mismatched. */
+ * silently mismatched.
+ *
+ * Self-review finding, 2026-09-15: the original version wrapped only
+ * the count in format.ltr() and left "×" and the currency figure bare
+ * -- inconsistent with IA.md line 956 ("מספרים... וסימני מטבע ב-LTR
+ * בתוך container של RTL") and with predict.js's own precedent for a
+ * multi-token LTR expression (its derived-field value wraps the WHOLE
+ * "followup_5 (13) − closed (2)" string in ONE ltr() call, not each
+ * number separately). Each count×currency pair is now isolated as one
+ * unit; only the Hebrew " + " joiner between multi-level strategies
+ * stays outside it. */
 function compositionText(allocations) {
   return allocations
-    .map((a) => `${format.ltr(format.formatNumber(a.count))}×${format.formatCurrency(a.ad_budget)}`)
+    .map((a) => format.ltr(`${format.formatNumber(a.count)}×${format.formatCurrency(a.ad_budget)}`))
     .join(" + ");
 }
 
@@ -170,7 +189,10 @@ function buildStrategyTable(strategies) {
     row.appendChild(el("td", { text: `${format.formatCurrency(s.lower_bound)}–${format.formatCurrency(s.upper_bound)}` }));
     row.appendChild(el("td", { text: sampleSizeText(s.allocations) }));
     row.appendChild(el("td", {}, [
-      el("span", { className: `evidence-badge evidence-${s.evidence_level}`, text: EVIDENCE_LABELS[s.evidence_level] }),
+      el("span", { className: `evidence-badge evidence-${s.evidence_level}` }, [
+        el("span", { className: "badge-icon", text: EVIDENCE_ICONS[s.evidence_level] }),
+        el("span", { text: EVIDENCE_LABELS[s.evidence_level] }),
+      ]),
     ]));
     tbody.appendChild(row);
   }
