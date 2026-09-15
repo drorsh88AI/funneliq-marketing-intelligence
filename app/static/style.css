@@ -670,6 +670,15 @@ button {
   white-space: nowrap;
 }
 
+/* DESIGN.md §3.4's own P4S row: "שני כפתורים זה-לצד-זה: שליחה ו-
+   clear-form-action". */
+.p4s-actions-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
 .p4s-definitions {
   margin: var(--space-2) 0;
   font-size: var(--font-size-sm);

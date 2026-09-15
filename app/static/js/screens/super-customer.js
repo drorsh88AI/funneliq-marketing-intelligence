@@ -80,9 +80,18 @@ const PROPENSITY_BAND_ICONS = { below_base: "▼", near_base: "●", above_base:
 // גלויות... בשפה פשוטה" -- no exact wording is locked). Keyed by the
 // literal value itself so an unrecognized future contract value falls
 // back to the raw string rather than silently mistranslating it.
+// Review-round finding, confirmed against SPEC.md's own field table
+// (ltv_months is listed there as an OBSERVED, customer-level historical
+// outcome column, not a live model output): the original wording used
+// "משך החיים הצפוי" ("his/her EXPECTED lifetime"), forward-looking
+// language that risked reading as a restatement of P2's own live
+// prediction. ltv_months>=34 here is a threshold on a HISTORICAL,
+// already-observed value used only to build this model's training
+// label -- unrelated to what P2 forecasts for a NEW scenario. Reworded
+// to a plain historical-observation frame, with no "expected"/"צפוי".
 const TARGET_DEFINITION_TEXT = {
   "referred=Yes AND upsell=1 AND ltv_months>=34":
-    "לקוח-על מוגדר כרוכש שגם הפנה לקוחות נוספים, גם רכש שוב (אפסייל), וגם משך החיים הצפוי שלו הוא 34 חודשים ומעלה.",
+    "לקוח-על מוגדר, בנתוני העבר, כרוכש שגם הפנה לקוחות נוספים, גם רכש שוב (אפסייל), וגם משך החיים שנצפה אצלו בפועל הגיע ל-34 חודשים ומעלה. זו הגדרה היסטורית לתיוג, לא תחזית.",
 };
 const POPULATION_DEFINITION_TEXT = {
   "purchased=1": "המודל אומן על כלל הלקוחות שביצעו רכישה.",
@@ -182,23 +191,16 @@ function buildFieldNode(name) {
 function buildOnce() {
   container.replaceChildren();
 
-  const contextWrap = el("div", { className: "context-confirmation" });
-  const contextLabel = el("label");
-  const contextCheckbox = el("input", { type: "checkbox" });
-  contextCheckbox.addEventListener("change", (e) => {
-    const next = e.target.checked;
-    if (next === form.contextConfirmed) { updateDynamic(); return; }
-    form.contextConfirmed = next;
-    sharedGen.bump();
-    submitState = "idle";
-    submitResult = null;
-    updateDynamic();
-  });
-  contextLabel.appendChild(contextCheckbox);
-  contextLabel.appendChild(el("span", { text: CONTEXT_CONFIRMATION_TEXT }));
-  contextWrap.appendChild(contextLabel);
-  container.appendChild(contextWrap);
-
+  // DESIGN.md §3.4's own P4S row, exact order (⚠ explicitly flagged
+  // there as DIFFERENT from the shared form's own top-of-screen
+  // placement): prefill-picker → input-summary → 4 fields (each with
+  // its own revert-field-action) → context-confirmation, "בתחתית, ממש
+  // לפני כפתור השליחה" → submit + clear-form-action SIDE BY SIDE →
+  // results. Confirmation sits at the bottom here because it is a
+  // right-before-submit attestation, not an opening condition the way
+  // it is on the shared form (review-round finding: this module
+  // originally reused the shared form's own top-of-screen placement
+  // verbatim, which is correct THERE but explicitly wrong here).
   const prefillWrap = el("div", { className: "prefill-picker" });
   prefillWrap.appendChild(el("h3", { text: "טעינת דוגמה היסטורית" }));
   const prefillBody = el("div", { className: "prefill-picker-body" });
@@ -222,16 +224,35 @@ function buildOnce() {
   const blockedWrap = el("div", { className: "submit-blocked-wrap" });
   container.appendChild(blockedWrap);
 
+  const contextWrap = el("div", { className: "context-confirmation" });
+  const contextLabel = el("label");
+  const contextCheckbox = el("input", { type: "checkbox" });
+  contextCheckbox.addEventListener("change", (e) => {
+    const next = e.target.checked;
+    if (next === form.contextConfirmed) { updateDynamic(); return; }
+    form.contextConfirmed = next;
+    sharedGen.bump();
+    submitState = "idle";
+    submitResult = null;
+    updateDynamic();
+  });
+  contextLabel.appendChild(contextCheckbox);
+  contextLabel.appendChild(el("span", { text: CONTEXT_CONFIRMATION_TEXT }));
+  contextWrap.appendChild(contextLabel);
+  container.appendChild(contextWrap);
+
+  const actionsRow = el("div", { className: "p4s-actions-row" });
   // "הפקת ציון" -- this module's own composition (no button label is
   // locked anywhere for this screen; IA.md §3.3 only names the shared
   // form's own "הפקת תחזיות"). Parallel phrasing: one score, not three
   // predictions.
   const submitButton = el("button", { type: "button", className: "submit-button", text: "הפקת ציון" });
   submitButton.addEventListener("click", submitForm);
-  container.appendChild(submitButton);
+  actionsRow.appendChild(submitButton);
 
   const clearWrap = el("div", { className: "clear-form-action" });
-  container.appendChild(clearWrap);
+  actionsRow.appendChild(clearWrap);
+  container.appendChild(actionsRow);
 
   const resultsWrap = el("div", { className: "results-wrap" });
   container.appendChild(resultsWrap);

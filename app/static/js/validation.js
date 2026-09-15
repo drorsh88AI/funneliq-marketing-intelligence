@@ -35,12 +35,22 @@ export function validateSharedForm(values) {
   // compare fields to each other and would be meaningless to evaluate
   // against a missing or negative value.
   const missing = EDITABLE_FIELDS.filter((f) => !isFilled(f));
-  const negative = EDITABLE_FIELDS.filter((f) => isFilled(f) && Number(v(f)) < 0);
-  if (missing.length > 0 || negative.length > 0) {
+  // "שלמות" in rule 5's own name (IA.md §3.2 row 5) reuses the "שלם"
+  // (integer) root deliberately -- §3.1's own base clause requires
+  // every one of the 13 values to be "מספר שלם · סופי · אי-שלילי"
+  // (integer, finite, non-negative), not merely present. A decimal
+  // like 1.5 or a non-finite value from scientific-notation overflow
+  // (e.g. "1e400" -> Infinity) is neither negative nor "missing" by the
+  // old check, so it slipped through undetected and would only fail
+  // server-side as a generic 422 (found in review; genuine gap, not
+  // just a stricter client-side echo of the API's own StrictInt check).
+  const malformed = EDITABLE_FIELDS.filter((f) => isFilled(f) && (!Number.isFinite(Number(v(f))) || !Number.isInteger(Number(v(f)))));
+  const negative = EDITABLE_FIELDS.filter((f) => isFilled(f) && !malformed.includes(f) && Number(v(f)) < 0);
+  if (missing.length > 0 || malformed.length > 0 || negative.length > 0) {
     violations.push({
       rule: 5,
       message: "יש להשלים ערך חוקי בכל שדה; ערך שלילי אינו חוקי",
-      fields: [...missing, ...negative],
+      fields: [...missing, ...malformed, ...negative],
     });
     // The remaining four rules need every field filled and non-negative
     // to mean anything -- evaluating them against a missing/negative
@@ -90,12 +100,15 @@ export function validateSuperCustomerForm(values) {
   const isFilled = (name) => v(name) !== null && v(name) !== undefined && v(name) !== "";
 
   const missing = SUPER_CUSTOMER_FIELDS.filter((f) => !isFilled(f));
-  const negative = SUPER_CUSTOMER_FIELDS.filter((f) => isFilled(f) && Number(v(f)) < 0);
-  if (missing.length > 0 || negative.length > 0) {
+  // Same fix as validateSharedForm's own rule 5, same reasoning
+  // (IA.md §3א.1: "כולם חובה · מספר שלם · סופי · אי-שלילי").
+  const malformed = SUPER_CUSTOMER_FIELDS.filter((f) => isFilled(f) && (!Number.isFinite(Number(v(f))) || !Number.isInteger(Number(v(f)))));
+  const negative = SUPER_CUSTOMER_FIELDS.filter((f) => isFilled(f) && !malformed.includes(f) && Number(v(f)) < 0);
+  if (missing.length > 0 || malformed.length > 0 || negative.length > 0) {
     violations.push({
       rule: 5,
       message: "יש להשלים ערך חוקי בכל שדה; ערך שלילי אינו חוקי",
-      fields: [...missing, ...negative],
+      fields: [...missing, ...malformed, ...negative],
     });
     return violations;
   }
