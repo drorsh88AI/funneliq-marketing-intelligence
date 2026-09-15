@@ -720,11 +720,19 @@ button {
 }
 
 /* ---- Budget Simulator screen (checkpoint 7) ---- */
+/* DESIGN.md line 100: overlap-alert's own locked token is
+   --color-uncertain -- review finding, confirmed: this used
+   evidence-low's tokens by mistake (evidence-level semantics, not
+   uncertainty). --out-of-distribution-bg/-fg is the box-form pairing
+   already established for this exact color (tokens.css's own comment:
+   "same amber family as --color-uncertain... IS a prediction-related
+   state" -- true here too, this alert is about uncertainty in the
+   Simulator's own predictions). */
 .overlap-alert {
   margin-bottom: var(--space-4);
   padding: var(--space-3);
-  background: var(--evidence-low-bg);
-  color: var(--evidence-low-fg);
+  background: var(--out-of-distribution-bg);
+  color: var(--out-of-distribution-fg);
   border-radius: var(--radius-sm);
 }
 
