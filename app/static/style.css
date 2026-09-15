@@ -498,10 +498,152 @@ button {
   padding: var(--space-2) var(--space-3);
 }
 
-.results-placeholder-wrap {
+.results-wrap {
   margin-top: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-.results-placeholder-row {
-  padding: var(--space-2) 0;
+/* ---- shared prediction form -- result panels (checkpoint 5) ---- */
+.prediction-panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.prediction-panel h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+/* D10, DESIGN.md §3.1: prediction/probability is ALWAYS
+   --color-uncertain -- never --color-positive/--color-negative, even
+   when the number looks favorable. */
+.prediction-primary {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-uncertain);
+}
+
+.prediction-range {
+  margin: 0 0 var(--space-3);
+  color: var(--prediction-range-color);
+  font-size: var(--font-size-base);
+}
+
+.base-rate-line {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.evidence-badge,
+.calibration-badge,
+.propensity-band-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  margin-inline-end: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.badge-icon {
+  font-size: var(--font-size-xs);
+}
+
+.evidence-badge.evidence-low {
+  background: var(--evidence-low-bg);
+  color: var(--evidence-low-fg);
+}
+
+.evidence-badge-message {
+  flex-basis: 100%;
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+}
+
+.calibration-badge.calibrated {
+  background: var(--calibrated-bg);
+  color: var(--calibrated-fg);
+}
+
+.calibration-badge.uncalibrated {
+  background: var(--uncalibrated-bg);
+  color: var(--uncalibrated-fg);
+}
+
+/* propensity_band is neutral information, never green/red (D10) --
+   all three bands share the same uncertain-family treatment; only the
+   icon/label distinguish them (§3.2: "אין הסתמכות על צבע בלבד"). */
+.propensity-band-badge {
+  background: var(--evidence-low-bg);
+  color: var(--color-text);
+}
+
+.ood-banner {
+  background: var(--out-of-distribution-bg);
+  color: var(--out-of-distribution-fg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.ood-banner-title {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+}
+
+.ood-banner-reason {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-sm);
+}
+
+.ltv-leverage-tip {
+  margin: var(--space-2) 0;
+  font-size: var(--font-size-sm);
+}
+
+.model-details {
+  margin-top: var(--space-3);
+}
+
+.model-details summary {
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.model-details dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+}
+
+.model-details dt {
+  color: var(--color-muted);
+}
+
+.model-details dd {
+  margin: 0;
+}
+
+.model-details-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+
+.prediction-panel .panel-error {
+  background: var(--error-bg);
+  color: var(--error-fg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
 }

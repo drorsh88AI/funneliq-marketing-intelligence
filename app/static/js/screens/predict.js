@@ -40,6 +40,8 @@ import * as supabasePrefill from "../supabase-prefill.js";
 import * as generation from "../generation.js";
 import * as status from "../status.js";
 import * as format from "../format.js";
+import * as facts from "../facts.js";
+import { renderSummaryRecommendation } from "../summary-recommendation.js";
 import { EDITABLE_FIELDS, deriveNotClosed, validateSharedForm } from "../validation.js";
 
 const FIELD_META = {
@@ -67,6 +69,19 @@ const SOURCE_LABELS = {
   historical: "דוגמה היסטורית",
   edited: "תרחיש שנערך",
 };
+
+// checkpoint 5 -- result panels. IA.md §4, verbatim labels.
+const PROPENSITY_BAND_LABELS = {
+  below_base: "מתחת לשיעור הבסיס",
+  near_base: "סביב שיעור הבסיס",
+  above_base: "מעל שיעור הבסיס",
+};
+// Icon glyphs are this module's own choice. DESIGN.md §3.2/IA.md §10
+// require every state badge (ood-banner, evidence-badge,
+// calibration-badge, propensity-band-badge) to carry BOTH text and an
+// icon, never color alone -- but no specific glyph is locked anywhere
+// in the source docs. Plain, directional/neutral unicode symbols.
+const PROPENSITY_BAND_ICONS = { below_base: "▼", near_base: "●", above_base: "▲" };
 
 const sharedGen = generation.createGenerationCounter(); // P11-D4: ONE generation for all three predict calls
 let prefillGen = 0; // local staleness guard for the example-list fetch only
@@ -244,7 +259,7 @@ function buildOnce() {
   const clearWrap = el("div", { className: "clear-form-action" });
   container.appendChild(clearWrap);
 
-  const resultsWrap = el("div", { className: "results-placeholder-wrap" });
+  const resultsWrap = el("div", { className: "results-wrap" });
   container.appendChild(resultsWrap);
 
   nodes = { contextCheckbox, prefillBody, summaryWrap, detailsEl, fieldInputs, derivedValueEl: derived.valueEl, blockedWrap, submitButton, clearWrap, resultsWrap };
@@ -345,6 +360,327 @@ function renderClearFormAction() {
   }
 }
 
+// ---------------------------------------------------------------------
+// Checkpoint 5 -- the three result panels (P2/P3/P4).
+//
+// Content sources, all locked unless a comment says otherwise (§ד "כלל
+// תיקון מקור"):
+//   - panel layer content (primary/range/disclaimer/decision-limit):
+//     IA.md §3.4, verbatim.
+//   - the D9 four-layer summary-recommendation text (answer/meaning/
+//     action/caveat) for the SUCCESS, in-domain state: DESIGN.md §6.1's
+//     own matrix row for P2/P3/P4, verbatim, with only the {X}/{Y}/{Z}/
+//     {N} numeric placeholders filled from the live response. DESIGN's
+//     own action/caveat sentences already embed every branch §6.1א's
+//     transition table allows (calibrated/uncalibrated,
+//     above_base/near_base/below_base) as internal "אם...אחרת..."
+//     clauses -- so ONE fixed sentence per layer covers every non-OOD
+//     state without this module branching on calibration_status or
+//     propensity_band for the TEXT itself (only for which badges show).
+//   - the OOD state's four D9 layers: NOT locked anywhere -- IA.md/
+//     DESIGN.md state only constraints for this state ("no number, no
+//     segmentation action"), never exact sentences. This module's own
+//     composition, flagged inline at each panel below. The caveat layer
+//     in that branch reuses the SAME locked success-state sentence,
+//     since P2's already explicitly covers OOD ("ב-OOD אין תחזית") and
+//     P3/P4's already covers the uncalibrated case the same way calibr-
+//     ation does.
+//   - field→component mapping (what goes in model-details vs. inline):
+//     DESIGN.md §5.1-§5.3, matched field-for-field against the response.
+//   - badge display words ("מכויל"/"לא מכויל", "תמיכה חלקית בנתונים")
+//     and icon glyphs: this module's own choice -- the LOCKED vocabulary
+//     is the underlying token (calibrated/uncalibrated/low), not a
+//     specific display string or icon.
+// ---------------------------------------------------------------------
+
+// Source contradiction, flagged and resolved by explicit user decision
+// (not a silent frontend workaround, per CLAUDE.md's own source-fix
+// rule): IA.md's state table promises "ניסיון חוזר" on a per-panel
+// prediction failure; DESIGN.md §2.1's parallel row for this same
+// screen omits it (unlike every other row in that table). Resolved:
+// a failed panel's retry button re-submits ALL THREE predictions
+// (submitForm(), the same action as the main button) rather than
+// retrying only that one model's own request.
+function panelFailureMessage(result) {
+  if (result.reason === "unavailable") return "השירות אינו זמין כרגע. נסו לשלוח את הטופס שוב.";
+  if (result.reason === "network") return "שגיאת רשת. נסו לשלוח את הטופס שוב.";
+  if (result.reason === "auth") return "פג תוקף ההתחברות.";
+  return "אירעה שגיאה. נסו לשלוח את הטופס שוב.";
+}
+
+/** IA.md §9.2: "בפאנל OOD: 'אין מספיק נתונים לחיזוי אמין' + הסיבה
+ * הקונקרטית (איזה שדה, מחוץ לאיזה גבול) + בלי מספר." The concrete
+ * per-field reason line's exact wording beyond the server's own
+ * `message` is this module's own composition. */
+function buildOodBanner(warnings) {
+  const banner = el("div", { className: "ood-banner", role: "alert" });
+  banner.appendChild(el("p", { className: "ood-banner-title" }, [
+    el("span", { className: "badge-icon", text: "⛔" }),
+    el("span", { text: "אין מספיק נתונים לחיזוי אמין" }),
+  ]));
+  for (const w of warnings.filter((x) => x.code === "ood_feature_out_of_range")) {
+    const meta = FIELD_META[w.feature];
+    const featureLabel = meta ? meta.label : w.feature;
+    banner.appendChild(el("p", {
+      className: "ood-banner-reason",
+      text: `${w.message} — ${featureLabel} (${format.ltr(w.feature)}): ${format.ltr(format.formatNumber(w.value))}, טווח מאומן: ${format.ltr(`${format.formatNumber(w.min)}–${format.formatNumber(w.max)}`)}`,
+    }));
+  }
+  return banner;
+}
+
+/** IA.md §5: evidence_level=null -- "המסך אינו מציג דבר". Only "low"
+ * renders anything, carrying the UnobservedBudgetWarning's own message
+ * (DESIGN.md §1.1). */
+function buildEvidenceBadge(evidenceLevel, warnings) {
+  if (evidenceLevel !== "low") return null;
+  const unobserved = warnings.find((w) => w.code === "unobserved_budget_level");
+  const badge = el("div", { className: "evidence-badge evidence-low" }, [
+    el("span", { className: "badge-icon", text: "⚠" }),
+    el("span", { text: "תמיכה חלקית בנתונים" }), // IA.md's own phrase: "מוצגים עם תמיכה חלקית"
+  ]);
+  if (unobserved) badge.appendChild(el("p", { className: "evidence-badge-message", text: unobserved.message }));
+  return badge;
+}
+
+function buildCalibrationBadge(calibrationStatus) {
+  const label = calibrationStatus === "calibrated" ? "מכויל" : "לא מכויל";
+  const icon = calibrationStatus === "calibrated" ? "✓" : "⚠";
+  return el("div", { className: `calibration-badge ${calibrationStatus}` }, [
+    el("span", { className: "badge-icon", text: icon }),
+    el("span", { text: label }),
+  ]);
+}
+
+function buildBandBadge(band) {
+  return el("div", { className: `propensity-band-badge ${band}` }, [
+    el("span", { className: "badge-icon", text: PROPENSITY_BAND_ICONS[band] }),
+    el("span", { text: PROPENSITY_BAND_LABELS[band] }),
+  ]);
+}
+
+function buildBaseRateLine(eventProbability, baseRate) {
+  const diffPoints = (eventProbability - baseRate) * 100;
+  const direction = diffPoints > 0 ? "מעל" : diffPoints < 0 ? "מתחת ל" : "בדיוק על";
+  const magnitude = format.formatNumber(Math.abs(diffPoints), { decimals: 2 });
+  return el("div", { className: "base-rate-line", text: `שיעור הבסיס: ${format.formatPercent(baseRate)} (${magnitude} נקודות ${direction})` });
+}
+
+function buildModelDetails(rows, extraNote) {
+  const details = el("details", { className: "model-details" });
+  details.appendChild(el("summary", { text: "פרטי המודל" }));
+  const dl = el("dl", {});
+  for (const [label, value] of rows) {
+    dl.appendChild(el("dt", { text: label }));
+    dl.appendChild(el("dd", { text: value }));
+  }
+  details.appendChild(dl);
+  if (extraNote) details.appendChild(el("p", { className: "model-details-note", text: extraNote }));
+  return details;
+}
+
+function p2DetailRows(d) {
+  return [
+    ["גרסת מודל", format.ltr(d.model_version)],
+    ["אלגוריתם", format.ltr(d.model_algorithm)],
+    ["שיטת אינטרוול", format.ltr(d.interval_method)],
+    ["כיסוי נומינלי", format.formatPercent(d.interval_details.nominal_coverage)],
+    ["כיסוי נמדד", format.formatPercent(d.interval_details.measured_coverage)],
+    ["MAE (CV)", format.formatNumber(d.metrics.cv.mean_mae, { decimals: 2 })],
+    ["RMSE (CV)", format.formatNumber(d.metrics.cv.mean_rmse, { decimals: 2 })],
+    ["R² (CV)", format.formatNumber(d.metrics.cv.mean_r2, { decimals: 3 })],
+    ["MAE (Holdout)", format.formatNumber(d.metrics.holdout.mae, { decimals: 2 })],
+    ["RMSE (Holdout)", format.formatNumber(d.metrics.holdout.rmse, { decimals: 2 })],
+    ["R² (Holdout)", format.formatNumber(d.metrics.holdout.r2, { decimals: 3 })],
+  ];
+}
+
+// Shared by P3 and P4 -- ClassificationMetrics (app/schemas.py) is the
+// SAME schema for both. Deliberately carries only the fields the
+// contract actually has: roc_auc/pr_auc/brier/log_loss -- B32's other
+// four metrics (Accuracy/Precision/Recall/F1) are never fetched, so
+// they can never appear here (IA.md §3.4: "B32 אינו נענה בממשק כלל").
+function p3p4DetailRows(d) {
+  return [
+    ["גרסת מודל", format.ltr(d.model_version)],
+    ["אלגוריתם", format.ltr(d.model_algorithm)],
+    ["שיטת כיול", format.ltr(d.calibration_method)],
+    ["ROC-AUC (CV)", format.formatNumber(d.metrics.cv.mean_roc_auc, { decimals: 3 })],
+    ["PR-AUC (CV)", format.formatNumber(d.metrics.cv.mean_pr_auc, { decimals: 3 })],
+    ["Brier (CV)", format.formatNumber(d.metrics.cv.mean_brier, { decimals: 3 })],
+    ["Log loss (CV)", format.formatNumber(d.metrics.cv.mean_log_loss, { decimals: 3 })],
+    ["ROC-AUC (Holdout)", format.formatNumber(d.metrics.holdout.roc_auc, { decimals: 3 })],
+    ["PR-AUC (Holdout)", format.formatNumber(d.metrics.holdout.pr_auc, { decimals: 3 })],
+    ["Brier (Holdout)", format.formatNumber(d.metrics.holdout.brier, { decimals: 3 })],
+    ["Log loss (Holdout)", format.formatNumber(d.metrics.holdout.log_loss, { decimals: 3 })],
+  ];
+}
+
+function buildP2Panel(result) {
+  const panel = el("div", { className: "prediction-panel prediction-panel-p2" });
+  panel.appendChild(el("h3", { text: "P2 — משך חיים צפוי" }));
+  if (!result.ok) {
+    panel.appendChild(status.errorElement(panelFailureMessage(result), { onRetry: submitForm }));
+    return panel;
+  }
+  const d = result.data;
+  const evidenceBadge = buildEvidenceBadge(d.evidence_level, d.warnings);
+  if (evidenceBadge) panel.appendChild(evidenceBadge);
+
+  if (!d.in_training_domain) {
+    panel.appendChild(buildOodBanner(d.warnings));
+    panel.appendChild(renderSummaryRecommendation({
+      // OOD state -- this module's own composition (see header comment).
+      answer: "אין תחזית — הקלט הנוכחי מחוץ לתחום שעליו אומן מודל ה-LTV",
+      meaning: "המודל יודע להעריך אורך חיים רק עבור קלט בטווחים שראה באימון; קלט חריג אינו ניתן להערכה אמינה",
+      action: "יש לבדוק את השדות המסומנים למטה מול הטווח המאומן, לתקן במידת הצורך ולשלוח שוב",
+      caveat: "זהו טווח אי־ודאות, לא הבטחה. ב־OOD אין תחזית; בתמיכה חלקית אין החלטת פילוח לפי המודל בלבד",
+    }));
+    panel.appendChild(buildModelDetails(p2DetailRows(d)));
+    return panel;
+  }
+
+  const rounded = Math.round(d.point_estimate);
+  const lower = Math.round(d.lower_bound);
+  const upper = Math.round(d.upper_bound);
+  panel.appendChild(el("p", { className: "prediction-primary", text: `תחזית: ${format.formatNumber(rounded)} חודשים` }));
+  panel.appendChild(el("p", { className: "prediction-range", text: `טווח חיזוי משוער: ${format.formatNumber(lower)}–${format.formatNumber(upper)} חודשים` }));
+
+  // P11-D15: hidden ALONE on facts.json load failure or a
+  // model_versions.P2 mismatch against this live response's own
+  // model_version -- never affects the prediction above.
+  const leverage = facts.getLtvLeverage(d.model_version);
+  if (leverage && leverage.dominant_feature) {
+    const featureMeta = FIELD_META[leverage.dominant_feature];
+    const featureLabel = featureMeta ? featureMeta.label : leverage.dominant_feature;
+    panel.appendChild(el("p", {
+      className: "ltv-leverage-tip",
+      text: `לפי שלושת המודלים שנבחנו, הפיצ'ר המשפיע ביותר על אורך חיי הלקוח הוא ${featureLabel} (${format.ltr(leverage.dominant_feature)}).`,
+    }));
+    panel.appendChild(el("p", {
+      className: "model-disclaimer",
+      text: "feature importance מתאר על מה המודל נשען, ואינו מוכיח סיבתיות; שינוי הפיצ'ר אינו מבטיח שינוי בתוצאה.",
+    }));
+  }
+
+  panel.appendChild(renderSummaryRecommendation({
+    answer: `תחזית: ${format.formatNumber(rounded)} חודשים, טווח: ${format.formatNumber(lower)}–${format.formatNumber(upper)} חודשים`,
+    meaning: "הערכה לאורך החיים הכולל של לקוח שנרכש בקמפיין שהסתיים. במודלים שאומנו על הנתונים ההיסטוריים, מספר השיחות הממוצע עד סגירה היה האות החזק ביותר, אך אינו מוכיח שיותר שיחות מאריכות קשר",
+    action: "כשהקלט בתחום ואינו מסומן בתמיכה חלקית, להשתמש באומדן בזהירות לתכנון ופילוח; לבחון שינוי במדיניות השיחות רק בניסוי שמודד שימור בפועל",
+    caveat: "זהו טווח אי־ודאות, לא הבטחה. ב־OOD אין תחזית; בתמיכה חלקית אין החלטת פילוח לפי המודל בלבד",
+  }));
+
+  panel.appendChild(buildModelDetails(p2DetailRows(d)));
+  return panel;
+}
+
+function buildP3Panel(result) {
+  const panel = el("div", { className: "prediction-panel prediction-panel-p3" });
+  panel.appendChild(el("h3", { text: "P3 — נטייה לאפסייל" }));
+  if (!result.ok) {
+    panel.appendChild(status.errorElement(panelFailureMessage(result), { onRetry: submitForm }));
+    return panel;
+  }
+  const d = result.data;
+  const evidenceBadge = buildEvidenceBadge(d.evidence_level, d.warnings);
+  if (evidenceBadge) panel.appendChild(evidenceBadge);
+
+  if (!d.in_training_domain) {
+    panel.appendChild(buildOodBanner(d.warnings));
+    panel.appendChild(renderSummaryRecommendation({
+      // OOD state -- this module's own composition (see header comment).
+      answer: "אין תוצאה — הקלט הנוכחי מחוץ לתחום שעליו אומן המודל",
+      meaning: "המודל יודע להעריך נטייה לאפסייל רק עבור קלט בטווחים שראה באימון; קלט חריג אינו ניתן להערכה אמינה",
+      action: "יש לבדוק את השדות המסומנים למטה מול הטווח המאומן, לתקן במידת הצורך ולשלוח שוב",
+      caveat: "כשהתוצאה מכוילת, זהו אומדן הסתברותי מנתוני סוף קמפיין; אם אינה מכוילת, אין לפרש אותה כהסתברות ואין לפעול לפיה. אין הבטחה או השפעה סיבתית",
+    }));
+    panel.appendChild(buildModelDetails(p3p4DetailRows(d), "מגבלה מדווחת: עקומת הכיול אינה מונוטונית באזור האמצע"));
+    return panel;
+  }
+
+  panel.appendChild(buildBandBadge(d.propensity_band));
+  panel.appendChild(buildBaseRateLine(d.event_probability, d.base_rate));
+  panel.appendChild(buildCalibrationBadge(d.calibration_status));
+
+  const pct = format.formatPercent(d.event_probability);
+  panel.appendChild(el("p", { className: "prediction-primary", text: `נטייה לאפסייל: ${pct}` }));
+
+  if (d.calibration_status === "uncalibrated") {
+    panel.appendChild(el("p", { className: "model-disclaimer", text: "הציון אינו מכויל; אין לפרש אותו כהסתברות ואין לפעול לפיו." }));
+  }
+
+  const diffPoints = (d.event_probability - d.base_rate) * 100;
+  const direction = diffPoints > 0 ? "מעל" : diffPoints < 0 ? "מתחת ל" : "בדיוק על";
+  panel.appendChild(renderSummaryRecommendation({
+    answer: `נטייה לאפסייל: ${pct}, ${format.formatNumber(Math.abs(diffPoints), { decimals: 2 })} נקודות ${direction} שיעור הבסיס`,
+    meaning: "התוצאה מציבה את התרחיש מעל, סביב או מתחת לשיעור האפסייל שנמדד באוכלוסיית האימון",
+    action: "רק כשהקלט בתחום, התוצאה מכוילת, אין סימון תמיכה חלקית והנטייה מעל הבסיס, אפשר לשקול פנייה אחרי בדיקה ידנית. בכל מצב אחר אין פעולה מיוחדת לפי המודל",
+    caveat: "כשהתוצאה מכוילת, זהו אומדן הסתברותי מנתוני סוף קמפיין; אם אינה מכוילת, אין לפרש אותה כהסתברות ואין לפעול לפיה. אין הבטחה או השפעה סיבתית",
+  }));
+
+  panel.appendChild(buildModelDetails(p3p4DetailRows(d), "מגבלה מדווחת: עקומת הכיול אינה מונוטונית באזור האמצע"));
+  return panel;
+}
+
+function buildP4Panel(result) {
+  const panel = el("div", { className: "prediction-panel prediction-panel-p4" });
+  panel.appendChild(el("h3", { text: "P4 — נטייה להפניה" }));
+  if (!result.ok) {
+    panel.appendChild(status.errorElement(panelFailureMessage(result), { onRetry: submitForm }));
+    return panel;
+  }
+  const d = result.data;
+  // IA.md §3.4 P4 "הסתייגות גלויה" -- unconditional, shown in every
+  // state (unlike the "מגבלת החלטה גלויה" caveat below, which is
+  // conditional on calibration_status).
+  panel.appendChild(el("p", {
+    className: "model-disclaimer",
+    text: "התחזית מעריכה את הסיכוי שהלקוח יפנה לקוחות נוספים. ציון לקוח-על, שמשלב הישארות, רכישה נוספת והפניה, מוצג במסך נפרד.",
+  }));
+
+  const evidenceBadge = buildEvidenceBadge(d.evidence_level, d.warnings);
+  if (evidenceBadge) panel.appendChild(evidenceBadge);
+
+  if (!d.in_training_domain) {
+    panel.appendChild(buildOodBanner(d.warnings));
+    panel.appendChild(renderSummaryRecommendation({
+      // OOD state -- this module's own composition (see header comment).
+      answer: "אין תוצאה — הקלט הנוכחי מחוץ לתחום שעליו אומן המודל",
+      meaning: "המודל יודע להעריך נטייה להפניה רק עבור קלט בטווחים שראה באימון; קלט חריג אינו ניתן להערכה אמינה",
+      action: "יש לבדוק את השדות המסומנים למטה מול הטווח המאומן, לתקן במידת הצורך ולשלוח שוב",
+      caveat: "אם התוצאה אינה מכוילת, אין לפרש אותה כהסתברות ואין לפעול לפיה. גם אומדן מכויל אינו הבטחה או השפעה סיבתית; זהו חיזוי הפניה בלבד, לא ציון לקוח-על",
+    }));
+    panel.appendChild(buildModelDetails(p3p4DetailRows(d), "עקומת הכיול המלאה מתועדת ב-REPORT.md."));
+    return panel;
+  }
+
+  panel.appendChild(buildBandBadge(d.propensity_band));
+  panel.appendChild(buildBaseRateLine(d.event_probability, d.base_rate));
+  panel.appendChild(buildCalibrationBadge(d.calibration_status));
+
+  const pct = format.formatPercent(d.event_probability);
+  panel.appendChild(el("p", { className: "prediction-primary", text: `נטייה להפניה: ${pct}` }));
+
+  if (d.calibration_status === "uncalibrated") {
+    panel.appendChild(el("p", { className: "model-disclaimer", text: "הציון אינו מכויל; אין לפרש אותו כהסתברות ואין לפעול לפיו." }));
+  }
+
+  // DESIGN.md §6.1's own template is "..., מול שיעור הבסיס שחזר" --
+  // this module reads that as "compared against the base_rate the
+  // response carried" and renders the actual figure for clarity; the
+  // template itself does not spell out a placeholder for it the way
+  // P3's "{N} נקודות" does. Composition choice, flagged.
+  panel.appendChild(renderSummaryRecommendation({
+    answer: `נטייה להפניה: ${pct}, מול שיעור הבסיס שחזר: ${format.formatPercent(d.base_rate)}`,
+    meaning: "התוצאה מציבה את התרחיש מעל, סביב או מתחת לשיעור ההפניה שנמדד באוכלוסיית האימון. ציון לקוח-על מוצג במסך נפרד",
+    action: "רק כשהקלט בתחום, התוצאה מכוילת, אין סימון תמיכה חלקית והנטייה מעל הבסיס, אפשר לשקול בקשת הפניה אחרי בדיקה ידנית. בכל מצב אחר אין פעולה מיוחדת לפי המודל",
+    caveat: "אם התוצאה אינה מכוילת, אין לפרש אותה כהסתברות ואין לפעול לפיה. גם אומדן מכויל אינו הבטחה או השפעה סיבתית; זהו חיזוי הפניה בלבד, לא ציון לקוח-על",
+  }));
+
+  panel.appendChild(buildModelDetails(p3p4DetailRows(d), "עקומת הכיול המלאה מתועדת ב-REPORT.md."));
+  return panel;
+}
+
 function renderResults() {
   nodes.resultsWrap.replaceChildren();
   if (submitState === "idle") return;
@@ -352,17 +688,12 @@ function renderResults() {
     nodes.resultsWrap.appendChild(status.loadingElement("שולח לחיזוי…"));
     return;
   }
-  // Checkpoint 5 replaces this with the real three prediction-panel
-  // components. This checkpoint only proves the request mechanism --
-  // per-panel success/failure genuinely captured and independent
-  // (IA.md §3.3 step 5).
-  for (const [key, labelHe] of [["ltv", "P2"], ["upsell", "P3"], ["referral", "P4"]]) {
-    const r = submitResults[key];
-    const row = el("div", { className: "results-placeholder-row" });
-    row.appendChild(el("strong", { text: `${labelHe}: ` }));
-    row.appendChild(el("span", { text: r.ok ? "התקבלה תשובה" : `כשל (${r.reason})` }));
-    nodes.resultsWrap.appendChild(row);
-  }
+  // Per-panel independence (IA.md §3.3 step 5 / DESIGN.md §2.1): each
+  // panel renders from its OWN api.js result -- a failure or OOD state
+  // in one never removes or blocks the other two.
+  nodes.resultsWrap.appendChild(buildP2Panel(submitResults.ltv));
+  nodes.resultsWrap.appendChild(buildP3Panel(submitResults.upsell));
+  nodes.resultsWrap.appendChild(buildP4Panel(submitResults.referral));
 }
 
 /** Refreshes every part of the screen EXCEPT the field <input>
@@ -445,10 +776,14 @@ async function submitForm() {
   updateDynamic();
 
   const payload = { ...form.values, not_closed: deriveNotClosed(form.values) };
+  // facts.init() rides along so P2's optional leverage tip (P11-D15)
+  // has business_facts.json ready by the time results render -- it is
+  // idempotent and never affects the three predictions themselves.
   const [ltv, upsell, referral] = await Promise.all([
     api.predictLtv(payload),
     api.predictUpsell(payload),
     api.predictReferral(payload),
+    facts.init(),
   ]);
 
   if (!sharedGen.isCurrent(myGen)) return; // superseded (edit/clear/new example/session change) while in flight
