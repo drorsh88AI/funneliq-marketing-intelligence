@@ -38,7 +38,17 @@ def test_nine_interface_routes_all_wired_in_frontend():
     routes from openapi.json plus /api/config and /api/me from
     app.auth's own router -- must each appear as a literal path string
     in the frontend, sourced from real introspection rather than a
-    third hand-typed list."""
+    third hand-typed list.
+
+    Second-pass self-review, 2026-09-15 (no external reviewer
+    available): the first draft only checked substring presence
+    anywhere in the file, which a code COMMENT mentioning a path would
+    also satisfy -- caught in this same file's own
+    test_no_service_key_used_to_build_a_second_supabase_client, whose
+    first draft counted "createClient(" and was fooled by exactly this.
+    Tightened here to require each path appear specifically as the
+    first argument of postJson(/getJson(/fetch( -- an actual call site,
+    not a comment mentioning the route in passing."""
     business = _business_routes()
     auth_paths = _auth_routes()
     assert len(business) == 7, f"expected 7 locked business routes, found {business}"
@@ -47,11 +57,13 @@ def test_nine_interface_routes_all_wired_in_frontend():
 
     api_js_text = API_JS.read_text(encoding="utf-8")
     for path in business:
-        assert f'"{path}"' in api_js_text, f"{path} not wired in api.js"
+        pattern = re.compile(r'(?:postJson|getJson)\(\s*"' + re.escape(path) + r'"')
+        assert pattern.search(api_js_text), f"{path} is not called via postJson(/getJson( in api.js (comment mention doesn't count)"
 
     bootstrap_text = BOOTSTRAP_JS.read_text(encoding="utf-8")
     for path in auth_paths:
-        assert f'"{path}"' in bootstrap_text, f"{path} not wired in bootstrap.js"
+        pattern = re.compile(r'fetch\(\s*"' + re.escape(path) + r'"')
+        assert pattern.search(bootstrap_text), f"{path} is not called via fetch( in bootstrap.js (comment mention doesn't count)"
 
 
 def test_every_business_call_attaches_a_bearer_token():
@@ -60,10 +72,20 @@ def test_every_business_call_attaches_a_bearer_token():
     not just Supabase's own RLS-enforced reads. api.js's shared call()
     wrapper is the ONE place this is built; checked as exactly one
     function so a future second call-building path can't quietly skip
-    it."""
+    it.
+
+    Second-pass self-review, 2026-09-15: the first draft searched the
+    Authorization pattern across the WHOLE file, which would still pass
+    even if it only existed in a comment or dead code while the real
+    call() body had lost it. Tightened to search specifically within
+    call()'s own body (from its declaration to the next top-level
+    function), the same class of gap the route-wiring test above had."""
     text = API_JS.read_text(encoding="utf-8")
-    assert re.search(r"Authorization:\s*`Bearer \$\{", text), (
-        "api.js's call() must attach 'Authorization: Bearer ${...}' to every request"
+    start = text.index("async function call(")
+    end = text.index("\nfunction postJson(", start)
+    call_body = text[start:end]
+    assert re.search(r"Authorization:\s*`Bearer \$\{", call_body), (
+        "call()'s own body must attach 'Authorization: Bearer ${...}' to every request"
     )
     assert len(re.findall(r"async function call\(", text)) == 1
 
@@ -72,10 +94,17 @@ def test_no_secret_key_anywhere_in_shipped_frontend():
     """CLAUDE.md's own locked decision: anon/publishable key in the
     browser only, service/secret key confined to scripts/*.py and never
     shipped to app/static/. Static grep across every JS file actually
-    served to the browser (not just api.js) plus index.html."""
+    served to the browser plus index.html.
+
+    Second-pass self-review, 2026-09-15: the first draft scanned only
+    STATIC_JS.rglob("*.js") -- app/static/js/**/*.js -- which silently
+    MISSES app/static/app.js itself (the SPA entry point, one directory
+    up from app/static/js/), the file that wires the Supabase client
+    and every screen's auth-gated bootstrap. Fixed to scan STATIC_DIR
+    (app/static/) recursively instead, so app.js is included."""
     forbidden = re.compile(r"service_role|SUPABASE_SECRET|sk-[a-zA-Z0-9]|-----BEGIN", re.IGNORECASE)
     offenders = []
-    for path in STATIC_JS.rglob("*.js"):
+    for path in STATIC_DIR.rglob("*.js"):
         if forbidden.search(path.read_text(encoding="utf-8")):
             offenders.append(str(path.relative_to(REPO_ROOT)))
     index_html = STATIC_DIR / "index.html"
@@ -84,38 +113,71 @@ def test_no_secret_key_anywhere_in_shipped_frontend():
     assert not offenders, f"secret-like pattern found in: {offenders}"
 
 
-# Per-screen-file MINIMUM summary-recommendation call count, matching
-# the known target->file mapping (never a single global magic number,
-# so one legitimate future call site doesn't force an unrelated edit
-# here): Overview(1) + P2/P3/P4(3, each >=1 even though every one of
-# them actually carries 2 -- success AND OOD branches) + P4S(1) +
-# Budget Simulator(1) + Follow-up's two graphs(2) = the 8 targets
-# PHASE10.md's own D9 names.
-SCREEN_FILES_MIN_TARGETS = {
-    "overview.js": 1,
-    "predict.js": 3,
-    "super-customer.js": 1,
-    "budget.js": 1,
-    "followup.js": 2,
-}
+def _function_body(text: str, func_name: str, next_func_name: str | None) -> str:
+    """Slice from `function func_name(`'s declaration to the next named
+    function's declaration (or EOF if `next_func_name` is None). Robust
+    to line-number drift, unlike hardcoding offsets."""
+    start = text.index(f"function {func_name}(")
+    end = text.index(f"function {next_func_name}(", start) if next_func_name else len(text)
+    return text[start:end]
+
+
+# Single-target files: per-file presence is already exactly per-target
+# (no aggregation blind spot -- see the multi-target files below).
+SINGLE_TARGET_FILES = ["overview.js", "super-customer.js", "budget.js"]
+
+# Multi-target files: (target label, owning function, next function to
+# bound the slice). Second-pass self-review, 2026-09-15 (no external
+# reviewer available): the original version of this test only checked a
+# per-FILE minimum count (predict.js >= 3, followup.js >= 2) -- which
+# would still pass even if one target's own call were entirely missing,
+# as long as ANOTHER target in the same file happened to call it an
+# extra time (e.g. a duplicate in P2's own branch masking a missing
+# call in P4's). Rewritten to slice each target's own function body by
+# name and check it individually, closing that blind spot -- the same
+# class of gap test_nine_interface_routes_all_wired_in_frontend and
+# test_every_business_call_attaches_a_bearer_token had, both already
+# tightened above in this same review pass.
+MULTI_TARGET_FUNCTIONS = [
+    ("predict.js", "P2", "buildP2Panel", "buildP3Panel"),
+    ("predict.js", "P3", "buildP3Panel", "buildP4Panel"),
+    ("predict.js", "P4", "buildP4Panel", "renderResults"),
+    ("followup.js", "dropout", "buildStagesGroup", "computeStagesD9"),
+    ("followup.js", "calls_to_closed", "buildCallsGroup", "computeCallsD9"),
+]
 
 
 def test_summary_recommendation_wired_for_all_eight_targets():
     """PHASE10.md D9 / DESIGN.md §6: all eight targets carry a
-    summary-recommendation. IA.md's own rule that a D9 layer is never
-    optional means every state branch (not just the success path)
-    should call it -- checked here as a minimum, not an exact count,
-    since OOD/success branches legitimately double some files' calls."""
+    summary-recommendation, checked per TARGET (not per file) so one
+    target's own call can never be substituted by another's."""
     screens_dir = STATIC_JS / "screens"
-    total_targets = 0
-    for filename, min_targets in SCREEN_FILES_MIN_TARGETS.items():
+    covered = 0
+
+    for filename in SINGLE_TARGET_FILES:
         text = (screens_dir / filename).read_text(encoding="utf-8")
-        call_count = len(re.findall(r"renderSummaryRecommendation\(", text))
-        assert call_count >= min_targets, (
-            f"{filename}: expected >= {min_targets} renderSummaryRecommendation call(s), found {call_count}"
+        assert "renderSummaryRecommendation(" in text, f"{filename}: no summary-recommendation call found"
+        covered += 1
+
+    file_text_cache: dict[str, str] = {}
+    for filename, target_label, func_name, next_func_name in MULTI_TARGET_FUNCTIONS:
+        text = file_text_cache.setdefault(filename, (screens_dir / filename).read_text(encoding="utf-8"))
+        body = _function_body(text, func_name, next_func_name)
+        # computeStagesD9/computeCallsD9's OWN body (not their caller
+        # buildStagesGroup/buildCallsGroup) is what actually builds the
+        # D9 props object -- but the CALL to renderSummaryRecommendation
+        # happens in the caller. Include both: the caller function's
+        # body already spans up to the next declared function, which
+        # for buildStagesGroup/buildCallsGroup is exactly
+        # computeStagesD9/computeCallsD9's own declaration line (not its
+        # body) -- so the call site itself (inside the caller) is
+        # captured correctly by this slice.
+        assert "renderSummaryRecommendation(" in body, (
+            f"{filename} ({target_label}): no summary-recommendation call found in {func_name}()"
         )
-        total_targets += min_targets
-    assert total_targets == 8
+        covered += 1
+
+    assert covered == 8
 
 
 def test_no_service_key_used_to_build_a_second_supabase_client():
