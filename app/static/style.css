@@ -137,7 +137,20 @@ button {
 }
 
 /* ---- authenticated-shell (screens 2-6, DESIGN.md 1.4) ---- */
-#authenticated-shell {
+/* checkpoint 11 (E2E) finding, caught by the FIRST real-browser test
+   ever run against this app: an ID selector's own `display` beats the
+   browser's UA-stylesheet `[hidden] { display: none }` rule on
+   specificity (100 vs 10), so `hidden` on this element had ZERO visual
+   effect since checkpoint 1 -- an unauthenticated visitor saw the full
+   nav bar and sign-out button behind/around the Login form, not just
+   Login alone (violates CP1's own "מבקר לא מאומת רואה רק Login"
+   acceptance line). No fake-DOM harness or CSS-token test could ever
+   have caught this -- none of them compute real CSS cascade/
+   specificity. `:not([hidden])` scopes this rule to apply only when
+   NOT hidden, so the UA default correctly takes over otherwise --
+   :not([hidden]) never appeared anywhere else in this file before, so
+   this is a genuine gap, not a missed instance of an existing idiom. */
+#authenticated-shell:not([hidden]) {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -155,7 +168,11 @@ button {
 
 /* app-nav: horizontal, the five connected screens side by side
    (DESIGN.md §1.4 row for authenticated-shell layout). */
-#app-nav {
+/* Same checkpoint-11 finding as #authenticated-shell above -- this
+   element's own `hidden` attribute (set before the first 200 from
+   /api/me, per P11-D13's seven-branch bootstrap) had zero visual
+   effect for the identical reason. */
+#app-nav:not([hidden]) {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
