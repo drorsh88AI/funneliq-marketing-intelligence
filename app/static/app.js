@@ -21,6 +21,7 @@ import * as overviewScreen from "./js/screens/overview.js";
 import * as predictScreen from "./js/screens/predict.js";
 import * as superCustomerScreen from "./js/screens/super-customer.js";
 import * as budgetScreen from "./js/screens/budget.js";
+import * as followupScreen from "./js/screens/followup.js";
 
 const els = {
   loading: document.getElementById("loading"),
@@ -95,6 +96,9 @@ function showRoute(route) {
   }
   if (route === "budget") {
     budgetScreen.show(document.getElementById("screen-budget"));
+  }
+  if (route === "followup") {
+    followupScreen.show(document.getElementById("screen-followup"));
   }
 }
 
