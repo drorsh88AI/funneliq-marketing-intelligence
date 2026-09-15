@@ -16,25 +16,27 @@
 //     Simulator row, verbatim -- this row carries NO {X}/{Y}
 //     placeholders (unlike P2/P3/P4/P4S's own rows), because it
 //     describes the CURRENT, frozen-model state as fixed prose, not a
-//     live-response template. The "meaning"/"action" layers' "322
-//     שורות" figure comes from business_facts.json (budget_backtest) --
-//     degraded gracefully (P11-D15) if that asset fails to load or
-//     model_versions.P6 does not match, same pattern as
-//     super-customer.js's own D9 "meaning" fallback. The overlap-
+//     live-response template. The "meaning"/"action" layers' "פי 8.60"
+//     / "322 שורות" figures come from business_facts.json
+//     (budget_backtest) -- degraded gracefully (P11-D15) if that asset
+//     fails to load or model_versions.P6 does not match, same pattern
+//     as super-customer.js's own D9 "meaning" fallback. The overlap-
 //     alert's OWN separate "וטו + פיילוט" paragraph is gated even more
 //     strictly (hidden outright, not degraded) -- IA.md §6 / DESIGN.md's
 //     P11-D15-extended note are explicit that a backtest failure hides
 //     that whole recommendation and forbids substituting a rank-only
 //     one in its place.
-//   ⛔ PENDING (review round, 2026-09-15): the "8.59"/"פי X"
-//     overestimate-ratio figure that SPEC.md/IA.md/DESIGN.md all cite
-//     is NOT rendered anywhere in this file right now. Standard
-//     rounding of the live ratio, AND of SPEC.md's own stated inputs
-//     for it, both give 8.60 -- this looks like a pre-existing
-//     documentation arithmetic error, not a frontend bug, and
-//     PHASE11.md §ב forbids resolving it silently in this module. See
-//     buildOverlapAlert()'s own comment for the full derivation. Do not
-//     reintroduce a computed ratio here without an approved decision.
+//   ⚠ RESOLVED (review round, 2026-09-15, explicit user decision): the
+//     overestimate-ratio figure was originally documented everywhere as
+//     "8.59", but standard rounding of the live ratio
+//     (predicted_per_customer/actual_mean_per_customer at level 500) --
+//     and of SPEC.md's own stated inputs for it -- both give 8.60, a
+//     pre-existing documentation arithmetic error, not a frontend bug
+//     (PHASE11.md §ב forbids resolving such a thing silently in this
+//     module, which an earlier Math.floor "fix" had wrongly done). The
+//     user's decision: show whatever the real calculation produces.
+//     SPEC.md/IA.md/DESIGN.md were corrected from "8.59" to "8.60" to
+//     match. See buildOverlapAlert()'s own comment for the derivation.
 //   - model-details rows: DESIGN.md §5.4/§6 (RegressionMetrics + the
 //     locked interval_method/bootstrap fields).
 
@@ -89,10 +91,10 @@ function compositionText(allocations) {
     .join(" + ");
 }
 
-/** The veto+pilot recommendation's quantitative backing (8.59, 322 rows)
+/** The veto+pilot recommendation's quantitative backing (8.60, 322 rows)
  * is business_facts.json's own budget_backtest -- IA.md §6 + DESIGN.md's
  * P11-D15-extended note are explicit that a load failure or
- * model_versions.P6 mismatch hides "המלצת התקציב והמספר 8.59" TOGETHER,
+ * model_versions.P6 mismatch hides "המלצת התקציב והמספר 8.60" TOGETHER,
  * "אין להחליפם בהמלצה לפי rank בלבד" (must not substitute a rank-only
  * recommendation). So unlike super-customer.js's/this screen's own D9
  * "meaning" layer (which degrades to a NUMBER-FREE sentence), this
@@ -117,25 +119,19 @@ function buildOverlapAlert(sim) {
   }
 
   if (backtest && backtest["500"] && backtest["2000"]) {
-    // ⛔ PENDING: the specific "פי X" overestimate-ratio figure is
-    // deliberately OMITTED here, not computed. Review finding, agreed:
-    // standard rounding of the live ratio (predicted_per_customer /
-    // actual_mean_per_customer at level 500 = 8.595179...) gives 8.60
-    // in both JS and Python; SPEC.md/IA.md/DESIGN.md all cite "8.59".
-    // The earlier fix (Math.floor truncation to force "8.59") was
-    // itself wrong -- a silent frontend workaround of a source/live
-    // contradiction, exactly what PHASE11.md §ב forbids ("אין לעקוף
-    // בקוד ה-frontend"). Worse: SPEC.md's OWN stated inputs for this
-    // figure (7,895.94 / 918.65) already divide out to 8.595 -> 8.60,
-    // not 8.59 -- so this looks like a pre-existing arithmetic error in
-    // the documentation itself, not something this module can resolve.
-    // Per PHASE11.md §ב: stop, do not guess, await an approved decision
-    // (fix the docs' "8.59", or accept 8.60 and update SPEC/IA/DESIGN).
-    // n_train_at_level (322 for the 25×2,000 pilot) is NOT in question
-    // -- that figure is unrelated to the disputed ratio and stays.
+    // Resolved by explicit user decision (2026-09-15), per PHASE11.md
+    // §ב's own two clean options: the display shows whatever the real
+    // calculation produces, not a value chosen to match a prior
+    // document. Standard rounding (this module's usual
+    // format.formatNumber, decimals: 2 -- no Math.floor) of the live
+    // ratio (predicted_per_customer / actual_mean_per_customer at
+    // level 500) gives 8.60. SPEC.md/IA.md/DESIGN.md were corrected
+    // from "8.59" to "8.60" to match (all three cited the same,
+    // apparently pre-existing, arithmetic slip).
+    const ratio = format.formatNumber(backtest["500"].predicted_per_customer / backtest["500"].actual_mean_per_customer, { decimals: 2 });
     const n2000 = format.formatNumber(backtest["2000"].n_train_at_level);
     wrap.appendChild(el("p", {
-      text: `100×500 מדורגת ראשונה מספרית, אך אינה המלצה: הטווח שלה חופף ל-25×2,000, ובבדיקת עבר רמת 500 התחזית הוערכה גבוה משמעותית מהתוצאה בפועל (המכפיל המדויק ממתין להכרעה — ר' הערת קוד; ${format.ltr(n2000)} שורות אימון ב-25×2,000). אין לבצע לפיה הקצאה מלאה; אם בוחנים חלופה, ההמלצה היא פיילוט מבוקר של 25×2,000.`,
+      text: `100×500 מדורגת ראשונה מספרית, אך אינה המלצה: הטווח שלה חופף ל-25×2,000, ובבדיקת עבר רמת 500 הוערכה פי ${format.ltr(ratio)} מהתוצאה בפועל (${format.ltr(n2000)} שורות אימון ב-25×2,000). אין לבצע לפיה הקצאה מלאה; אם בוחנים חלופה, ההמלצה היא פיילוט מבוקר של 25×2,000.`,
     }));
   }
   // Asset unavailable/mismatched: no substitute rank-based
@@ -231,32 +227,28 @@ function buildModelDetails(sim) {
 }
 
 /** DESIGN.md §6.1's own Budget Simulator row -- fixed prose, no
- * placeholders. Only the "meaning" layer's specific figures (8.59,
- * 322) depend on business_facts.json; degrades gracefully (P11-D15,
- * same pattern as super-customer.js's own D9 "meaning" fallback) if
- * that asset failed to load or model_versions.P6 does not match this
- * response's own model_version. */
+ * placeholders. Only the "meaning"/"action" layers' specific figures
+ * (8.60, 322) depend on business_facts.json; degrades gracefully
+ * (P11-D15, same pattern as super-customer.js's own D9 "meaning"
+ * fallback) if that asset failed to load or model_versions.P6 does not
+ * match this response's own model_version. */
 function buildD9(sim) {
   const backtest = facts.getBudgetBacktest(sim.model_version);
   let meaning;
   let action;
   if (backtest && backtest["500"] && backtest["2000"]) {
-    // ⛔ PENDING (review finding, agreed -- see buildOverlapAlert's own,
-    // longer comment): standard rounding of this live ratio gives 8.60,
-    // not the "8.59" all three source docs cite, and SPEC.md's own
-    // stated inputs for the figure (7,895.94 / 918.65) already divide
-    // out to 8.60 too -- looks like a pre-existing documentation
-    // arithmetic error, not something to silently paper over with a
-    // non-standard rounding method (the earlier Math.floor "fix" was
-    // itself wrong, per PHASE11.md §ב). The number is a plain
-    // "אינו זמין כרגע" pending statement until that is resolved.
+    // Resolved by explicit user decision (2026-09-15) -- see
+    // buildOverlapAlert()'s own comment for the full derivation.
+    // Standard rounding, no Math.floor: gives 8.60, matching
+    // SPEC.md/IA.md/DESIGN.md after their own correction from "8.59".
     // "×" used here and in the fixed layers below, in place of DESIGN.md's
     // own code-formatted "100x500"/"25x2000" tokens -- for visual
     // consistency with compositionText()'s own "×" formatting elsewhere
     // on this screen (strategy-table, chart). No wording otherwise
     // deviates from the locked cells (DESIGN.md §6.1's own Budget
     // Simulator row), including their own lack of trailing punctuation.
-    meaning = "הדירוג לבדו אינו מכריע: טווחי 100×500 ו־25×2,000 חופפים, ובבדיקת עבר התחזית לרמת 500 הייתה גבוהה משמעותית מהתוצאה בפועל (המכפיל המדויק ממתין להכרעה)";
+    const ratio = format.formatNumber(backtest["500"].predicted_per_customer / backtest["500"].actual_mean_per_customer, { decimals: 2 });
+    meaning = `הדירוג לבדו אינו מכריע: טווחי 100×500 ו־25×2,000 חופפים, ובבדיקת עבר התחזית לרמת 500 הייתה גבוהה פי ${format.ltr(ratio)} מהתוצאה בפועל`;
     const n2000 = format.formatNumber(backtest["2000"].n_train_at_level);
     action = `לא לבצע הקצאה מלאה לפי הדירוג. אם בוחנים אחת מארבע החלופות, לבצע פיילוט מבוקר של 25×2,000, שלה ${format.ltr(n2000)} שורות אימון ובדיקת עבר קרובה יותר`;
   } else {
