@@ -380,6 +380,24 @@ button {
   font-size: var(--model-disclaimer-font-size);
 }
 
+/* checkpoint 9 self-review finding, 2026-09-15: the STANDALONE
+   .model-disclaimer class -- used on its own <p> across predict.js
+   (P2 leverage caveat, P3/P4 uncalibrated warnings), super-customer.js
+   (P4S disclaimer) and budget.js (the always-visible summary), distinct
+   from D9's own internal caveat layer above -- had NO CSS rule at all
+   since checkpoint 5. Every one of those paragraphs rendered as plain,
+   undifferentiated body text: DESIGN.md's own component table requires
+   "טיפוגרפיה משנית שאינה מוסתרת" (secondary typography, smaller but
+   never hidden) for this exact component. Same tokens as the D9 caveat
+   layer above -- both represent the same semantic content by DESIGN's
+   own reasoning ("model-disclaimer (מבנה דומה)" is how §3א.6's
+   business-context-card describes borrowing this same treatment). */
+.model-disclaimer {
+  color: var(--model-disclaimer-fg);
+  font-size: var(--model-disclaimer-font-size);
+  margin: var(--space-2) 0;
+}
+
 /* ---- shared prediction form -- input side (checkpoint 4) ---- */
 .context-confirmation {
   margin-bottom: var(--space-4);
