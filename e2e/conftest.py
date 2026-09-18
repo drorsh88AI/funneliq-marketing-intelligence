@@ -244,17 +244,35 @@ def mocked_context(app_server, browser):
     """One BrowserContext per test (⛔ never Page-level routing --
     PHASE11.md §ו), service workers blocked at creation, the
     always-mocked externals installed. `unexpected_requests` is a list
-    the test can assert is empty at the end -- any URL that fell through
-    to default_deny lands here, turning a missed mock into a loud
-    assertion failure instead of a silently-aborted request nobody
-    noticed."""
+    of every URL that fell through to default_deny.
+
+    ⚠ Self-review finding, 2026-09-18: of the 30 falsification-case
+    tests built on this fixture, only ONE (case 6) ever actually
+    asserted `unexpected_requests == []` itself -- the other 29 relied
+    on it only implicitly (an unmocked request usually, but not
+    provably, stalls whatever selector the test is waiting for into a
+    timeout instead). Enforced automatically here instead of trusting
+    every future test to remember: teardown fails loudly if anything
+    landed in default_deny and the test never acknowledged it. The one
+    test that deliberately WANTS a default_deny hit
+    (test_default_deny_actually_blocks_an_unmocked_request) opts out by
+    setting `context.allow_unexpected_requests = True` before it ends."""
     context = browser.new_context(service_workers="block")
     unexpected_requests: list[str] = []
     install_network_mocks(context, unexpected_requests=unexpected_requests)
     context.unexpected_requests = unexpected_requests  # type: ignore[attr-defined]
     context.e2e_base_url = app_server  # type: ignore[attr-defined]
-    yield context
-    context.close()
+    context.allow_unexpected_requests = False  # type: ignore[attr-defined]
+    try:
+        yield context
+    finally:
+        context.close()
+    if not context.allow_unexpected_requests:  # type: ignore[attr-defined]
+        assert unexpected_requests == [], (
+            f"unexpected network requests reached default_deny and were never "
+            f"acknowledged by the test (set context.allow_unexpected_requests = "
+            f"True if this one is deliberate): {unexpected_requests}"
+        )
 
 
 @pytest.fixture

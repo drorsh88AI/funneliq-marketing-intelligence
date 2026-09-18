@@ -36,6 +36,7 @@ def _fill_and_open_predict_form(page):
 def test_case_2_field_edit_while_submitting_discards_the_late_response(mocked_page, mocked_context):
     """2. שליחה → שינוי שדה בזמן בקשה ⇒ התשובה המאוחרת אינה מרונדרת."""
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/me", fx.api_me())
     sign_in_and_wait(mocked_page, mocked_context)
     _fill_and_open_predict_form(mocked_page)
@@ -71,6 +72,7 @@ def test_case_2_field_edit_while_submitting_discards_the_late_response(mocked_pa
 def test_case_5_two_submissions_old_returns_last_only_new_renders(mocked_page, mocked_context):
     """5. שתי שליחות רצופות באותו מסך, הישנה חוזרת אחרונה ⇒ מרונדרת רק החדשה."""
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/me", fx.api_me())
     sign_in_and_wait(mocked_page, mocked_context)
     _fill_and_open_predict_form(mocked_page)

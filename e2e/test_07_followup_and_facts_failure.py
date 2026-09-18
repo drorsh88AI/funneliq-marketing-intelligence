@@ -39,6 +39,7 @@ def test_case_22_business_facts_load_failure_hides_only_dependent_content(mocked
     budget.js's backtest recommendation -- the two live consumers."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_status(mocked_context, "**/business_facts.json", 500)
     route_json(mocked_context, "**/api/predict/ltv", fx.ltv_prediction_success())
     route_json(mocked_context, "**/api/predict/upsell", fx.propensity_prediction_success())
@@ -70,6 +71,7 @@ def test_case_23_followup_partial_failure_shows_available_marks_missing_no_numbe
     מסומן, אין מספר שמור."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(
         mocked_context, "**/api/insights/followup",
         fx.followup_response(stages=fx.followup_stages_available(), calls=fx.followup_calls_unavailable()),

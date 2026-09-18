@@ -69,3 +69,4 @@ def test_default_deny_actually_blocks_an_unmocked_request(mocked_context):
     )
     assert "rejected" in result
     assert any("example-unmocked-host.invalid" in u for u in mocked_context.unexpected_requests)
+    mocked_context.allow_unexpected_requests = True  # this hit is the whole point of the test

@@ -7,8 +7,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fixtures as fx
 from conftest import (
@@ -95,6 +93,7 @@ def test_case_9c_token_refreshed_in_flight_renders_and_next_request_uses_new_tok
     """9ג. TOKEN_REFRESHED בזמן בקשה באוויר ⇒ epoch אינו עולה, התשובה
     מרונדרת, והבקשה הבאה נושאת את הטוקן החדש."""
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/me", fx.api_me())
     user = fx.supabase_user()
     page = _client_captured_page(mocked_context)
@@ -135,6 +134,7 @@ def test_case_9d_a_signed_in_same_token_in_flight_no_cancellation(mocked_context
     """9ד(א). SIGNED_IN חוזר, אותו user.id ואותו access_token, בזמן
     בקשה באוויר ⇒ אין epoch, אין ביטול -- התשובה מרונדרת כרגיל."""
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/me", fx.api_me())
     user = fx.supabase_user()
     same_token = fx.fake_jwt(sub=user["id"])
@@ -161,45 +161,30 @@ def test_case_9d_a_signed_in_same_token_in_flight_no_cancellation(mocked_context
     page.wait_for_selector(".prediction-panel-p2 .prediction-primary", timeout=10_000)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "OPEN FINDING, 2026-09-18, not yet resolved -- do not trust a "
-        "green run of this one test as proof the behavior is correct. "
-        "This assertion fails ~30-40% of the time (5 repeated runs: 3 "
-        "pass, 2 fail; a separate run of 4: 3 pass, 1 fail) -- the stale "
-        "ltv/upsell/referral responses sometimes DO render after an "
-        "epoch-raising re-delivered SIGNED_IN, even though BOTH "
-        "independent guards that should catch this (api.js's own "
-        "session.isCurrentEpoch() check, and predict.js's OWN "
-        "session.onSessionEvent listener bumping its sharedGen counter "
-        "when epochRaised && submitState==='submitting', read directly "
-        "out of both files) run SYNCHRONOUSLY inside the SAME "
-        "onAuthStateChange callback, before verify()'s own /api/me call "
-        "is even dispatched. Debug assertions added while investigating "
-        "(setSession() error is always None; the /api/me re-verification "
-        "request always carries the correct NEW token) hold in EVERY "
-        "run, including the failing ones -- so the SIGNED_IN event is "
-        "genuinely delivered correctly every time; only whether the "
-        "stale render is actually suppressed varies. Sibling cases 9c "
-        "and 9d(a) -- structurally identical test mechanics, but where "
-        "epoch does NOT rise -- passed 6/6 across repeated runs, so this "
-        "is not general test flakiness in the harness; it is specific "
-        "to the epoch-RAISES-and-must-cancel path. Two explanations "
-        "remain open: a real, narrow concurrency bug in predict.js/"
-        "api.js's cancellation timing, or an unidentified gap in this "
-        "test's own synchronization that repeated hardening (waiting "
-        "for all three routes' captures, not just one; a 2s polling "
-        "assertion instead of one fixed sleep) has not closed. Needs "
-        "dedicated follow-up -- ideally Codex's own read once available "
-        "-- before this can be trusted either way."
-    ),
-    strict=False,
-)
 def test_case_9d_b_signed_in_new_token_in_flight_cancels_and_reverifies(mocked_context):
     """9ד(ב). SIGNED_IN, אותו user.id אך access_token שונה, ללא SIGNED_OUT
     קודם, בזמן בקשה באוויר ⇒ epoch עולה, בקשות ישנות נפסלות, /api/me
-    מאומת לפני המשך."""
+    מאומת לפני המשך.
+
+    RESOLVED finding, 2026-09-18 -- was an xfail, this batch's own
+    third-pass self-review of conftest.py/fixtures.py found and fixed
+    the real cause: fixtures.fake_jwt() computed `exp` as
+    `int(time.time()) + 3600` -- second resolution -- as the payload's
+    only varying field. `old_token`/`new_token` below are two separate
+    calls with the SAME `sub`, seconds apart by wall clock; whenever
+    both landed in the same truncated second (confirmed directly: a
+    bare 0.3s gap already collides), they came out BYTE-IDENTICAL --
+    silently turning this test's own "same user, DIFFERENT
+    access_token" setup into "same token", which session.js's own
+    string-equality check then correctly treated as a no-op (no epoch
+    raise) -- not a bug in predict.js/api.js at all, but this test
+    accidentally testing the WRONG branch on an unlucky fraction of
+    runs. fake_jwt() now mixes in a monotonic counter, guaranteeing two
+    calls are never equal regardless of timing. Re-run 6/6 clean after
+    the fix (previously ~30-40% failing) -- matches sibling cases 9c/
+    9d(a)'s own 6/6 track record now that the real variable is fixed."""
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/me", fx.api_me())
     user = fx.supabase_user()
     old_token = fx.fake_jwt(sub=user["id"])
@@ -251,6 +236,7 @@ def test_case_9f_token_refreshed_then_me_503_shell_and_data_kept_blocked_until_r
     נשארים, epoch אינו עולה, קריאות עסקיות חדשות חסומות עד Retry=200,
     ואז המשך ללא אובדן state."""
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/me", fx.api_me())
     user = fx.supabase_user()
     page = _client_captured_page(mocked_context)
@@ -311,6 +297,7 @@ def test_case_10_in_flight_request_then_sign_out_never_renders(mocked_page, mock
     if releasing the stale responses ever throws in the browser."""
     install_auth_mocks(mocked_context)
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/me", fx.api_me())
     page_errors = []
     mocked_page.on("pageerror", lambda exc: page_errors.append(str(exc)))
@@ -349,6 +336,7 @@ def test_case_11_in_flight_then_sign_out_then_sign_in_again_old_response_never_r
     container nobody ever looked at again."""
     install_auth_mocks(mocked_context)
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/me", fx.api_me())
     page_errors = []
     mocked_page.on("pageerror", lambda exc: page_errors.append(str(exc)))

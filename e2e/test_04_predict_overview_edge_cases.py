@@ -32,6 +32,7 @@ def test_case_13_budget_tiers_200_zero_rows_is_availability_error_not_empty(mock
     """13. budget-tiers מחזיר 200 עם אפס שורות ⇒ שגיאת זמינות, לא empty."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_empty())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
 
     mocked_page.wait_for_selector("#screen-overview .panel-error:not([hidden])", timeout=10_000)
@@ -48,6 +49,7 @@ def test_case_14_one_of_three_predictions_500_others_stay_intact(mocked_page, mo
     """14. אחת משלוש קריאות החיזוי מחזירה 500 ⇒ שני הפאנלים האחרים נשארים תקינים."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
 
     route_status(mocked_context, "**/api/predict/ltv", 500)
@@ -68,6 +70,7 @@ def test_case_15_ood_confined_to_p2_only(mocked_page, mocked_context):
     """15. OOD ב-P2 בלבד ⇒ P2 ללא מספר + סיבה קונקרטית; P3/P4 מציגים מספר."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
 
     route_json(mocked_context, "**/api/predict/ltv", fx.ltv_prediction_ood())

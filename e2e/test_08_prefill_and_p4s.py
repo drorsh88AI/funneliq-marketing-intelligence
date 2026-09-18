@@ -53,6 +53,7 @@ def test_case_1_loading_example_then_editing_field_clears_result_and_relabels(mo
     תרחיש שנערך."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/predict/ltv", fx.ltv_prediction_success())
     route_json(mocked_context, "**/api/predict/upsell", fx.propensity_prediction_success())
     route_json(mocked_context, "**/api/predict/referral", fx.propensity_prediction_success())
@@ -81,6 +82,7 @@ def test_case_16_prefill_selector_failure_leaves_manual_entry_and_submit_fully_p
     """16. כשל בורר ה-prefill ⇒ הזנה ידנית ושליחה נשארות אפשריות במלואן."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     route_json(mocked_context, "**/api/predict/ltv", fx.ltv_prediction_success())
     route_json(mocked_context, "**/api/predict/upsell", fx.propensity_prediction_success())
     route_json(mocked_context, "**/api/predict/referral", fx.propensity_prediction_success())
@@ -102,6 +104,7 @@ def test_case_3_p4s_in_flight_survives_shared_form_field_edit(mocked_page, mocke
     מתבטלת (מוני דור נפרדים לגמרי)."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
 
     _open_p4s(mocked_page)
@@ -124,6 +127,7 @@ def test_case_4_shared_form_in_flight_survives_p4s_field_edit(mocked_page, mocke
     אינה מתבטלת."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
 
     _open_predict(mocked_page)
@@ -152,6 +156,7 @@ def test_case_18_p4s_clear_form_cancel_noop_confirm_bumps_generation_first(mocke
     לפני האיפוס."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
     _open_p4s(mocked_page)
     _fill_p4s(mocked_page, {"ad_budget": 5000, "num_leads": 100, "leads_answered": 80, "followup_1": 70})
@@ -185,6 +190,7 @@ def test_case_19_p4s_revert_field_decrements_counter_full_revert_shows_4_of_4(mo
     ואישור ההקשר מתאפס; החזרה מלאה ⇒ דוגמה היסטורית · 4/4 בלי מונה."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     install_prefill_mock(mocked_context, [P4S_EXAMPLE_ROW])
     sign_in_and_wait(mocked_page, mocked_context)
     _open_p4s(mocked_page)

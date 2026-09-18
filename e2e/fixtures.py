@@ -11,6 +11,7 @@ by quietly feeding the frontend a shape the real API could never send.
 from __future__ import annotations
 
 import base64
+import itertools
 import json
 import time
 from typing import Any
@@ -64,6 +65,9 @@ def supabase_user(*, user_id: str = "user-1", email: str = "demo@example.com", o
     }
 
 
+_fake_jwt_counter = itertools.count(1)
+
+
 def fake_jwt(*, sub: str = "user-1", exp: int | None = None) -> str:
     """A structurally-valid (but unsigned) JWT -- three base64url segments,
     no padding -- built to satisfy the real vendored supabase-js's own
@@ -82,7 +86,24 @@ def fake_jwt(*, sub: str = "user-1", exp: int | None = None) -> str:
     paths fires, per the same source read: exp in the FUTURE ->
     `GET /auth/v1/user` -> emits `SIGNED_IN`; exp in the PAST ->
     `POST /auth/v1/token?grant_type=refresh_token` -> emits
-    `TOKEN_REFRESHED`. Defaults one hour in the future."""
+    `TOKEN_REFRESHED`. Defaults one hour in the future.
+
+    ⚠ Third-pass self-review finding, 2026-09-18: `exp` used to be the
+    payload's ONLY varying field, computed as `int(time.time()) + 3600`
+    -- second resolution. Two calls with the same `sub` made under one
+    wall-clock second (empirically confirmed: a 0.3s gap already
+    truncates to the identical second) produced a byte-IDENTICAL token.
+    Case 9d(b)'s own test calls this twice with the same `sub`, ~1-3s
+    apart by wall clock, to build "the same user, a DIFFERENT
+    access_token" -- a same-second collision would silently turn that
+    into "the same token", which session.js's own `applySessionChange`
+    (comparing access_token by string equality) would then correctly
+    treat as a no-op, NOT raising epoch -- exactly the failure mode
+    that test's own xfail was chasing, and a very plausible reason a
+    supposedly-deterministic guard behaved probabilistically. A
+    monotonic counter closes this regardless of wall-clock timing --
+    every call is now guaranteed unique even if issued twice in the
+    same microsecond."""
     if exp is None:
         exp = int(time.time()) + 3600
 
@@ -90,7 +111,7 @@ def fake_jwt(*, sub: str = "user-1", exp: int | None = None) -> str:
         return base64.urlsafe_b64encode(json.dumps(obj).encode()).rstrip(b"=").decode()
 
     header = b64url({"alg": "HS256", "typ": "JWT"})
-    payload = b64url({"sub": sub, "exp": exp, "aud": "authenticated", "role": "authenticated"})
+    payload = b64url({"sub": sub, "exp": exp, "aud": "authenticated", "role": "authenticated", "jti": next(_fake_jwt_counter)})
     sig = base64.urlsafe_b64encode(b"fake-e2e-signature").rstrip(b"=").decode()
     return f"{header}.{payload}.{sig}"
 

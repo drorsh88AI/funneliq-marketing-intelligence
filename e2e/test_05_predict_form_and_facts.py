@@ -37,6 +37,7 @@ def test_case_17_closed_gt_followup5_blocks_no_clamp_no_silent_change(mocked_pag
     """17. closed > followup_5 ⇒ שגיאה חוסמת; אין חיתוך לאפס ואין שינוי שקט ב-closed."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
     _open_predict(mocked_page)
 
@@ -62,6 +63,7 @@ def test_case_18_clear_form_cancel_is_a_no_op_confirm_bumps_generation_first(moc
     הדור עולה לפני האיפוס (הבקשה הישנה שבאוויר נזרקת בשקט, לא מרונדרת)."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
     _open_predict(mocked_page)
     _fill(mocked_page, PREDICT_VALUES)
@@ -107,6 +109,7 @@ def test_case_20_p2_model_version_mismatch_hides_only_leverage_tip(mocked_page, 
     P2 וכל שאר המסכים נשארים פעילים."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
 
     mismatched_facts = {

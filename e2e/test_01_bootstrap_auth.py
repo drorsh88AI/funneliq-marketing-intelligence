@@ -31,6 +31,7 @@ def test_case_7_401_mid_session_shows_login_form_not_preserved(mocked_page, mock
     """7. 401 באמצע session ⇒ מסך התחברות; תוכן הטופס אינו נשמר."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
     sign_in_and_wait(mocked_page, mocked_context)
 
     mocked_page.click('a[data-route="predict"]')
