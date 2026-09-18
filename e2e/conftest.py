@@ -475,3 +475,20 @@ def route_deferred(context: BrowserContext, url_pattern: str) -> DeferredRoute:
     deferred = DeferredRoute()
     context.route(url_pattern, deferred._capture)
     return deferred
+
+
+def install_prefill_mock(context: BrowserContext, rows: list[dict], *, status: int = 200) -> None:
+    """Mocks supabase-prefill.js's own REST call -- read directly out of
+    that file: `client.from("funnel_records").select(columns).eq(...)
+    .order(...).limit(...)`, which supabase-js's PostgREST client turns
+    into `GET {supabase_url}/rest/v1/funnel_records?...`. Matches BOTH
+    the shared form's and P4S's own separate prefill (different
+    `select=` columns, same table/path) -- callers needing to
+    distinguish them would register a narrower pattern afterward
+    (last-registered-wins, same mechanism as every other route() in
+    this file). PostgREST returns the row array directly as the body,
+    not wrapped in an envelope."""
+    context.route(
+        "**/rest/v1/funnel_records*",
+        lambda route: route.fulfill(status=status, content_type="application/json", body=json.dumps(rows)),
+    )
