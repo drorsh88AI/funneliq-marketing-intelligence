@@ -200,7 +200,7 @@ def test_shared_form_empty_no_example(mocked_page, mocked_context):
     sign_in_and_wait(mocked_page, mocked_context)
     mocked_page.click('a[data-route="predict"]')
     mocked_page.wait_for_selector("#field-ad_budget", timeout=10_000)
-    assert "0" in mocked_page.text_content(".input-summary")
+    assert "0/12" in mocked_page.text_content(".input-summary")
     shoot(mocked_page, "shared-form-empty")
 
 
