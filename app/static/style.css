@@ -1,16 +1,10 @@
-/* FunnelIQ -- functional RTL styling only (phase 4, D4).
-   Design tokens and visual polish arrive in phases 7/10 via Stitch. */
-
-:root {
-  --color-bg: #ffffff;
-  --color-text: #1a1a1a;
-  --color-primary: #2563eb;
-  --color-primary-text: #ffffff;
-  --color-border: #d1d5db;
-  --color-error-bg: #fef2f2;
-  --color-error-text: #b91c1c;
-  --color-muted: #6b7280;
-}
+/* FunnelIQ -- functional RTL styling, now wired to app/static/tokens.css
+   (phase 11, checkpoint 1). tokens.css is the source of truth for
+   VALUES (DESIGN.md is the source of truth for which token goes where);
+   this file hardcodes zero color/font values (PHASE11.md §ד). Two
+   tokens tokens.css lacked entirely -- --color-on-primary and
+   --color-border -- were added there in this same checkpoint rather
+   than hand-typed here; see their definitions for why. */
 
 * {
   box-sizing: border-box;
@@ -18,94 +12,848 @@
 
 body {
   margin: 0;
-  font-family: "Rubik", system-ui, sans-serif;
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
   background: var(--color-bg);
   color: var(--color-text);
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-main {
-  width: 100%;
-  max-width: 360px;
-  padding: 2rem 1.5rem;
-}
-
-h1 {
-  font-size: 1.5rem;
-  margin: 0 0 1.5rem;
-  text-align: center;
-}
-
-.field {
-  margin-bottom: 1rem;
-}
-
-label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-weight: 500;
-}
-
-input {
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 1rem;
-  font-family: inherit;
-}
-
-input:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
+a {
+  color: inherit;
 }
 
 button {
-  width: 100%;
-  padding: 0.65rem;
-  border: none;
-  border-radius: 6px;
-  background: var(--color-primary);
-  color: var(--color-primary-text);
-  font-size: 1rem;
   font-family: inherit;
   cursor: pointer;
 }
 
-button:hover {
-  filter: brightness(0.92);
-}
-
-button:focus-visible {
-  outline: 2px solid var(--color-primary);
+:focus-visible {
+  outline: 2px solid var(--focus-outline);
   outline-offset: 2px;
-}
-
-.error {
-  background: var(--color-error-bg);
-  color: var(--color-error-text);
-  padding: 0.6rem 0.75rem;
-  border-radius: 6px;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
 }
 
 #loading {
   text-align: center;
   color: var(--color-muted);
+  padding: var(--space-8);
 }
 
-#shell-section {
+/* ---- shared error/alert surface -- config-error, session-expired,
+   forbidden-notice, availability-error all use this (DESIGN.md
+   panel-error / auth-redirect / forbidden-notice rows: role="alert",
+   --error-fg on --error-bg). ---- */
+.panel-error {
+  background: var(--error-bg);
+  color: var(--error-fg);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  margin: var(--space-4);
+  font-size: var(--font-size-base);
+}
+
+.panel-error button {
+  margin-top: var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+/* ---- panel-loading / panel-empty (checkpoint 2 primitives, status.js).
+   panel-loading is role="status" -- same muted treatment as #loading,
+   smaller since it renders WITHIN a screen, not full-page. panel-empty
+   carries no role (DESIGN.md's own table: "—") -- informative, not an
+   alert. ---- */
+.panel-loading {
+  color: var(--color-muted);
+  padding: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.panel-empty {
+  color: var(--color-muted);
+  padding: var(--space-4);
+  font-size: var(--font-size-base);
+}
+
+/* ---- Login (screen 1) -- structure/content unchanged from phase 4
+   (DESIGN.md D4), styling only. ---- */
+#login-section {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+}
+
+#login-section h1 {
+  font-size: var(--font-size-xl);
+  margin: 0 0 var(--space-6);
   text-align: center;
 }
 
-#shell-section p {
-  margin-bottom: 1rem;
+.field {
+  margin-bottom: var(--space-4);
 }
 
+.field label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-weight: 500;
+}
+
+.field input {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+}
+
+#login-form button[type="submit"] {
+  width: 100%;
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--font-size-base);
+}
+
+#login-form button[type="submit"]:hover {
+  filter: brightness(0.92);
+}
+
+.error {
+  background: var(--error-bg);
+  color: var(--error-fg);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+/* ---- authenticated-shell (screens 2-6, DESIGN.md 1.4) ---- */
+/* checkpoint 11 (E2E) finding, caught by the FIRST real-browser test
+   ever run against this app: an ID selector's own `display` beats the
+   browser's UA-stylesheet `[hidden] { display: none }` rule on
+   specificity (100 vs 10), so `hidden` on this element had ZERO visual
+   effect since checkpoint 1 -- an unauthenticated visitor saw the full
+   nav bar and sign-out button behind/around the Login form, not just
+   Login alone (violates CP1's own "מבקר לא מאומת רואה רק Login"
+   acceptance line). No fake-DOM harness or CSS-token test could ever
+   have caught this -- none of them compute real CSS cascade/
+   specificity. `:not([hidden])` scopes this rule to apply only when
+   NOT hidden, so the UA default correctly takes over otherwise --
+   :not([hidden]) never appeared anywhere else in this file before, so
+   this is a genuine gap, not a missed instance of an existing idiom. */
+#authenticated-shell:not([hidden]) {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* app-nav: horizontal, the five connected screens side by side
+   (DESIGN.md §1.4 row for authenticated-shell layout). */
+/* Same checkpoint-11 finding as #authenticated-shell above -- this
+   element's own `hidden` attribute (set before the first 200 from
+   /api/me, per P11-D13's seven-branch bootstrap) had zero visual
+   effect for the identical reason. */
+#app-nav:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+#app-nav a {
+  text-decoration: none;
+  padding: var(--space-2) var(--space-1);
+  color: var(--color-text);
+  border-bottom: 2px solid transparent;
+}
+
+#app-nav a[aria-current="page"] {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 500;
+}
+
+#shell-user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* sign-out-control -- always visible in the connected wrapper,
+   including in forbidden-notice (DESIGN.md row for sign-out-control). */
 #signout-button {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+#signout-button:hover {
+  background: var(--color-tier-1-bg);
+}
+
+#app-main {
+  flex: 1;
+  padding: var(--space-6);
+}
+
+.screen-placeholder {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* ---- capability-index (checkpoint 3, DESIGN.md, IA.md §2 D8) ---- */
+.capability-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.capability-card {
+  text-align: start;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.capability-card:hover {
+  box-shadow: var(--shadow-popover);
+}
+
+.capability-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-base);
+}
+
+.capability-card p {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.capability-limitation {
+  color: var(--color-muted) !important;
+  font-size: var(--font-size-xs) !important;
+}
+
+/* ---- tier-table (checkpoint 3, IA.md §2.1) ---- */
+.tier-table-wrap {
+  overflow-x: auto; /* DESIGN.md §4.1: its own scroll container, never the page body */
+  margin-bottom: var(--space-6);
+}
+
+.tier-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.tier-table th,
+.tier-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tier-table tbody tr:nth-child(1) { background: var(--color-tier-1-bg); color: var(--color-tier-1-fg); }
+.tier-table tbody tr:nth-child(2) { background: var(--color-tier-2-bg); color: var(--color-tier-2-fg); }
+.tier-table tbody tr:nth-child(3) { background: var(--color-tier-3-bg); color: var(--color-tier-3-fg); }
+
+/* gap row (IA.md §2.1): visually distinct, never colored as a fourth
+   ramp step -- color-tier-* is a THREE-step ramp by definition. */
+.tier-row-gap {
+  background: transparent !important;
+  color: var(--color-text) !important;
+  font-style: italic;
+}
+
+/* ---- chart-live (checkpoint 3, DESIGN.md §4/§4.1) ---- */
+.chart-live {
+  margin-bottom: var(--space-6);
+}
+
+.chart-live-svg {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: block;
+}
+
+.chart-grid-line {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.chart-bar {
+  fill: var(--color-primary);
+}
+
+/* D10: a bar representing a PREDICTION (e.g. P6's expected profit in
+   Budget Simulator) is always --color-uncertain, never --color-primary
+   -- DESIGN.md's own token table lists "רווח צפוי ב-P6" explicitly
+   alongside P2/P3/P4/P4S under this rule, "⛔ ללא יוצא מן הכלל". */
+.chart-bar-uncertain {
+  fill: var(--color-uncertain);
+}
+
+.chart-whisker-line,
+.chart-whisker-cap {
+  stroke: var(--color-text);
+  stroke-width: 1.5;
+}
+
+.chart-legend {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+
+.chart-axis-label {
+  fill: var(--color-muted);
+  font-size: 10px;
+  font-family: var(--font-family);
+}
+
+.chart-fallback-table {
+  overflow-x: auto;
+  margin-top: var(--space-2);
+}
+
+.chart-fallback-table table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.chart-fallback-table th,
+.chart-fallback-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+/* ---- summary-recommendation (checkpoint 3, PHASE10.md D9) ---- */
+.summary-recommendation {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.summary-layer {
+  margin-bottom: var(--space-3);
+}
+
+.summary-layer:last-child {
+  margin-bottom: 0;
+}
+
+.summary-layer-label {
+  display: block;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-muted);
+  margin-bottom: var(--space-1);
+}
+
+.summary-layer-text {
+  margin: 0;
+  font-size: var(--font-size-base);
+}
+
+.summary-layer-answer .summary-layer-text {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+}
+
+/* "חשוב לדעת" -- DESIGN.md: "model-disclaimer לשכבת 'חשוב לדעת'". */
+.summary-layer-caveat .summary-layer-text {
+  color: var(--model-disclaimer-fg);
+  font-size: var(--model-disclaimer-font-size);
+}
+
+/* checkpoint 9 self-review finding, 2026-09-15: the STANDALONE
+   .model-disclaimer class -- used on its own <p> across predict.js
+   (P2 leverage caveat, P3/P4 uncalibrated warnings), super-customer.js
+   (P4S disclaimer) and budget.js (the always-visible summary), distinct
+   from D9's own internal caveat layer above -- had NO CSS rule at all
+   since checkpoint 5. Every one of those paragraphs rendered as plain,
+   undifferentiated body text: DESIGN.md's own component table requires
+   "טיפוגרפיה משנית שאינה מוסתרת" (secondary typography, smaller but
+   never hidden) for this exact component. Same tokens as the D9 caveat
+   layer above -- both represent the same semantic content by DESIGN's
+   own reasoning ("model-disclaimer (מבנה דומה)" is how §3א.6's
+   business-context-card describes borrowing this same treatment). */
+.model-disclaimer {
+  color: var(--model-disclaimer-fg);
+  font-size: var(--model-disclaimer-font-size);
+  margin: var(--space-2) 0;
+}
+
+/* ---- shared prediction form -- input side (checkpoint 4) ---- */
+.context-confirmation {
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.context-confirmation label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.prefill-picker {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.prefill-picker h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.prefill-picker-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.prefill-picker-list button {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.input-summary {
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-4) 0;
+}
+
+.field label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+
+.field-label-business { color: var(--color-text); }
+.field-label-technical { color: var(--color-muted); font-size: var(--font-size-xs); }
+.field-label-unit { color: var(--color-muted); font-size: var(--font-size-xs); }
+
+.field input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+}
+
+.derived-field-value {
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.derived-field-error {
+  color: var(--error-fg);
+  border-color: var(--error-fg);
+}
+
+.submit-blocked-message {
+  background: var(--error-bg);
+  color: var(--error-fg);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.submit-button {
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--font-size-base);
+}
+
+.submit-button:disabled {
   background: var(--color-muted);
+  cursor: not-allowed;
+}
+
+.clear-form-action {
+  display: inline-block;
+  margin-inline-start: var(--space-3);
+}
+
+.clear-form-action > button {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-base);
+}
+
+.clear-form-confirm {
+  margin-top: var(--space-2);
+  background: var(--error-bg);
+  color: var(--error-fg);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.clear-form-confirm button {
+  margin-inline-end: var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.results-wrap {
+  margin-top: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ---- shared prediction form -- result panels (checkpoint 5) ---- */
+.prediction-panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.prediction-panel h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+/* D10, DESIGN.md §3.1: prediction/probability is ALWAYS
+   --color-uncertain -- never --color-positive/--color-negative, even
+   when the number looks favorable. */
+.prediction-primary {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-uncertain);
+}
+
+.prediction-range {
+  margin: 0 0 var(--space-3);
+  color: var(--prediction-range-color);
+  font-size: var(--font-size-base);
+}
+
+.base-rate-line {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.evidence-badge,
+.calibration-badge,
+.propensity-band-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  margin-inline-end: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.badge-icon {
+  font-size: var(--font-size-xs);
+}
+
+/* .evidence-high/.evidence-medium: P6's own three-level scale
+   (IA.md §5) -- never reached by P2/P3/P4/P4S's two-level evidence-
+   badge (low/none only), so these rules never existed until checkpoint
+   7's strategy-table became the first consumer. Self-review finding,
+   2026-09-15: tokens.css already defined --evidence-high-bg/-fg and
+   --evidence-medium-bg/-fg since checkpoint 1 (test_design_tokens.py's
+   own orphan-token check only verifies a token is CITED in DESIGN.md,
+   not that style.css actually applies it in a rule -- true here, and
+   the gap slipped past every review round since these two badge states
+   were never actually rendered before). */
+.evidence-badge.evidence-high {
+  background: var(--evidence-high-bg);
+  color: var(--evidence-high-fg);
+}
+
+.evidence-badge.evidence-medium {
+  background: var(--evidence-medium-bg);
+  color: var(--evidence-medium-fg);
+}
+
+.evidence-badge.evidence-low {
+  background: var(--evidence-low-bg);
+  color: var(--evidence-low-fg);
+}
+
+.evidence-badge-message {
+  flex-basis: 100%;
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+}
+
+.calibration-badge.calibrated {
+  background: var(--calibrated-bg);
+  color: var(--calibrated-fg);
+}
+
+.calibration-badge.uncalibrated {
+  background: var(--uncalibrated-bg);
+  color: var(--uncalibrated-fg);
+}
+
+/* propensity_band is neutral information, never green/red (D10) --
+   all three bands share the same uncertain-family treatment; only the
+   icon/label distinguish them (§3.2: "אין הסתמכות על צבע בלבד"). */
+.propensity-band-badge {
+  background: var(--evidence-low-bg);
+  color: var(--color-text);
+}
+
+.ood-banner {
+  background: var(--out-of-distribution-bg);
+  color: var(--out-of-distribution-fg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.ood-banner-title {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+}
+
+.ood-banner-reason {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-sm);
+}
+
+.ltv-leverage-tip {
+  margin: var(--space-2) 0;
+  font-size: var(--font-size-sm);
+}
+
+.model-details {
+  margin-top: var(--space-3);
+}
+
+.model-details summary {
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.model-details dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+}
+
+.model-details dt {
+  color: var(--color-muted);
+}
+
+.model-details dd {
+  margin: 0;
+}
+
+.model-details-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+
+.prediction-panel .panel-error {
+  background: var(--error-bg);
+  color: var(--error-fg);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+}
+
+/* ---- P4S screen (checkpoint 6) ---- */
+.field-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.field-input-row input {
+  flex: 1;
+}
+
+.revert-field-action {
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* DESIGN.md §3.4's own P4S row: "שני כפתורים זה-לצד-זה: שליחה ו-
+   clear-form-action". */
+.p4s-actions-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.p4s-definitions {
+  margin: var(--space-2) 0;
+  font-size: var(--font-size-sm);
+}
+
+.p4s-definitions p {
+  margin: 0 0 var(--space-1);
+}
+
+/* Same structure as .model-disclaimer (DESIGN.md's own component row:
+   "model-disclaimer (מבנה דומה)"), own class since its content is a
+   fixed business-facts sentence, not a model disclaimer. */
+.business-context-card {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-inline-start: 3px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* ---- Budget Simulator screen (checkpoint 7) ---- */
+/* DESIGN.md line 100: overlap-alert's own locked token is
+   --color-uncertain -- review finding, confirmed: this used
+   evidence-low's tokens by mistake (evidence-level semantics, not
+   uncertainty). --out-of-distribution-bg/-fg is the box-form pairing
+   already established for this exact color (tokens.css's own comment:
+   "same amber family as --color-uncertain... IS a prediction-related
+   state" -- true here too, this alert is about uncertainty in the
+   Simulator's own predictions). */
+.overlap-alert {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background: var(--out-of-distribution-bg);
+  color: var(--out-of-distribution-fg);
+  border-radius: var(--radius-sm);
+}
+
+.overlap-alert p {
+  margin: 0 0 var(--space-1);
+}
+
+.overlap-alert p:last-child {
+  margin-bottom: 0;
+}
+
+.strategy-table-wrap {
+  overflow-x: auto;
+  margin-bottom: var(--space-4);
+}
+
+.strategy-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.strategy-table th,
+.strategy-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+.prediction-primary-cell {
+  color: var(--color-uncertain);
+  font-weight: 600;
+}
+
+/* ---- Follow-up screen (checkpoint 8) ---- */
+/* DESIGN.md §3.4's own Follow-up row: "שתי קבוצות פריסה זו-לצד-זו". */
+.followup-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-6);
+}
+
+.followup-group h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.followup-recommendation {
+  margin-top: var(--space-6);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.followup-recommendation h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.followup-recommendation p {
+  margin: 0;
+}
+
+.followup-recommendation-unavailable {
+  color: var(--color-muted);
+  font-style: italic;
 }

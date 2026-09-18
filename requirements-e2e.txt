@@ -1,0 +1,12 @@
+# Phase 11 checkpoint 11 (P11-D7). A TEST dependency, never a production
+# one -- render.yaml's buildCommand references requirements.txt
+# explicitly (verified, not a glob), so this file never reaches the
+# deployed service. -r pulls in the app's own runtime deps (uvicorn to
+# run the local server fixture, the real app/schemas.py/app/auth.py to
+# derive mocked fixtures from) without duplicating their pins here.
+-r requirements.txt
+
+# Pinned to the versions verified in the pro1_FunnelIQ conda env
+# (Python 3.12.14), same convention as requirements.txt's own header.
+playwright==1.63.0
+pytest-playwright==0.9.0

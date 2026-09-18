@@ -52,6 +52,15 @@
      is NEVER colored in them -- always --color-uncertain or neutral,
      even when the forecast looks "good". ===================================== */
   --color-primary: #2563eb;      /* brand -- vs white: 5.17:1 */
+  --color-on-primary: #ffffff;   /* text/icon on a --color-primary-filled
+                                     surface (buttons) -- checkpoint 1
+                                     addition: PHASE11.md §ד requires
+                                     app/static/style.css to consume
+                                     tokens.css with zero hardcoded
+                                     color values, and no existing token
+                                     covered this. Same white already
+                                     measured at 5.17:1 against
+                                     --color-primary above. */
   --color-positive: #166534;     /* observed success: closed, upsell happened,
                                      referral given, super-customer in the
                                      historical profile -- vs white: 7.13:1 */
@@ -62,6 +71,13 @@
   --color-muted: #6b7280;        /* secondary/disclaimer text -- vs white: 4.83:1 */
   --color-text: #1a1a1a;         /* body text -- vs white: 17.40:1 */
   --color-bg: #ffffff;
+  --color-border: #d1d5db;       /* neutral structural divider/input
+                                     border -- not a state/semantic
+                                     token, so no D10 contrast rule
+                                     applies. Checkpoint 1 addition, same
+                                     value as phase 4's original
+                                     style.css --color-border; see
+                                     --color-on-primary above for why. */
 
   /* Budget tiers -- an ORDERED sequential ramp (Low -> Mid -> High), not
      three unrelated hues, so the visual order matches the logical order.
