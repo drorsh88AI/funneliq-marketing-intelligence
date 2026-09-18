@@ -788,6 +788,24 @@ async function submitForm() {
 
   if (!sharedGen.isCurrent(myGen)) return; // superseded (edit/clear/new example/session change) while in flight
 
+  // Same "not a real attempt" treatment loadPrefillList() and every
+  // load()-screen already give "blocked"/"stale" (api.js's own contract:
+  // "blocked" = businessBlocked was true, refused before sending --
+  // reachable here specifically because a mid-session 503/500 re-verify
+  // leaves an already-shown shell/screen untouched per app.js, so the
+  // form stays fully interactive while submissions are gated; "stale" is
+  // normally already caught by the isCurrent(myGen) check above via the
+  // proactive epochRaised listener, this is a defensive second layer).
+  // Unlike those screens' load(), submitForm() is user-triggered, not
+  // re-invoked on route re-entry, so updateDynamic() here is required to
+  // clear the "שולח..." spinner and re-enable the button -- otherwise
+  // nothing else would ever do it.
+  if ([ltv, upsell, referral].some((r) => !r.ok && (r.reason === "blocked" || r.reason === "stale"))) {
+    submitState = "idle";
+    updateDynamic();
+    return;
+  }
+
   submitState = "done";
   submitResults = { ltv, upsell, referral };
   updateDynamic();

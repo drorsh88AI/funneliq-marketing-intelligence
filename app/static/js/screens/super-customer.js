@@ -652,6 +652,15 @@ async function submitForm() {
 
   if (!sharedGen.isCurrent(myGen)) return;
 
+  // Mirrors predict.js's own submitForm() fix -- see its comment for the
+  // full reasoning (api.js "blocked"/"stale" contract, why it's reachable
+  // here specifically, and why updateDynamic() is required in this branch).
+  if (!result.ok && (result.reason === "blocked" || result.reason === "stale")) {
+    submitState = "idle";
+    updateDynamic();
+    return;
+  }
+
   submitState = "done";
   submitResult = result;
   updateDynamic();
