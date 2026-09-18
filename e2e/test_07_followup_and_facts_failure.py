@@ -82,9 +82,14 @@ def test_case_23_followup_partial_failure_shows_available_marks_missing_no_numbe
     groups = mocked_page.query_selector_all(".followup-group")
     assert len(groups) == 2
     # Stages (available) rendered a real chart -- no panel-error inside it.
+    # Self-review finding: an earlier version of this assertion OR'd the
+    # chart-element check with "נשירה" in the group's text -- but that
+    # heading is appended in BOTH the success and the panel-error
+    # branches (buildStagesGroup's own code), so the OR made this
+    # tautologically true regardless of whether a chart ever rendered.
     stages_group = groups[0]
     assert stages_group.query_selector(".panel-error") is None
-    assert stages_group.query_selector("svg, canvas, .bar-chart") is not None or "נשירה" in stages_group.text_content()
+    assert stages_group.query_selector(".chart-live") is not None
     # Calls (unavailable) is explicitly marked, not silently blank or zeroed.
     calls_group = groups[1]
     assert calls_group.query_selector(".panel-error") is not None

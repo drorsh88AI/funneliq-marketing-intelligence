@@ -295,10 +295,25 @@ def test_case_9f_token_refreshed_then_me_503_shell_and_data_kept_blocked_until_r
 
 
 def test_case_10_in_flight_request_then_sign_out_never_renders(mocked_page, mocked_context):
-    """10. בקשה באוויר → sign-out ⇒ התשובה אינה מרונדרת בשום מסך."""
+    """10. בקשה באוויר → sign-out ⇒ התשובה אינה מרונדרת בשום מסך.
+
+    Self-review finding: sign-out's own stateCleared handling already
+    tears down predict.js's `nodes`/`container` entirely
+    (container.replaceChildren(); nodes = null -- read directly out of
+    predict.js's session.onSessionEvent listener). That means
+    `.prediction-panel-p2 .prediction-primary` not existing afterward
+    would be true EVEN IF submitForm()'s own generation guard were
+    removed -- releasing the stale routes would then hit a null
+    `nodes.resultsWrap` and throw, which still leaves no
+    `.prediction-primary` in the DOM, just for the wrong reason (a
+    crash, not a correctness check) that a plain DOM assertion can't
+    tell apart. A `pageerror` listener closes that gap: it fails loudly
+    if releasing the stale responses ever throws in the browser."""
     install_auth_mocks(mocked_context)
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
     route_json(mocked_context, "**/api/me", fx.api_me())
+    page_errors = []
+    mocked_page.on("pageerror", lambda exc: page_errors.append(str(exc)))
     sign_in_and_wait(mocked_page, mocked_context)
 
     _fill_and_open_predict_form(mocked_page)
@@ -317,14 +332,26 @@ def test_case_10_in_flight_request_then_sign_out_never_renders(mocked_page, mock
     mocked_page.wait_for_timeout(500)
     assert mocked_page.is_hidden("#authenticated-shell")
     assert mocked_page.query_selector(".prediction-panel-p2 .prediction-primary") is None
+    assert page_errors == []
 
 
 def test_case_11_in_flight_then_sign_out_then_sign_in_again_old_response_never_renders(mocked_page, mocked_context):
     """11. בקשה באוויר → sign-out → התחברות מחדש ⇒ התגובה הישנה אינה
-    מרונדרת גם ב-session החדש."""
+    מרונדרת גם ב-session החדש.
+
+    Self-review findings, applied here same as case 10's own docstring:
+    (1) a `pageerror` listener, so a crash from releasing the stale
+    routes against a torn-down `nodes` isn't mistaken for a correct
+    discard; (2) explicitly re-opening the predict screen after the
+    second sign-in (rather than assuming the router restores the same
+    hash on its own) so `.prediction-panel-p2` existing-or-not is
+    checked against a screen actually re-shown for THIS session, not a
+    container nobody ever looked at again."""
     install_auth_mocks(mocked_context)
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
     route_json(mocked_context, "**/api/me", fx.api_me())
+    page_errors = []
+    mocked_page.on("pageerror", lambda exc: page_errors.append(str(exc)))
     sign_in_and_wait(mocked_page, mocked_context)
 
     _fill_and_open_predict_form(mocked_page)
@@ -338,9 +365,12 @@ def test_case_11_in_flight_then_sign_out_then_sign_in_again_old_response_never_r
     mocked_page.wait_for_selector("#login-section:not([hidden])", timeout=10_000)
 
     sign_in_and_wait(mocked_page, mocked_context)
+    mocked_page.click('a[data-route="predict"]')
+    mocked_page.wait_for_selector("#field-ad_budget")
 
     ltv_route.release(payload=fx.ltv_prediction_success())
     upsell_route.release(payload=fx.propensity_prediction_success())
     referral_route.release(payload=fx.propensity_prediction_success())
     mocked_page.wait_for_timeout(500)
     assert mocked_page.query_selector(".prediction-panel-p2 .prediction-primary") is None
+    assert page_errors == []
