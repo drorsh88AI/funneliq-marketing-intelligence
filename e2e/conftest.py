@@ -21,6 +21,7 @@ responses -- not backend logic, which the rest of tests/ already owns.
 from __future__ import annotations
 
 import contextlib
+import json
 import socket
 import subprocess
 import sys
@@ -80,13 +81,42 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def app_server():
-    """Session-scoped: one real `sys.executable -m uvicorn app.main:app`
-    subprocess (⛔ never the bare `python` off PATH -- PHASE11.md §ו),
-    dummy Supabase env (⛔ zero real secrets), polled on /health until
-    200. Serves the REAL, unmodified static frontend for every test in
-    this run; torn down once at the end of the session."""
+    """Function-scoped (⚠ NOT session-scoped -- see the finding below):
+    one real `sys.executable -m uvicorn app.main:app` subprocess (⛔ never
+    the bare `python` off PATH -- PHASE11.md §ו), dummy Supabase env (⛔
+    zero real secrets), polled on /health until 200. Serves the REAL,
+    unmodified static frontend; torn down at the end of EACH test.
+
+    ⚠ Diagnostic finding, 2026-09-18: a session-scoped app_server (one
+    uvicorn subprocess shared for the whole file) made the THIRD real
+    Chrome full-page navigation in a run hang forever on `page.goto()`,
+    stuck waiting for "load" (every navigation after the 2nd, too).
+    Isolated via direct experiment, not assumed -- ruled out one cause at
+    a time:
+      1. A fresh Browser/BrowserContext per attempt (browser.new_context()
+         isolation) did NOT help -- still hung on attempt 3.
+      2. A fresh Playwright Node driver process per attempt did NOT help
+         either -- still hung on attempt 3, so it wasn't the driver.
+      3. Plain `urllib` GETs against the SAME server, interleaved right
+         before the 3rd browser attempt, succeeded instantly -- so the
+         server wasn't globally wedged for every client, only for a new
+         real-Chrome full page load (many keep-alive connections opened,
+         then abruptly severed by `browser.close()`).
+      4. A FRESH uvicorn subprocess per attempt (this fixture's current
+         shape), even with the SAME Browser instance reused across all
+         attempts, passed every time, in ~0.5s each -- proving the shared
+         uvicorn subprocess itself, not the browser, was accumulating the
+         bad state (almost certainly Windows' asyncio Proactor loop +
+         uvicorn's keep-alive connection handling degrading after two
+         full sets of connections get severed by an abruptly-closed real
+         Chrome process, rather than being closed gracefully).
+    A fresh uvicorn subprocess per test costs ~0.5-0.9s of extra startup
+    (verified above) -- cheap next to a suite that was hanging solid
+    after two tests, and e2e/ already isn't part of the CI-gating
+    `pytest -q` (pytest.ini's testpaths=tests), so this only affects the
+    manual e2e run's own wall-clock time."""
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
     env = {
@@ -225,3 +255,81 @@ def mocked_context(app_server, browser):
     context.e2e_base_url = app_server  # type: ignore[attr-defined]
     yield context
     context.close()
+
+
+@pytest.fixture
+def mocked_page(mocked_context: BrowserContext):
+    """The common case: one page, already navigated to `/`. Falsification
+    cases needing multiple tabs (none of the 30 do) would use
+    mocked_context.new_page() directly instead."""
+    page = mocked_context.new_page()
+    page.goto(mocked_context.e2e_base_url)  # type: ignore[attr-defined]
+    return page
+
+
+def route_json(context: BrowserContext, url_pattern: str, payload: dict | list, *, status: int = 200) -> None:
+    """Registers a JSON response for one URL pattern. Added AFTER
+    install_network_mocks's own dispatcher (every test calls this from
+    inside its own body, which runs after the mocked_context/mocked_page
+    fixture already installed that dispatcher) -- Playwright's
+    last-registered-wins rule then correctly makes THIS the winning
+    handler for this one URL, same mechanism install_network_mocks's
+    own docstring explains."""
+    body = json.dumps(payload)
+    context.route(url_pattern, lambda route: route.fulfill(status=status, content_type="application/json", body=body))
+
+
+def route_status(context: BrowserContext, url_pattern: str, status: int, *, body: str = "") -> None:
+    """A bare status code with no JSON body -- 401/403/500/503 fixtures
+    that carry no response shape the frontend reads beyond the code
+    itself (app/auth.py's own error responses aren't part of the
+    Contract app/schemas.py owns)."""
+    context.route(url_pattern, lambda route: route.fulfill(status=status, body=body))
+
+
+def install_auth_mocks(
+    context: BrowserContext,
+    *,
+    sign_in_ok: bool = True,
+    user: dict | None = None,
+    access_token: str = "fake-access-token-1",
+    refresh_token: str = "fake-refresh-token-1",
+) -> None:
+    """Auth/v1/token (sign-in) and auth/v1/logout, in the EXACT shapes
+    verified empirically against the real, unmodified supabase-js
+    2.58.0 (not assumed from memory or docs) -- see the commit history
+    for the diagnostic runs that established these. `sign_in_ok=False`
+    mocks the real 400 invalid_grant shape GoTrue returns for a wrong
+    password."""
+    import fixtures as fx
+
+    if sign_in_ok:
+        body = json.dumps(fx.supabase_token_response(access_token=access_token, refresh_token=refresh_token, user=user or fx.supabase_user()))
+        context.route("**/auth/v1/token?grant_type=password", lambda route: route.fulfill(status=200, content_type="application/json", body=body))
+    else:
+        err_body = json.dumps({"error": "invalid_grant", "error_description": "Invalid login credentials"})
+        context.route("**/auth/v1/token?grant_type=password", lambda route: route.fulfill(status=400, content_type="application/json", body=err_body))
+
+    context.route("**/auth/v1/logout*", lambda route: route.fulfill(status=204, body=""))
+
+
+def sign_in(page, email: str = "demo@example.com", password: str = "rightpass") -> None:
+    """Fills and submits the real login-form -- never a shortcut that
+    bypasses app.js's own signInWithPassword() call, since several
+    falsification cases care about exactly what happens around that
+    call (timing, event ordering)."""
+    page.wait_for_selector("#login-section:not([hidden])", timeout=10_000)
+    page.fill("#login-form input[name=email]", email)
+    page.fill("#login-form input[name=password]", password)
+    page.click("#login-form button[type=submit]")
+
+
+def sign_in_and_wait(page, context: BrowserContext, **kwargs) -> None:
+    """install_auth_mocks + sign_in + wait for the shell -- the common
+    setup path most falsification cases start from. Callers that need
+    to control auth mocks more precisely (e.g. a wrong password, or a
+    session that starts already-authenticated on page load) call the
+    pieces directly instead."""
+    install_auth_mocks(context, **kwargs)
+    sign_in(page)
+    page.wait_for_selector("#authenticated-shell:not([hidden])", timeout=10_000)
