@@ -333,3 +333,145 @@ def sign_in_and_wait(page, context: BrowserContext, **kwargs) -> None:
     install_auth_mocks(context, **kwargs)
     sign_in(page)
     page.wait_for_selector("#authenticated-shell:not([hidden])", timeout=10_000)
+
+
+# ---------------------------------------------------------------------
+# 9c/9d/9f's mechanism: a REAL TOKEN_REFRESHED or SIGNED_IN event, fired
+# by the real vendored supabase-js client -- not simulated by hand.
+#
+# bootstrap.js's `client` (the object onAuthStateChange is actually
+# subscribed on) is a module-private variable, never exposed on
+# `window` by app code, and shouldn't be for production reasons. The
+# capture below is a test-only shim at the SDK boundary: it wraps
+# `window.supabase.createClient` (the ONE function app code actually
+# calls) so that whatever client bootstrap.js creates is ALSO stashed
+# on `window.__testClient` -- the real client, the real subscription,
+# nothing about app.js/bootstrap.js touched or bypassed.
+#
+# Read directly out of e2e/vendor/supabase.min.js's own
+# `_setSession()`: calling `client.auth.setSession({access_token,
+# refresh_token})` decodes access_token's `exp` claim and picks one of
+# two REAL code paths -- exp in the future calls `GET /auth/v1/user`
+# and emits `SIGNED_IN` with that exact session; exp in the past calls
+# `POST /auth/v1/token?grant_type=refresh_token` and emits
+# `TOKEN_REFRESHED`. Both go through the SAME onAuthStateChange
+# subscription bootstrap.js itself registered -- these are genuine
+# events indistinguishable, from app.js's perspective, from a second
+# tab signing in or a real background token rotation. Verified
+# empirically before writing a single falsification-case test on top
+# of it (see the commit history for the diagnostic run).
+_CAPTURE_CLIENT_INIT_SCRIPT = """
+(() => {
+  let realSupabase;
+  Object.defineProperty(window, 'supabase', {
+    configurable: true,
+    get() { return realSupabase; },
+    set(value) {
+      const originalCreateClient = value.createClient;
+      value.createClient = (...args) => {
+        const client = originalCreateClient(...args);
+        window.__testClient = client;
+        return client;
+      };
+      realSupabase = value;
+    },
+  });
+})();
+"""
+
+
+def capture_supabase_client(context: BrowserContext) -> None:
+    """Must be called BEFORE the page navigates (context-level init
+    script -- applies to every page/navigation in this context), so it
+    is in place before bootstrap.js's own `window.supabase.createClient`
+    call runs. After the page loads, `window.__testClient` is the real
+    client bootstrap.js is using."""
+    context.add_init_script(_CAPTURE_CLIENT_INIT_SCRIPT)
+
+
+def _set_session(page, *, access_token: str, refresh_token: str) -> dict:
+    return page.evaluate(
+        """async ({access_token, refresh_token}) => {
+             const { data, error } = await window.__testClient.auth.setSession({access_token, refresh_token});
+             return { error: error ? error.message : null, hasSession: !!data.session };
+           }""",
+        {"access_token": access_token, "refresh_token": refresh_token},
+    )
+
+
+def deliver_signed_in(context: BrowserContext, page, *, user: dict, access_token: str | None = None) -> dict:
+    """Fires a REAL `SIGNED_IN` event carrying `user`/`access_token` --
+    requires `capture_supabase_client(context)` to have run before the
+    page navigated. Registers the `GET /auth/v1/user` mock this path
+    needs (see module docstring above) and calls the real
+    `setSession()` with a future-`exp` JWT, which is what makes
+    supabase-js take the SIGNED_IN branch instead of the refresh one."""
+    import fixtures as fx
+
+    if access_token is None:
+        access_token = fx.fake_jwt(sub=user["id"])
+    context.route("**/auth/v1/user", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(user)))
+    return _set_session(page, access_token=access_token, refresh_token="irrelevant-not-decoded")
+
+
+def deliver_token_refreshed(context: BrowserContext, page, *, user: dict, new_access_token: str | None = None, new_refresh_token: str = "refreshed-refresh-token") -> dict:
+    """Fires a REAL `TOKEN_REFRESHED` event carrying `new_access_token`
+    -- requires `capture_supabase_client(context)` to have run before
+    the page navigated. Registers the
+    `POST /auth/v1/token?grant_type=refresh_token` mock this path
+    needs, and calls the real `setSession()` with a PAST-`exp` JWT
+    (any structurally-valid one -- its claims are never used once
+    expired, only its expiry decides the branch), which is what makes
+    supabase-js call the refresh endpoint instead of GET /auth/v1/user."""
+    import fixtures as fx
+
+    if new_access_token is None:
+        new_access_token = fx.fake_jwt(sub=user["id"])
+    refreshed_body = json.dumps({
+        "access_token": new_access_token,
+        "token_type": "bearer",
+        "expires_in": 3600,
+        "expires_at": int(time.time()) + 3600,
+        "refresh_token": new_refresh_token,
+        "user": user,
+    })
+    context.route("**/auth/v1/token?grant_type=refresh_token", lambda route: route.fulfill(status=200, content_type="application/json", body=refreshed_body))
+    expired_token = fx.fake_jwt(sub=user["id"], exp=int(time.time()) - 3600)
+    return _set_session(page, access_token=expired_token, refresh_token="some-refresh-token")
+
+
+class DeferredRoute:
+    """One in-flight HTTP request, held open until the test explicitly
+    releases it -- the mechanism every falsification case whose whole
+    point is "while a request is in flight" (1-5, 9c, 9d, 9f, 10, 11)
+    needs: Playwright's route() handler itself becomes the pause point,
+    since it is not required to call fulfill()/abort() synchronously."""
+
+    def __init__(self) -> None:
+        self._routes: list[Route] = []
+
+    def _capture(self, route: Route) -> None:
+        self._routes.append(route)
+
+    def wait_for_capture(self, page, *, timeout: float = 5.0) -> None:
+        deadline = time.time() + timeout
+        while not self._routes:
+            if time.time() > deadline:
+                raise TimeoutError("no request arrived at the deferred route in time")
+            page.wait_for_timeout(50)
+
+    def release(self, *, status: int = 200, payload: dict | list | None = None, body: str = "") -> None:
+        route = self._routes.pop(0)
+        if payload is not None:
+            route.fulfill(status=status, content_type="application/json", body=json.dumps(payload))
+        else:
+            route.fulfill(status=status, body=body)
+
+
+def route_deferred(context: BrowserContext, url_pattern: str) -> DeferredRoute:
+    """Registers a route that captures the Route object instead of
+    resolving it -- .wait_for_capture() blocks until the request
+    arrives, .release() resolves it whenever the test is ready."""
+    deferred = DeferredRoute()
+    context.route(url_pattern, deferred._capture)
+    return deferred

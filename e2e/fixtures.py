@@ -10,6 +10,7 @@ by quietly feeding the frontend a shape the real API could never send.
 """
 from __future__ import annotations
 
+import base64
 import json
 import time
 from typing import Any
@@ -61,6 +62,37 @@ def supabase_user(*, user_id: str = "user-1", email: str = "demo@example.com", o
         "user_metadata": {},
         "created_at": "2026-01-01T00:00:00Z",
     }
+
+
+def fake_jwt(*, sub: str = "user-1", exp: int | None = None) -> str:
+    """A structurally-valid (but unsigned) JWT -- three base64url segments,
+    no padding -- built to satisfy the real vendored supabase-js's own
+    `K()` parser (read directly out of e2e/vendor/supabase.min.js: it
+    requires exactly 3 dot-separated segments, each matching
+    `/^([a-z0-9_-]{4})*($|[a-z0-9_-]{3}$|[a-z0-9_-]{2}$)$/i` -- no
+    padding characters allowed at all). Needed ONLY for
+    `client.auth.setSession()` (cases 9c/9d/9f's mechanism for
+    triggering a REAL TOKEN_REFRESHED/SIGNED_IN event -- see
+    conftest.py's `deliver_signed_in`/`deliver_token_refreshed`);
+    `install_auth_mocks`'s own sign-in flow never decodes its
+    access_token as a JWT (verified empirically -- signInWithPassword()
+    does not call K()), so it keeps using a plain opaque string.
+
+    `exp` (unix seconds) decides which of setSession()'s two real code
+    paths fires, per the same source read: exp in the FUTURE ->
+    `GET /auth/v1/user` -> emits `SIGNED_IN`; exp in the PAST ->
+    `POST /auth/v1/token?grant_type=refresh_token` -> emits
+    `TOKEN_REFRESHED`. Defaults one hour in the future."""
+    if exp is None:
+        exp = int(time.time()) + 3600
+
+    def b64url(obj: dict) -> str:
+        return base64.urlsafe_b64encode(json.dumps(obj).encode()).rstrip(b"=").decode()
+
+    header = b64url({"alg": "HS256", "typ": "JWT"})
+    payload = b64url({"sub": sub, "exp": exp, "aud": "authenticated", "role": "authenticated"})
+    sig = base64.urlsafe_b64encode(b"fake-e2e-signature").rstrip(b"=").decode()
+    return f"{header}.{payload}.{sig}"
 
 
 def supabase_token_response(*, access_token: str = "fake-access-token-1", refresh_token: str = "fake-refresh-token-1", user: dict | None = None) -> dict:
