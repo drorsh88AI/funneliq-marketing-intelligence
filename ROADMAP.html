@@ -496,7 +496,8 @@
       </ul>
     </div>
     <div class="policy-card">
-      <h2>פאזה 11 בוצעה ומוזגה · פאזה 12 — קבלה, בתכנון</h2>
+      <h2>פאזה 11 בוצעה ומוזגה · פאזה 11A חוסמת את שער 11→12 · פאזה 12 מוקפאת</h2>
+      <p>⛔ <strong>עדכון 19.09.2026:</strong> ביקורת רוחב של קודקס על היישום המוזג (<code>6e36c17..af07d6f</code>) חשפה שלושה פערי יישום בקוד שכבר מוזג ל-<code>main</code> — אמינות ה-degradation של <code>business_facts.json</code> (בלוק חלקי מייצר <code>NaN</code> ושלושה מסכים מדפיסים במצב מושפל טענות שהנכס אמור לבסס), חוזה שפת הגרפים (שמות צירים וכותרת נשארים רק בטבלת ה-fallback העברית), ופריסה/היררכיה (<code>total_budget</code> אינו מוצג, שלושת פאנלי החיזוי נערמים, <code>Overview</code> מרנדר 5 כרטיסים בשורה). תוקן תכנון <a href="docs/planning/PHASE11A.md">PHASE11A.md</a> (14 הכרעות, 10 checkpoints), אושר בביקורת Codex ולביצוע על ידי המשתמש. <strong>שער 11→12 חסום עד סגירת 11A</strong> — ר׳ <a href="#panel-roadmap">ציר הזמן</a>, פאזה 11A. הפסקאות שלהלן מתעדות את מצב שער 11→12 <strong>לפני</strong> הביקורת הזו, ונשארות כרקע לתכנון פאזה 12 עצמו.</p>
       <p><strong>פאזה 11 הושלמה:</strong> כל 13 ה-checkpoints נסגרו ו-PR #29 מוזג ל-<code>main</code> (<code>c182b4b</code>, 18.09.2026, CI ירוק בשתי ריצות). המוצר קיים בדפדפן לראשונה, והפריסה החיה כבר מגישה אותו — אומת בשער: <code>/health</code> ⇒ 200, <code>/js/router.js</code> ⇒ 200, <code>index.html</code> החי זהה ל-tracked, <code>business_facts.json</code> החי זהה בייט-לבייט ל-blob. ⚠ כל הראיות האלה נאספו <strong>ללא התחברות</strong> — אף אחד עדיין לא נכנס לגרסה החיה וקיבל ממנה מספר ממודל אמיתי.</p>
       <p><strong>פאזה 12 — קבלה:</strong> התכנון המפורט נכתב בשער 11→12 ב-<a href="docs/planning/PHASE12.md">PHASE12.md</a> — <code>planning_status: planning_in_progress</code>, ממתין לאישור המשתמש. שתי הכרעות מעצבות: <code>P12-D1</code> — שני מסלולי ראיה (חבילת Playwright חיה מול הפריסה <em>ועוד</em> מסע אנושי אחד, כי רף <code>B59</code> הוא טענה על בן-אדם וסקריפט שיודע מראש איזה כפתור ללחוץ אינו מוכיח אותה); <code>P12-D2</code> — החבילה החיה היא <strong>משלים</strong> ל-<code>e2e/</code> ולא שכפול שלה, ומכסה רק את מה שמוק אינו יכול להוכיח מבנית (Auth אמיתי, RLS אמיתי, מודלים אמיתיים, cold start, שלמות נכסים פרוסים).</p>
       <p>⛔ <strong>ממצא שנסגר בשער:</strong> תנאי הסגירה של <code>PHASE11.md</code> §ח1 — עדכון עמודת ה-<code>evidence</code> של <code>B10</code>/<code>B45</code>/<code>B50</code>/<code>B56</code> — לא בוצע ב-CP13 שלב 6, והמרשם תיאר את פאזה 11 כאילו לא סופקה (<code>B56</code> היה ריק לגמרי). תוקן בשער, יחד עם <code>B28</code>/<code>B36</code>/<code>B41</code>/<code>B52</code> שנשאו נוסח שהתיישן; ⛔ אפס שינוי <code>status</code>.</p>
@@ -878,6 +879,24 @@ const PHASES = [
       test:"משתמש מחובר מפעיל כל יכולת מהדפדפן בלי נתון מומצא, fallback שקט או תלות בדוגמה; 30 מקרי הפרכה מכוסים ב-E2E מקומי",
       evidence:"docs/planning/PHASE11.md — תכנון מלא, 13 checkpoints + שער. כל checkpoint יתועד כאן בנפרד עם תאריך וראיה עם ביצועו"},
     note:"תכנון מפורט נכתב ב-docs/planning/PHASE11.md (P11-D1–P11-D15, 13 checkpoints ביצוע + checkpoint 0 כשער פתיחה, 30 מקרי הפרכה) לאחר שער 10→11: בדיקת מצב בפועל (פאזה 10/10A סגורות; הפריסה החיה שלאחר PR #26 לא אומתה), מיפוי מול REQUIREMENTS.md, וקריאה חוזרת מול הבריף עצמו — שחשפה שפרופורציית קריטריוני הקבלה הייתה טכנית מדי ביחס לחמש שאלות המייסדת, ושמרשם 73 הדרישות לא היה שלם (B66 חסר). עבר שמונה טיוטות ביקורת Codex–Claude: תוקנו סתירה בין P11-D1 (איסור תלות חדשה) ל-P11-D7 (Playwright) · סדר רישום routes ב-Playwright שהיה חוסם מוקים (ה-route האחרון גובר) · כריכה שגויה בין העלאת session epoch לניקוי state (הייתה מוחקת 12 שדות מלאים ברוטציית טוקן שגרתית) · טענה על JWT claim בשם 'sid' שקוימה כעובדה בלי אימות מול הסביבה, ותוקנה לגלאי המבוסס רק על user.id+access_token, שדות top-level מתועדים. נוספו קריטריוני קבלה עסקיים ב-CP3/CP5–CP8, לצד הטכניים. עקיבות: נוספה B66 (§07 בבריף — 'Use AI tools… explain every line' חסר במרשם), ותוקנה עמודת contributors ב-11 שורות (B33 הוסר; B24/B29c/B42/B43/B46a-c/B53a/B53b/B65 נוספו) — ⛔ אפס שינוי ב-owner/status/evidence של שורות קיימות. B10/B45/B50/B56 נשארות planned גם בסגירת פאזה 11 — הסגירה דורשת ראיית קבלה חיה בפאזה 12, לא רק מימוש. planning_status: outline_only ⇒ planning_in_progress ⇒ approved_for_execution, האחרון על בסיס אישור מפורש של המשתמש 14.09.2026. ✅ תוצרי שלב התכנון (G1–G5) נסגרו ומוזגו ל-main: PR #27 (docs/phase11-planning→main), שתי ריצות CI עצמאיות (push+pull_request, head_sha זהה, success), merge commit ee06bac, 14.09.2026. ⚠ אישור התכנון אינו הוראת ביצוע: execution_status נשאר not_started עד הוראה נפרדת לפתיחת feat/dashboard (checkpoint 0). רשימת 14 ה-checkpoints שלהלן מוצגת כעת כפריטים מתויגים (לא כתקציר טקסטואלי), לנוחות מעקב — כל אחד יעודכן לסטטוס/תאריך/ראיה בפועל עם ביצועו וסגירתו, בהתאם לתוכן PHASE11.md."},
+  { num:"11A", name:"יישור יישום מול חוזה התכן", branch:"fix/phase11a-remediation", execution_status:"not_started", planning_status:"approved_for_execution",
+    items:[
+      {t:"checkpoint 0 — שער: קומיט התכנון מוזג ל-main, fix/phase11a-remediation נפתח מ-main, רשומת 11A חוסמת את שער 11→12, פסילת ראיית B50 (D14) נרשמת (אינו נספר בתתי-המשימות)", s:"not_started", counts:false},
+      {t:"checkpoint 1 — טבלת degradation נפרדת ב-DESIGN.md §6.1 (D3): 12 שורות, שלושת היעדים הנעולים P2/P4S/Budget Simulator × ארבע שכבות D9, placeholders מקבוצה סגורה, מקור מותר; IA.md מתעד התנהגות ומפנה בלבד", s:"not_started"},
+      {t:"checkpoint 2 — P2, predict.js (D4): ארבע שכבות D9 קיימות ולא-ריקות; ⛔ אין טענת calls_to_closed ואין פעולת מדיניות שיחות במצב מושפל; fixture תקין מציג את שני חלקי B29c", s:"not_started"},
+      {t:"checkpoint 3 — P4S, super-customer.js (D5): buildD9Meaning() במצב מושפל ⛔ ללא טענת רווח/CAC", s:"not_started"},
+      {t:"checkpoint 4 — Budget, budget.js (D6): buildD9 במצב מושפל ⛔ ללא טענת דירוג/יחס הערכת-יתר/backtest/פיילוט; טבלת ארבע האסטרטגיות כולל עמודת rank נשארת מוצגת במפורש", s:"not_started"},
+      {t:"checkpoint 5 — facts.js (D2): ולידציה טיפוסית פר-בלוק, בלוק חלקי ⇒ null כמו חסר, ⛔ אפס NaN/undefined/Infinity, fixture תקין ⇒ התוכן חוזר במלואו", s:"not_started"},
+      {t:"checkpoint 6 — חוזה הגרפים, charts.js (D7): שם ציר X, שם ציר Y וכותרת באנגלית בתוך ה-SVG לכל ארבעת הגרפים, מקרא אנגלי היכן שיש whisker", s:"not_started"},
+      {t:"checkpoint 7 — פריסה והיררכיה (D8/D9/D10): ₪50,000 מוצג ב-Budget, שלוש קבוצות תוצאה זו לצד זו, Budget דו-עמודתי, Overview ⛔ לא 5 בשורה, h1 אחד בדיוק לכל מסך + h2 עקבי ללא דילוגי רמה, ⛔ אין מחרוזת REPORT.md אך ✅ ההפניה הגנרית לדוח נשארת", s:"not_started"},
+      {t:"checkpoint 8 — צילומי מצב מוצלח (D11): חמישה מסכים ברינדור אמיתי; fail-closed (D12): הסרת ה-skip ההיסטורי בבדיקה 9, ה-skip הסביבתי ב-test_metrics.py נשאר מתועד", s:"not_started"},
+      {t:"checkpoint 9 — תיעוד: שמונה תיקוני PHASE12.md, סנכרון המרשם ל-74 שורות (B1–B66), PHASE11.md ד3, תיקון טענות CP9/CP11 ב-ROADMAP.html, רשומת סגירה ב-codex-review.md", s:"not_started"},
+      {t:"checkpoint 10 — סגירה: תשעה שלבים (ביקורת/סודות → commit → push → PR → CI → commit evidence → push → CI → merge); ראיית יישום 11A מעודכנת ל-B50/B45 (D14) — ⛔ לא ראיה סופית", s:"not_started"}
+    ],
+    accept:{product:"שלושת פערי היישום שביקורת קודקס חשפה בקוד המוזג של פאזה 11 מתוקנים: אמינות ה-degradation של business_facts.json (כולל בלוק חלקי), חוזה שפת הגרפים, ופריסה/היררכיה — בלי לשנות API, מודלים או מסמכי תכן מעבר לנוסחי degradation חסרים",
+      test:"16 מקרי הפרכה לפי PHASE11A.md §ז; fixture חלקי ותקין לכל אחד משלושת המסכים; בדיקה 9 fail-closed",
+      evidence:"docs/planning/PHASE11A.md — תכנון מלא, 14 הכרעות (D1–D14) בסדר תלות, 10 checkpoints ביצוע + שער. אושר בביקורת Codex לאחר שלושה סבבים על המסמך עצמו (19.09.2026) ואושר לביצוע על ידי המשתמש (19.09.2026). כל checkpoint יתועד כאן בנפרד עם תאריך וראיה עם ביצועו"},
+    note:"פאזה 11 עצמה נשארת execution_status: done ⛔ ואינה נפתחת מחדש — 11A היא פאזת תיקון נפרדת, בדיוק כפי שפאזה 10 נשארה סגורה כשנפתחה 10A. נוצרה בעקבות ביקורת רוחב של קודקס על 6e36c17..af07d6f (היישום המוזג של checkpoints 4–13 בפאזה 11) שחשפה שלושה פערי יישום: (1) אמינות ה-degradation — facts.js מאמת מפתחות עליונים בלבד, בלוק חלקי מייצר NaN, ושלושה מסכים מדפיסים במצב מושפל טענות שהנכס אמור לבסס; (2) חוזה הגרפים — שמות צירים וכותרת מגיעים רק לטבלת ה-fallback העברית, לא ל-SVG האנגלי; (3) פריסה — total_budget אינו מוצג, שלושת פאנלי החיזוי נערמים במקום זה-לצד-זה, Budget חסר grid דו-עמודתי, ו-Overview מרנדר 5 כרטיסים בשורה. האבחנה המשותפת: 21 צילומי docs/design/states/ הם אפס מסכים מוצלחים, ואין assertion אחד בכל הריפו על .summary-recommendation — כל ממצא יושב על מסלול ההצלחה שמעולם לא נבדק. התכנון עבר תשעה סבבי ביקורת Codex–Claude (תכנון פאזה 12: 10 ממצאים; ביקורת רוחב: 3 ממצאים; שכתוב PHASE11A.md: 7+6+5 תיקוני קונסולידציה) עד שנסגר ללא סתירה פנימית נוספת. פאזה 12 נשארת planning_status: planning_in_progress, מוקפאת עד סגירת 11A — תכנון פאזה 12 (PHASE12.md, נכתב בשער 11→12, 18.09.2026) טרם אושר לביצוע על ידי המשתמש, ואישור כזה, אם יינתן, לא יפתח את שער 11→12 בעצמו."},
   { num:12, name:"קבלה", branch:"test/acceptance", execution_status:"not_started", planning_status:"planning_in_progress",
     items:[
       {t:"checkpoint 0 — שער: קומיט השער מוזג ל-main, test/acceptance נפתח מ-main (אינו נספר בתתי-המשימות)", s:"not_started", counts:false},
@@ -967,6 +986,25 @@ function gateHtml(p, next){
       '<div>ביקורת Claude עצמאית התקבלה ואושרה על ידי המשתמש (13.09.2026). checkpoint 8: כל ששת מסכי Stitch ' +
       'נבדקו ותוקנו מול DESIGN.md המעודכן, כולל תיקון P4S (h1 + תגי SUPER-CLIENT) בשני סבבים. ' +
       'checkpoint 9 (ייצוא + מטריצת כיסוי) הושלם. checkpoint 10 (בדיקה חזותית ידנית) הושלם -- 11 ממצאים + side-effect אחד תוקנו ואומתו לאורך ארבעה סבבים. checkpoint 11 הושלם -- לשונית המוקאפ הוחלפה בששת הצילומים הקנוניים. checkpoint 12 (ביקורת+סריקה -> commit -> push -> PR -> CI -> merge) הושלם במלואו -- merge commit ef2eb83, 14.09.2026. פאזה 10 נסגרה; execution_status: done. השער הבא הוא פאזה 11.</div></div>';
+  }
+  if(next && next.num === '11A' && next.execution_status !== 'done'){
+    return '<div class="gate-box"><h4>שלב תיקון בתוך פאזה 11 — פאזה 11A</h4>' +
+      '<div>ביקורת רוחב של קודקס על היישום המוזג (<span class="ltr">6e36c17..af07d6f</span>) חשפה שלושה פערי יישום: ' +
+      'אמינות ה-degradation של <span class="ltr">business_facts.json</span>, חוזה שפת הגרפים, ופריסה/היררכיה. ' +
+      'תכנון התיקון אושר ב-<a href="docs/planning/PHASE11A.md">PHASE11A.md</a> (14 הכרעות, 10 checkpoints). ' +
+      'שער 11→12 חסום עד סגירת 11A -- פאזה 12 נשארת planning_status: planning_in_progress ללא קשר לתוכנה שלה עצמה.</div></div>';
+  }
+  if(p.num === '11A' && p.execution_status !== 'done'){
+    return '<div class="gate-box"><h4>לפני פאזה 12</h4>' +
+      '<div>פאזה 12 (קבלה) נשארת <span class="ltr">planning_in_progress</span> ומוקפאת עד סגירת 11A. ' +
+      'תכנון פאזה 12 עצמו (<a href="docs/planning/PHASE12.md">PHASE12.md</a>) אינו נפתח מחדש כאן -- ' +
+      'הקפאתו היא תוצאה של שער 11A, לא ממצא חדש עליו.</div></div>';
+  }
+  if(p.num === '11A' && p.execution_status === 'done'){
+    return '<div class="gate-box"><h4>11A נסגרה — שער 11→12 פתוח לבדיקה מחדש</h4>' +
+      '<div>שלושת פערי היישום שביקורת קודקס חשפה בקוד המוזג של פאזה 11 תוקנו ואומתו (ר׳ תקציר checkpoints 1–10 לעיל). ' +
+      'פסילת ראיית B50 מ-checkpoint 0 הוחלפה בראיית יישום 11A מעודכנת. השער הבא הוא בדיקת תכנון פאזה 12 מחדש, ' +
+      'לא פתיחה אוטומטית של <span class="ltr">test/acceptance</span>.</div></div>';
   }
   if(!next){
     return '<div class="gate-box"><h4>שער מעבר — אין פאזה הבאה</h4>' +
@@ -1134,6 +1172,14 @@ function roadmapStateSummary(){
     const closed = next.planning_status === 'approved_for_execution';
     if(next.num === '10A' && next.execution_status !== 'done'){
       parts.push(`checkpoint 8 ממתין לסגירת 10A · תכנון 10A: ${PLAN_META[next.planning_status].label}`);
+    } else if(next.num === '11A' && next.execution_status !== 'done'){
+      parts.push(`פאזה 12 מוקפאת עד סגירת 11A · תכנון 11A: ${PLAN_META[next.planning_status].label}`);
+    } else if(current.num === '11A' && current.execution_status !== 'done'){
+      /* activeIndex עצמו הוא 11A כשהיא in_progress/awaiting_approval -- אז
+         gateFromIndex === activeIndex, current כאן הוא 11A ו-next הוא 12.
+         בלי הענף הזה השער היה מתואר "פתוח" (closed=false על planning_status
+         של 12) במקום "מוקפא עד סגירת 11A", בדיוק כמו לפני שהיא הפכה ל-active. */
+      parts.push(`פאזה 12 מוקפאת עד סגירת 11A · תכנון 12: ${PLAN_META[next.planning_status].label}`);
     } else {
       parts.push(`שער ${current.num}→${next.num} ${closed ? 'סגור' : 'פתוח'}`);
     }
