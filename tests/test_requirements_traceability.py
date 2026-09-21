@@ -25,7 +25,7 @@ REQUIREMENTS_MD = REPO_ROOT / "docs" / "planning" / "REQUIREMENTS.md"
 BRIEF_HTML = REPO_ROOT / "FunnelIQ_Assignment.html"
 ROADMAP_HTML = REPO_ROOT / "ROADMAP.html"
 
-# The exact 73 ids the registry is expected to hold right now (B1-B65,
+# The exact 74 ids the registry is expected to hold right now (B1-B66,
 # with a/b/c/d splits where one brief sentence carries several distinct
 # obligations, minus B47 which was retracted -- see REQUIREMENTS.md's own
 # "B47 -- הוסר" section). This is a deliberate snapshot, not a formula: it
@@ -191,7 +191,7 @@ def test_parent_requirement_points_at_real_children(requirements):
         assert missing == [], f"{p['id']}: children not present in the table: {missing}"
 
 
-def test_registry_contains_exactly_the_expected_73_ids(requirements):
+def test_registry_contains_exactly_the_expected_74_ids(requirements):
     """Six passing tests above only check the SHAPE of whatever rows
     happen to be in the table -- they say nothing if a row is quietly
     deleted, since a smaller table with well-formed rows still passes all

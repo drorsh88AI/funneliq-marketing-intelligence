@@ -453,7 +453,7 @@ Overview שמפנה ל-P2, או הבחנת P4/P4S זו מזו) — הזיהוי 
 | **P2** — כמה זמן צפוי לקוח חדש להישאר? | תחזית: {X} חודשים, טווח: {Y}–{Z} חודשים | הערכה לאורך החיים הכולל של לקוח שנרכש בקמפיין שהסתיים. במודלים שאומנו על הנתונים ההיסטוריים, מספר השיחות הממוצע עד סגירה היה האות החזק ביותר, אך אינו מוכיח שיותר שיחות מאריכות קשר | כשהקלט בתחום ואינו מסומן בתמיכה חלקית, להשתמש באומדן בזהירות לתכנון ופילוח; לבחון שינוי במדיניות השיחות רק בניסוי שמודד שימור בפועל | זהו טווח אי־ודאות, לא הבטחה. ב־OOD אין תחזית; בתמיכה חלקית אין החלטת פילוח לפי המודל בלבד | **בקשה נוכחית—API:** `LtvPrediction.point_estimate`, `.lower_bound`, `.upper_bound`, `.in_training_domain`, `.warnings[]`, `.evidence_level`; פרטים: `.interval_method`, `.interval_details.nominal_coverage`, `.interval_details.measured_coverage`, `.metrics.cv.mean_mae`, `.metrics.cv.mean_rmse`, `.metrics.cv.mean_r2`, `.metrics.holdout.mae`, `.metrics.holdout.rmse`, `.metrics.holdout.r2`, `.model_version`, `.model_algorithm`. **קבוע—נכס תצוגה:** `ltv.rank_1_by_algorithm.*` ו־`ltv.dominant_feature`, נגזרים מ־`metrics.json.global_feature_importance.P2` |
 | **P3** — מי צפוי לקנות יותר? | נטייה לאפסייל: {X}%, {N} נקודות מעל/מתחת לשיעור הבסיס | התוצאה מציבה את התרחיש מעל, סביב או מתחת לשיעור האפסייל שנמדד באוכלוסיית האימון | רק כשהקלט בתחום, התוצאה מכוילת, אין סימון תמיכה חלקית והנטייה מעל הבסיס, אפשר לשקול פנייה אחרי בדיקה ידנית. בכל מצב אחר אין פעולה מיוחדת לפי המודל | כשהתוצאה מכוילת, זהו אומדן הסתברותי מנתוני סוף קמפיין; אם אינה מכוילת, אין לפרש אותה כהסתברות ואין לפעול לפיה. אין הבטחה או השפעה סיבתית | **בקשה נוכחית—API:** `PropensityPrediction.event_probability`, `.base_rate`, `.propensity_band`, `.in_training_domain`, `.warnings[]`, `.evidence_level`; ההפרש הוא `event_probability-base_rate`; פרטים: `.calibration_status`, `.calibration_method`, `.metrics.cv.mean_roc_auc`, `.metrics.cv.mean_pr_auc`, `.metrics.cv.mean_brier`, `.metrics.cv.mean_log_loss`, `.metrics.holdout.roc_auc`, `.metrics.holdout.pr_auc`, `.metrics.holdout.brier`, `.metrics.holdout.log_loss`, `.model_version`, `.model_algorithm` |
 | **P4** — מה הסיכוי שהלקוח יפנה לקוחות נוספים? (יכולת משלימה) | נטייה להפניה: {X}%, מול שיעור הבסיס שחזר | התוצאה מציבה את התרחיש מעל, סביב או מתחת לשיעור ההפניה שנמדד באוכלוסיית האימון. ציון לקוח-על מוצג במסך נפרד | רק כשהקלט בתחום, התוצאה מכוילת, אין סימון תמיכה חלקית והנטייה מעל הבסיס, אפשר לשקול בקשת הפניה אחרי בדיקה ידנית. בכל מצב אחר אין פעולה מיוחדת לפי המודל | אם התוצאה אינה מכוילת, אין לפרש אותה כהסתברות ואין לפעול לפיה. גם אומדן מכויל אינו הבטחה או השפעה סיבתית; זהו חיזוי הפניה בלבד, ⛔ לא ציון לקוח-על | **בקשה נוכחית—API:** `PropensityPrediction.event_probability`, `.base_rate`, `.propensity_band`, `.in_training_domain`, `.warnings[]`, `.evidence_level`, `.calibration_status`, `.calibration_method`, `.metrics.cv.mean_roc_auc`, `.metrics.cv.mean_pr_auc`, `.metrics.cv.mean_brier`, `.metrics.cv.mean_log_loss`, `.metrics.holdout.roc_auc`, `.metrics.holdout.pr_auc`, `.metrics.holdout.brier`, `.metrics.holdout.log_loss`, `.model_version`, `.model_algorithm` מ־`POST /api/predict/referral`; אין מדד נוסף ממקור קבוע |
-| **P4S** — מי מבין הרוכשים עשוי להפוך ללקוח-על? | ציון לקוח-על: {X} מתוך 100, מול שיעור הבסיס שחזר | היסטורית, לקוחות-על היו {אחוז} מהרוכשים, יצרו {אחוז} מהרווח המצטבר; עלות הרכישה הממוצעת שלהם הייתה {עלות}, לעומת {עלות באוכלוסיית הרוכשים}, כלומר נמוכה ב־{אחוז}. זהו פרופיל תיאורי | רק כשהקלט בתחום, אין סימון תמיכה חלקית והנטייה מעל הבסיס, אפשר להשתמש בציון כאות מסייע לבדיקה ידנית של רוכש ידוע. בכל מצב אחר אין תעדוף לפי המודל | תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. CatBoost נמדד ב־Holdout עם ROC-AUC ‏0.8014 ו־PR-AUC ‏0.3420, אך Recall ‏0 בסף ברירת המחדל; לכן הציון הוא אות מסייע בלבד | **בקשה נוכחית—API:** `SuperCustomerPrediction.event_probability`, `.base_rate`, `.propensity_band`, `.evidence_level`, `.in_training_domain`, `.warnings[]`, `.calibration_status`, `.calibration_method`, `.metrics.cv.mean_roc_auc`, `.metrics.cv.mean_pr_auc`, `.metrics.cv.mean_brier`, `.metrics.cv.mean_log_loss`, `.metrics.holdout.roc_auc`, `.metrics.holdout.pr_auc`, `.metrics.holdout.brier`, `.metrics.holdout.log_loss`, `.model_version`, `.model_algorithm`, `.target_definition`, `.population_definition`; **קבוע—נכס תצוגה:** `super_customer_profile.pct_of_purchased`, `.pct_of_total_profit`, `.cac_super_mean`, `.cac_population_mean`, `.cac_savings_pct` מ־`app/static/business_facts.json`. המודל הפעיל הוא CatBoost בגרסה `P4S-catboost-20260912-1c70ca8` |
+| **P4S** — מי מבין הרוכשים עשוי להפוך ללקוח-על? | ציון לקוח-על: {X} מתוך 100, מול שיעור הבסיס שחזר: {Y} | היסטורית, לקוחות-על היו {אחוז} מהרוכשים, יצרו {אחוז} מהרווח המצטבר; עלות הרכישה הממוצעת שלהם הייתה {עלות}, לעומת {עלות באוכלוסיית הרוכשים}, כלומר נמוכה ב-{אחוז}. זהו פרופיל תיאורי | רק כשהקלט בתחום, אין סימון תמיכה חלקית והנטייה מעל הבסיס, אפשר להשתמש בציון כאות מסייע לבדיקה ידנית של רוכש ידוע. בכל מצב אחר אין תעדוף לפי המודל | תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. {p4s_model_algorithm} נמדד ב-Holdout עם ROC-AUC {p4s_holdout_roc_auc} ו-PR-AUC {p4s_holdout_pr_auc}; הציון הוא אות מסייע בלבד, לא תעדוף אוטומטי | **בקשה נוכחית—API:** `SuperCustomerPrediction.event_probability`, `.base_rate`, `.propensity_band`, `.evidence_level`, `.in_training_domain`, `.warnings[]`, `.calibration_status`, `.calibration_method`, `.metrics.cv.mean_roc_auc`, `.metrics.cv.mean_pr_auc`, `.metrics.cv.mean_brier`, `.metrics.cv.mean_log_loss`, `.metrics.holdout.roc_auc`, `.metrics.holdout.pr_auc`, `.metrics.holdout.brier`, `.metrics.holdout.log_loss`, `.model_version`, `.model_algorithm`, `.target_definition`, `.population_definition`; **קבוע—נכס תצוגה:** `super_customer_profile.pct_of_purchased`, `.pct_of_total_profit`, `.cac_super_mean`, `.cac_population_mean`, `.cac_savings_pct` מ־`app/static/business_facts.json`. המודל הפעיל הוא CatBoost בגרסה `P4S-catboost-20260912-1c70ca8` |
 | **Budget Simulator** — לאן להקצות את תקציב הפרסום? | `100x500` מדורגת ראשונה מספרית, אך אינה המלצה לפעולה; שתי המובילות חופפות ובדיקת העבר של רמת 500 חלשה מאוד | הדירוג לבדו אינו מכריע: טווחי `100x500` ו־`25x2000` חופפים, ובבדיקת עבר התחזית לרמת 500 הייתה גבוהה פי 8.60 מהתוצאה בפועל (תוקן מ-8.59 בפאזה 11 checkpoint 7 — עיגול סטנדרטי, ר' §6.1א) | לא לבצע הקצאה מלאה לפי הדירוג. אם בוחנים אחת מארבע החלופות, לבצע פיילוט מבוקר של `25x2000`, שלה 322 שורות אימון ובדיקת עבר קרובה יותר | הסכומים הם רווח מצטבר צפוי ומניחים רשומות עצמאיות ואדיטיביות; אינם רווח בחודש הבא, אינם השפעה סיבתית ואינם הבטחה | **בקשה נוכחית—API כלוקאפ קבוע מראש:** `BudgetSimulation.total_budget`, `.interval_method`, `.bootstrap_percentiles`, `.top_two_overlap`, `.strategies[].strategy_id`, `.strategies[].rank`, `.strategies[].allocations[].ad_budget`, `.strategies[].allocations[].count`, `.strategies[].allocations[].sample_size`, `.strategies[].point_estimate`, `.strategies[].lower_bound`, `.strategies[].upper_bound`, `.strategies[].bootstrap_iterations`, `.strategies[].evidence_level`, `.model_version`, `.model_algorithm`, `.metrics.cv.mean_mae`, `.metrics.cv.mean_rmse`, `.metrics.cv.mean_r2`, `.metrics.holdout.mae`, `.metrics.holdout.rmse`, `.metrics.holdout.r2`; `GET /api/simulate/budget` ללא body. הפרופילים נגזרים משורות train שנצפו, ו־`profile_source_row_id` נשמר לכל רמה |
 | **נשירה** (Follow-up) — באיזה שלב הנשירה מתנהגת באופן לא צפוי? | שיעורי הנשירה הם {חמשת השיעורים שחזרו}; {השלב בעל השיעור הנמוך ביותר} הוא הנמוך | אם השיעורים אינם עולים ברצף, הנתונים אינם תומכים בעצירה אוטומטית רק מפני שהתקדם מספר השלב | ההמלצה היא להמשיך מעקבים אחרי השלישי באופן מבוקר ולמדוד בכל שלב את שיעור הסגירה השולי, זמן העבודה והעלות לפני שינוי קבוע במדיניות | הנתונים מתארים מה קרה בפועל בכל שלב, ⛔ ואינם מסבירים מדוע | **בקשה נוכחית—Supabase:** `FollowupResponse.stages.status`; בהצלחה `.data[].stage_order`, `.stage`, `.from_leads`, `.to_leads`, `.drop_rate` מ־`followup_insight`; בכשל `.error.reason_code`, `.error.message`. אין החלפה במספר שמור |
 | **calls_to_closed** (Follow-up) — עבור עסקאות שנסגרו, כמה מעקבים הן דרשו בדרך כלל? | אין בקובץ מניין מעקבים לעסקה בודדת. במדד הקרוב, `calls_to_closed`, ב־{population_n} רשומות שנסגרו: חציון {median}, שכיח {mode} וממוצע {mean} | ב־{count_ge_4} רשומות ({rate_ge_4}) ממוצע השיחות עד סגירה הוא 4 ומעלה. יחד עם דפוס הנשירה, אין בסיס לעצירה אוטומטית אחרי המעקב השלישי | ההמלצה היא להמשיך מעקבים אחרי השלישי באופן מבוקר ולמדוד בכל שלב את שיעור הסגירה השולי, זמן העבודה והעלות לפני שינוי קבוע במדיניות | `calls_to_closed` הוא ממוצע ברמת רשומה ולא היסטוריה לעסקה; חמשת שלבי המעקב אינם מספר השיחות, שמגיע עד 9; אין הוכחה סיבתית או כלכלית | **בקשה נוכחית—Supabase + נגזרת דפדפן:** `FollowupResponse.calls_to_closed.status`; בהצלחה `.data.population_n`, `.data.distribution[].calls`, `.data.distribution[].n`; בכשל `.error.reason_code`, `.error.message`; ארבעת הסיכומים נגזרים מאותה התפלגות בלבד. השרת מסנן `closed>0`, קורא את כל העמודים ומשווה לספירה עצמאית על אותו מסנן |
@@ -558,6 +558,61 @@ SVG של SHAP או שורת מקור כדי להציג את העובדות המ�
 ועובדה היסטורית מסומנת רשאים להישאר, אך בלי מספר החיזוי הישן ובלי פעולה
 שמנוסחת כאילו היא שייכת לקלט החדש. בכשל חלקי ב־Follow-up אין מסקנה
 משולבת ואין fallback מהנכס הקבוע.
+
+#### 6.1ג — נוסח מושפל קנוני להשפלת נכס העובדות (`P11A-D1`/`D3`)
+
+⚠ **ציר נפרד מ-§6.1א.** הטבלה בשורה 503 (§6.1א) קובעת את הנוסח החי
+כש־`business_facts.json` **תקין** ו-`top_two_overlap=true` — ציר התנאי
+שם הוא תגובת ה-API. הטבלה כאן קובעת את הנוסח כש־**הנכס עצמו** נכשל
+בטעינה, `schema_version` אינו מוכר, מבנה/מפתח חסרים, בלוק חלקי, או
+`model_versions` אינו תואם — ציר תנאי אורתוגונלי, שאינו קיים בטבלת §6.1א.
+
+`P11A-D1` קובע שארבע שכבות D9 נשארות קיימות ולא-ריקות תמיד; במצב מושפל
+כל שכבה מנוסחת מחדש כך שאינה טוענת דבר שהנכס היה צריך לבסס. מותרים
+שלושה סוגי מקור בלבד: תגובת ה-API החיה, הגדרה נעולה של יעד/אוכלוסייה,
+ומצב הזמינות של הנכס עצמו ("אינו זמין כרגע") — ⛔ לא תוכן, ערך או
+מסקנה מהנכס.
+
+**בדיוק 12 שורות** — שלושת היעדים הנעולים `P2` · `P4S` · `Budget
+Simulator` × ארבע שכבות D9. ⛔ **placeholders מקבוצה סגורה בלבד**,
+ואף אחד מהם אינו ממופה לשדה ב-`business_facts.json`:
+`{ltv_months}`/`{ltv_lower}`/`{ltv_upper}` מ-`LtvPrediction`;
+`{p4s_score}`/`{p4s_base_rate}`/`{p4s_model_algorithm}`/`{p4s_holdout_roc_auc}`/`{p4s_holdout_pr_auc}`
+מ-`SuperCustomerPrediction` (השלושה האחרונים משדות `.model_algorithm`
+ו-`.metrics.holdout`, קבועים לגרסת המודל הפרוסה אך **מקורם תגובת
+API**, ⛔ לא "הגדרה נעולה" — אינם שדה יעד/אוכלוסייה). ⛔ אין לרשת את
+מוסכמת ה-`{X}` של מטריצת §6.1 — כאן כל placeholder טיפוסי ומתועד
+בעמודת המקור. ⛔ **אין Recall בחוזה** — `_HoldoutClassification`
+(`app/schemas.py`) נושא רק `roc_auc`/`pr_auc`/`brier`/`log_loss`; אין
+להוסיף טענת Recall כאן, ⛔ ואין להוסיף אותו לחוזה במסגרת 11A.
+
+⛔ **איסור נפרד ומוחלט, לא רק סיווג מקור:** אף שכבת D9 מושפלת אינה
+נושאת **טענת דירוג** — ⛔ לא זהות המנצחת המספרית, ⛔ לא חפיפה בין
+מובילות, ⛔ לא כל ניסוח שממנו נגזר סדר בין האסטרטגיות — **גם אם
+המידע מגיע מתגובת API חיה** (`strategies[].rank`,`top_two_overlap`)
+ולא מהנכס. עמודת `rank` בטבלת האסטרטגיות עצמה (מחוץ ל-D9) **נשארת**
+מוצגת במלואה; האיסור חל רק על תוכן ה-D9 המושפל (`P11A-D6`).
+
+| יעד נעול | שכבת D9 | נוסח מושפל קנוני | מקור מותר |
+|---|---|---|---|
+| P2 | תשובה פשוטה | תחזית: {ltv_months} חודשים, טווח: {ltv_lower}–{ltv_upper} חודשים | תגובת API (`LtvPrediction`) — ⛔ ללא תלות בנכס, זהה למצב תקין |
+| P2 | משמעות עסקית | הערכה לאורך החיים הכולל של לקוח שנרכש בקמפיין שהסתיים. פירוט הגורם המשפיע ביותר על ההערכה אינו זמין כרגע | הגדרת יעד נעולה (LTV) + מצב זמינות הנכס |
+| P2 | פעולה מומלצת | כשהקלט בתחום ואינו מסומן בתמיכה חלקית, להשתמש באומדן בזהירות לתכנון ופילוח. המלצה ממוקדת לפי הגורם המשפיע ביותר אינה זמינה כרגע | תגובת API (תנאי הדומיין/התמיכה) + מצב זמינות הנכס |
+| P2 | מגבלה | זהו טווח אי־ודאות, לא הבטחה. ב־OOD אין תחזית; בתמיכה חלקית אין החלטת פילוח לפי המודל בלבד | תגובת API — ⛔ ללא תלות בנכס, זהה למצב תקין |
+| P4S | תשובה פשוטה | ציון לקוח-על: {p4s_score} מתוך 100, מול שיעור הבסיס שחזר: {p4s_base_rate} | תגובת API (`SuperCustomerPrediction`) — ⛔ ללא תלות בנכס, זהה למצב תקין |
+| P4S | משמעות עסקית | פרופיל לקוחות-העל ההיסטורי (שיעור מהרוכשים, תרומה לרווח ועלות רכישה) אינו זמין כרגע | מצב זמינות הנכס — ⛔ ללא כיוון (גבוה/נמוך) וללא מספר |
+| P4S | פעולה מומלצת | רק כשהקלט בתחום, אין סימון תמיכה חלקית והנטייה מעל הבסיס, אפשר להשתמש בציון כאות מסייע לבדיקה ידנית של רוכש ידוע. בכל מצב אחר אין תעדוף לפי המודל | תגובת API — ⛔ ללא תלות בנכס, זהה למצב תקין |
+| P4S | מגבלה | תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. {p4s_model_algorithm} נמדד ב-Holdout עם ROC-AUC {p4s_holdout_roc_auc} ו-PR-AUC {p4s_holdout_pr_auc}; הציון הוא אות מסייע בלבד, לא תעדוף אוטומטי | תגובת API (`.model_algorithm`, `.metrics.holdout`) — ⛔ ללא תלות בנכס, זהה למצב תקין |
+| Budget Simulator | תשובה פשוטה | השוואה מלאה בין ארבע אסטרטגיות ההקצאה אינה זמינה כרגע; טבלת האסטרטגיות שלמטה מציגה את הנתונים הגולמיים בלבד | מצב זמינות הנכס בלבד — ⛔ ללא טענת דירוג |
+| Budget Simulator | משמעות עסקית | אין בסיס להכריע בין האסטרטגיות ללא ההשוואה המלאה; פירוט מדויק על ביצוע בפועל אינו זמין כרגע | מצב זמינות הנכס בלבד — ⛔ ללא דירוג או חפיפה בין מובילות |
+| Budget Simulator | פעולה מומלצת | לא לבצע הקצאה מלאה לפי הדירוג בלבד. אין בסיס מספיק להמליץ על חלופה מסוימת ללא הראיה החסרה | מצב זמינות הנכס — ⛔ ללא המלצת פיילוט |
+| Budget Simulator | מגבלה | הסכומים הם רווח מצטבר צפוי ומניחים רשומות עצמאיות ואדיטיביות; אינם רווח בחודש הבא, אינם השפעה סיבתית ואינם הבטחה | תגובת API — ⛔ ללא תלות בנכס, זהה למצב תקין |
+
+⚠ **שרשרת הקבלה:** ביקורת אנושית מאשרת את הנוסח **במסמך** ⇒ המימוש
+מקודד אותו מילה במילה (checkpoints 2–4 ב-`PHASE11A.md`) ⇒ הבדיקה
+מוכיחה שהמימוש מסונכרן למסמך ⇒ fixture תקין מוכיח שההשפלה ⛔ אינה
+מופעלת תמיד. ⛔ אין לכתוב פרוזה חופשית בטבלה — החילוץ חייב להיות
+דטרמיניסטי (`tests/test_design_tokens.py`).
 
 ### 6.2 — מסקנת Follow-up המלאה (מקור: `SPEC.md` § הכרעת CP4-D)
 
@@ -749,6 +804,25 @@ P4S חוזרים על שמות שכבר מופיעים בטופס המשותף (
 כל הנכסים תחת `docs/design/states/` הופקו על-ידי `e2e/capture_state_matrix.py` —
 לא נערכו ידנית ולא הורכבו ממוקאפ; ⛔ אינם ראיה למודלים/ל-Supabase
 האמיתיים, ר' ההערה למעלה.
+
+**9.2.3 — מצב מוצלח ומאוכלס, רינדור אמיתי (`P11A-D11`, checkpoint 8 פאזה 11A):**
+
+| מסך | נכס |
+|---|---|
+| Overview | `docs/design/states/overview-success.jpg` |
+| טופס תחזיות משותף | `docs/design/states/shared-form-success.jpg` (שלושת הפאנלים P2/P3/P4 מאוכלסים בו-זמנית) |
+| ציון לקוח-על (P4S) | `docs/design/states/p4s-success.jpg` (כולל `business-context-card` מ-`business_facts.json` האמיתי) |
+| Budget Simulator | `docs/design/states/budget-success.jpg` |
+| Follow-up | `docs/design/states/followup-success.jpg` (שני הבלוקים — נשירה ו-`calls_to_closed` — מאוכלסים) |
+
+⚠ **⛔ Login אינו ברשימה** — אינו אחד מחמשת המסכים המחוברים (§`app-nav`,
+9.1), ומסלול ההצלחה שלו (שדות ריקים) כבר מכוסה ב-`docs/design/login.jpg`.
+חמישה נכסים אלה שונים במהותם מששת נכסי `docs/design/*.jpg` (§9.1): אלה
+ייצוא עיצוב מ-Stitch (**ראיית עיצוב בלבד**, נתונים בדויים) ואילו אלה —
+כמו כל שאר `docs/design/states/` — רינדור אמיתי בדפדפן מול תגובה
+דטרמיניסטית שנבנתה מ-`app/schemas.py` (ר' ההערה שלמעלה ל-9.2). הם
+הראיה שסוגרת את D7 (חוזה הגרפים), D8 (פריסה) ו-D9 (מטריצת שש העמודות) —
+בלעדיהם שלושתם נכתבו אך לא אומתו על מסך מאוכלס בפועל.
 
 ### 9.3 — מסלול P4S: הזנה ידנית מול `prefill`
 

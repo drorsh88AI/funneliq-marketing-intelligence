@@ -1,5 +1,5 @@
 """Automated design-token checks (docs/planning/PHASE10.md D3-a,
-checkpoint 4). Nine tests, reading two files directly off disk with no
+checkpoint 4). Ten tests, reading two files directly off disk with no
 new dependency and no CSS parser library:
 
   app/static/tokens.css  -- the values (checkpoint 3)
@@ -653,16 +653,16 @@ def test_8_every_value_is_one_canonical_recognized_format(tokens):
 # ---------------------------------------------------------------------------
 # Test 9 -- D9's six-column matrix closure (question / answer / meaning
 # / action / limitation / evidence-source) for every panel and chart.
-# ⛔ That matrix is checkpoint 6's deliverable and does not exist yet --
-# this test is written now so it activates automatically the moment
-# checkpoint 6 adds the matrix, rather than being invented after the
-# fact to match whatever gets written.
+# ✅ Checkpoint 6 added the matrix (docs/DESIGN.md §6.1) -- this test was
+# written before that checkpoint so it would activate automatically the
+# moment the matrix landed, rather than being invented after the fact
+# to match whatever got written.
 # ---------------------------------------------------------------------------
 
 # A markdown table *header row* carrying all six column names together
-# is the actual matrix -- not a mention of it in a "not written yet"
-# list (both current mentions in docs/DESIGN.md are exactly that kind
-# of mention, which must NOT trigger this test's real check).
+# is the actual matrix -- matched narrowly so a future prose mention of
+# the same six column names (e.g. a "not written yet" list, should one
+# ever reappear) does not false-positive this test's real check.
 _D9_MATRIX_HEADER_ROW = re.compile(
     r"\|.*שאלת.*\|.*תשובה.*\|.*משמעות.*\|.*פעולה.*\|.*מגבלה.*\|.*מקור ראיה.*\|"
 )
@@ -694,14 +694,11 @@ _D9_TARGET_PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
 
 
 def test_9_d9_six_column_matrix_closure(design_md_text):
-    if not _D9_MATRIX_HEADER_ROW.search(design_md_text):
-        pytest.skip(
-            "D9's six-column matrix is checkpoint 6's deliverable and is not "
-            "written yet (docs/DESIGN.md Section 6 lists it as pending) -- "
-            "this test will activate once a table with all six column "
-            "headers (question/answer/meaning/action/limitation/evidence-"
-            "source) actually exists."
-        )
+    assert _D9_MATRIX_HEADER_ROW.search(design_md_text), (
+        "docs/DESIGN.md: D9 six-column matrix header row not found (expected "
+        "all six columns -- question/answer/meaning/action/limitation/"
+        "evidence-source -- together in one header row)"
+    )
     rows = _extract_markdown_table(design_md_text, _D9_MATRIX_HEADER_ROW)
     assert rows, "docs/DESIGN.md: D9 six-column matrix has a header but no data rows"
 
@@ -735,5 +732,141 @@ def test_9_d9_six_column_matrix_closure(design_md_text):
     missing_targets = expected_targets - set(matched_targets)
     if missing_targets:
         failures.append(f"D9 matrix is missing rows for: {sorted(missing_targets)}")
+
+    assert not failures, "\n".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# Test 10 -- the P11A-D3 degradation table (docs/DESIGN.md sec 6.1c): the
+# canonical degraded D9 wording for the three business_facts.json-dependent
+# targets (P2, P4S, Budget Simulator), fail-closed and structurally
+# disjoint from test 9's own six-column matrix above -- this header must
+# NEVER match _D9_MATRIX_HEADER_ROW, or the two tables' rows would get
+# mixed by _extract_markdown_table (checked explicitly below).
+# ---------------------------------------------------------------------------
+
+_DEGRADATION_TABLE_HEADER_ROW = re.compile(
+    r"\|.*יעד נעול.*\|.*שכבת D9.*\|.*נוסח מושפל קנוני.*\|.*מקור מותר.*\|"
+)
+
+_DEGRADATION_TARGETS: tuple[tuple[str, re.Pattern], ...] = (
+    ("P2", re.compile(r"^P2$")),
+    ("P4S", re.compile(r"^P4S$")),
+    ("Budget Simulator", re.compile(r"^Budget Simulator$")),
+)
+
+_DEGRADATION_LAYERS = ("תשובה פשוטה", "משמעות עסקית", "פעולה מומלצת", "מגבלה")
+
+# Closed, typed placeholder vocabulary (P11A-D3): every one must resolve to
+# a live-API field, never to a business_facts.json key -- the structural
+# enforcement behind P11A-D1's "a degraded row cannot voice an
+# asset-dependent claim" rule.
+_DEGRADATION_ALLOWED_PLACEHOLDERS = {
+    "ltv_months", "ltv_lower", "ltv_upper", "p4s_score", "p4s_base_rate",
+    "p4s_model_algorithm", "p4s_holdout_roc_auc", "p4s_holdout_pr_auc",
+}
+
+# The business_facts.json top-level keys themselves (docs/DESIGN.md sec
+# 6.1's own list) -- a placeholder named after one of these would be the
+# exact leak P11A-D1 forbids, so it is checked for explicitly rather than
+# just trusting the allow-list above to have been kept in sync by hand.
+_BUSINESS_FACTS_KEYS = {
+    "ltv", "budget_backtest", "super_customer_profile", "followup_context",
+    "model_versions", "schema_version", "metrics_sha256", "source_csv_sha256",
+    "source_keys", "dominant_feature", "rank_1_by_algorithm",
+}
+
+
+def test_10_degradation_table_is_fail_closed_and_asset_independent(design_md_text):
+    matrix_rows = _extract_markdown_table(design_md_text, _D9_MATRIX_HEADER_ROW)
+    degradation_rows = _extract_markdown_table(design_md_text, _DEGRADATION_TABLE_HEADER_ROW)
+
+    assert degradation_rows, (
+        "docs/DESIGN.md sec 6.1c: degradation table (P11A-D3) has a header "
+        "but no data rows -- checkpoint 1 of PHASE11A.md is not done"
+    )
+    # The degradation table must not have been swallowed into test 9's own
+    # extraction, and vice versa -- the "ואי-בליעתה בבדיקה 9" requirement.
+    assert len(matrix_rows) == 8, (
+        f"test 9's own D9 six-column matrix extraction returned "
+        f"{len(matrix_rows)} rows, expected 8 -- the degradation table may "
+        f"have been swallowed into it"
+    )
+
+    failures: list[str] = []
+    seen_keys: dict[tuple[str, str], str] = {}
+    for row in degradation_rows:
+        if len(row) != 4:
+            failures.append(f"row does not have exactly 4 columns: {row}")
+            continue
+        target_cell, layer_cell, wording_cell, source_cell = row
+        for label, cell in (
+            ("target", target_cell), ("layer", layer_cell),
+            ("wording", wording_cell), ("source", source_cell),
+        ):
+            if not cell:
+                failures.append(f"row {row!r}: column {label!r} is empty")
+
+        targets_hit = [name for name, pattern in _DEGRADATION_TARGETS if pattern.match(target_cell.strip("*"))]
+        if len(targets_hit) != 1:
+            failures.append(
+                f"row {row!r}: first cell {target_cell!r} must match exactly one "
+                f"of the three locked targets {[n for n, _ in _DEGRADATION_TARGETS]}"
+            )
+            continue
+        target = targets_hit[0]
+
+        layer = layer_cell.strip()
+        if layer not in _DEGRADATION_LAYERS:
+            failures.append(
+                f"row {row!r}: layer cell {layer_cell!r} must be exactly one of "
+                f"{_DEGRADATION_LAYERS}"
+            )
+            continue
+
+        key = (target, layer)
+        if key in seen_keys:
+            failures.append(f"duplicate (target, layer) key {key}: rows {seen_keys[key]!r} and {row!r}")
+        else:
+            seen_keys[key] = row
+
+        # Deliberately permissive capture -- [^{}]*, not an ASCII
+        # identifier class -- so a malformed placeholder like {foo-bar}
+        # or {אחוז} is still extracted and then rejected below, instead
+        # of silently vanishing from a stricter regex that never matched
+        # it in the first place (that was this test's own first-draft
+        # bug: [a-zA-Z0-9_]+ let anything non-ASCII slip past unseen).
+        found_placeholders = re.findall(r"\{([^{}]*)\}", wording_cell)
+        for placeholder in found_placeholders:
+            if placeholder in _BUSINESS_FACTS_KEYS:
+                failures.append(
+                    f"row {row!r}: placeholder {{{placeholder}}} names a "
+                    f"business_facts.json field -- a degraded row must not "
+                    f"be able to voice an asset-dependent claim (P11A-D1)"
+                )
+            elif placeholder not in _DEGRADATION_ALLOWED_PLACEHOLDERS:
+                failures.append(
+                    f"row {row!r}: placeholder {{{placeholder}}} is not in "
+                    f"the closed vocabulary {sorted(_DEGRADATION_ALLOWED_PLACEHOLDERS)}"
+                )
+        # Unbalanced braces (a stray `{` with no closing `}`, or vice
+        # versa) would silently not appear in found_placeholders at all
+        # -- caught here by a raw brace-count check instead.
+        if wording_cell.count("{") != len(found_placeholders) or wording_cell.count("}") != len(found_placeholders):
+            failures.append(f"row {row!r}: unbalanced or nested {{}} in wording cell {wording_cell!r}")
+
+    expected_keys = {
+        (target, layer)
+        for target, _ in _DEGRADATION_TARGETS
+        for layer in _DEGRADATION_LAYERS
+    }
+    missing_keys = expected_keys - set(seen_keys)
+    if missing_keys:
+        failures.append(f"degradation table is missing rows for: {sorted(missing_keys)}")
+
+    assert len(degradation_rows) == 12, (
+        f"degradation table has {len(degradation_rows)} rows, expected exactly "
+        f"12 (P11A-D3: 3 locked targets x 4 D9 layers)"
+    )
 
     assert not failures, "\n".join(failures)

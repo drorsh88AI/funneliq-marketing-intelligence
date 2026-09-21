@@ -110,7 +110,7 @@ function el(tag, props = {}, children = []) {
 function buildStagesGroup(stagesPart) {
   const group = el("div", { className: "followup-group" });
   if (stagesPart.status !== "available") {
-    group.appendChild(el("h3", { text: "נשירה" }));
+    group.appendChild(el("h2", { text: "נשירה" }));
     // DESIGN.md line 119: "panel-error + ניסיון חוזר" -- both parts come
     // from the SAME single GET, so retry re-fetches the whole endpoint
     // (same shape as predict.js's own resolved per-panel retry, which
@@ -125,11 +125,14 @@ function buildStagesGroup(stagesPart) {
     xEnglish: STAGE_LABELS_EN[r.stage],
     value: r.drop_rate,
   }));
-  group.appendChild(el("h3", { text: "נשירה" }));
+  group.appendChild(el("h2", { text: "נשירה" }));
   group.appendChild(charts.renderBarChart({
     data: chartRows,
     xLabel: "שלב מעקב",
     yLabel: "שיעור נשירה",
+    titleEnglish: "Drop-off Rate by Follow-up Stage",
+    xLabelEnglish: "Follow-up Stage",
+    yLabelEnglish: "Drop-off Rate",
     formatValue: (v) => (v === null ? "N/A" : format.formatPercent(v, { decimals: 1 })),
   }));
   group.appendChild(renderSummaryRecommendation(computeStagesD9(rows)));
@@ -196,7 +199,7 @@ function computeCallsStats(dist) {
 function buildCallsGroup(callsPart) {
   const group = el("div", { className: "followup-group" });
   if (callsPart.status !== "available") {
-    group.appendChild(el("h3", { text: "מספר שיחות עד סגירה" }));
+    group.appendChild(el("h2", { text: "מספר שיחות עד סגירה" }));
     group.appendChild(status.errorElement(callsPart.error.message, { onRetry: load }));
     return group;
   }
@@ -207,11 +210,14 @@ function buildCallsGroup(callsPart) {
     xEnglish: String(b.calls),
     value: b.n,
   }));
-  group.appendChild(el("h3", { text: "מספר שיחות עד סגירה" }));
+  group.appendChild(el("h2", { text: "מספר שיחות עד סגירה" }));
   group.appendChild(charts.renderBarChart({
     data: chartRows,
     xLabel: "מספר שיחות",
     yLabel: "מספר רשומות",
+    titleEnglish: "Record Count by Number of Calls to Close",
+    xLabelEnglish: "Number of Calls",
+    yLabelEnglish: "Number of Records",
     formatValue: (v) => format.formatNumber(v),
   }));
   group.appendChild(renderSummaryRecommendation(computeCallsD9(stats)));
@@ -232,8 +238,17 @@ function computeCallsD9(stats) {
 
 // ---------------------------------------------------------------------
 
+// P11A-D9: the screen's own sole h1 -- reuses index.html's own app-nav
+// label for this route. The two group h2s (buildStagesGroup/
+// buildCallsGroup, promoted from h3 above) and the "המלצה" h3 below
+// previously had no h1/h2 above them at all.
+function appendScreenHeading() {
+  container.appendChild(el("h1", { text: "מעקב שיחות" }));
+}
+
 function renderSuccess(resp) {
   container.replaceChildren();
+  appendScreenHeading();
 
   const layout = el("div", { className: "followup-layout" });
   layout.appendChild(buildStagesGroup(resp.stages));
@@ -256,11 +271,13 @@ function renderSuccess(resp) {
 
 function renderLoading() {
   container.replaceChildren();
+  appendScreenHeading();
   container.appendChild(status.loadingElement("טוען נתוני מעקב…"));
 }
 
 function renderError(message) {
   container.replaceChildren();
+  appendScreenHeading();
   container.appendChild(status.errorElement(message, { onRetry: load }));
 }
 

@@ -191,6 +191,13 @@ function buildFieldNode(name) {
 function buildOnce() {
   container.replaceChildren();
 
+  // P11A-D9: the screen's own sole h1 -- reuses index.html's own
+  // app-nav label for this route (product-facing, not a new invented
+  // string), distinct from the result panel's own more specific h3
+  // ("ציון לקוח-על מוקדם") below. The prefill h2 and that panel h3
+  // previously had no h1/h2 above them at all.
+  container.appendChild(el("h1", { text: "ציון לקוח־על" }));
+
   // DESIGN.md §3.4's own P4S row, exact order (⚠ explicitly flagged
   // there as DIFFERENT from the shared form's own top-of-screen
   // placement): prefill-picker → input-summary → 4 fields (each with
@@ -202,7 +209,9 @@ function buildOnce() {
   // originally reused the shared form's own top-of-screen placement
   // verbatim, which is correct THERE but explicitly wrong here).
   const prefillWrap = el("div", { className: "prefill-picker" });
-  prefillWrap.appendChild(el("h3", { text: "טעינת דוגמה היסטורית" }));
+  // P11A-D9: promoted from h3 -- precedes the P4S result-panel h3
+  // (buildP4SPanel) below, so an h2 must exist somewhere before it.
+  prefillWrap.appendChild(el("h2", { text: "טעינת דוגמה היסטורית" }));
   const prefillBody = el("div", { className: "prefill-picker-body" });
   prefillWrap.appendChild(prefillBody);
   container.appendChild(prefillWrap);
@@ -467,7 +476,12 @@ function buildBusinessContextCard() {
 function buildD9Meaning() {
   const profile = facts.getSuperCustomerProfile();
   if (!profile) {
-    return "היסטורית, לקוחות שעונים להגדרת לקוח-על הניבו רווח גבוה יחסית מתוך עלות רכישה נמוכה יחסית. פרופיל מדויק אינו זמין כרגע.";
+    // P11A-D5/DESIGN.md §6.1ג's own P4S/"משמעות עסקית" row, verbatim --
+    // the PREVIOUS wording here ("...הניבו רווח גבוה יחסית מתוך עלות
+    // רכישה נמוכה יחסית") asserted the profile's own directional
+    // conclusion even with `profile` null: exactly the asset-dependent
+    // claim P11A-D1 forbids in a degraded D9 layer, gated or not.
+    return "פרופיל לקוחות-העל ההיסטורי (שיעור מהרוכשים, תרומה לרווח ועלות רכישה) אינו זמין כרגע";
   }
   const pct1 = format.formatPercent(profile.pct_of_purchased, { decimals: 1 });
   const pct2 = format.formatPercent(profile.pct_of_total_profit, { decimals: 1 });
@@ -475,6 +489,21 @@ function buildD9Meaning() {
   const cacPopulation = format.formatCurrency(profile.cac_population_mean, { decimals: 2 });
   const pct3 = format.formatPercent(profile.cac_savings_pct, { decimals: 1 });
   return `היסטורית, לקוחות-על היו ${pct1} מהרוכשים, יצרו ${pct2} מהרווח המצטבר; עלות הרכישה הממוצעת שלהם הייתה ${cacSuper}, לעומת ${cacPopulation}, כלומר נמוכה ב-${pct3}. זהו פרופיל תיאורי`;
+}
+
+/** D9's "caveat" layer for P4S (DESIGN.md §6.1/§6.1ג -- identical text
+ * in both states, "זהה למצב תקין"): model_algorithm and the Holdout
+ * ROC-AUC/PR-AUC come from THIS response, never hand-typed -- the
+ * PREVIOUS text hardcoded "CatBoost"/0.8014/0.3420 (stale even for the
+ * live model) and asserted a Recall figure that isn't in this schema
+ * at all (`_HoldoutClassification` carries only roc_auc/pr_auc/brier/
+ * log_loss; CP1's own review round on the DESIGN.md table caught this
+ * same pair of mistakes there first). */
+function buildCaveatText(d) {
+  const algorithm = format.ltr(d.model_algorithm);
+  const rocAuc = format.formatNumber(d.metrics.holdout.roc_auc, { decimals: 3 });
+  const prAuc = format.formatNumber(d.metrics.holdout.pr_auc, { decimals: 3 });
+  return `תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. ${algorithm} נמדד ב-Holdout עם ROC-AUC ${rocAuc} ו-PR-AUC ${prAuc}; הציון הוא אות מסייע בלבד, לא תעדוף אוטומטי`;
 }
 
 function buildP4SPanel(result) {
@@ -507,7 +536,7 @@ function buildP4SPanel(result) {
       answer: "אין ציון — הקלט הנוכחי מחוץ לתחום שעליו אומן המודל",
       meaning: "המודל יודע להעריך פוטנציאל לקוח-על רק עבור קלט בטווחים שראה באימון; קלט חריג אינו ניתן להערכה אמינה",
       action: "יש לבדוק את השדות המסומנים למטה מול הטווח המאומן, לתקן במידת הצורך ולשלוח שוב",
-      caveat: "תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. CatBoost נמדד ב-Holdout עם ROC-AUC 0.8014 ו-PR-AUC 0.3420, אך Recall 0 בסף ברירת המחדל; לכן הציון הוא אות מסייע בלבד",
+      caveat: buildCaveatText(d),
     }));
     panel.appendChild(buildModelDetails(d));
     return panel;
@@ -542,7 +571,7 @@ function buildP4SPanel(result) {
     answer: `ציון לקוח-על: ${format.ltr(String(score))} מתוך 100, מול שיעור הבסיס שחזר: ${pct}`,
     meaning: buildD9Meaning(),
     action: "רק כשהקלט בתחום, אין סימון תמיכה חלקית והנטייה מעל הבסיס, אפשר להשתמש בציון כאות מסייע לבדיקה ידנית של רוכש ידוע. בכל מצב אחר אין תעדוף לפי המודל",
-    caveat: "תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. CatBoost נמדד ב-Holdout עם ROC-AUC 0.8014 ו-PR-AUC 0.3420, אך Recall 0 בסף ברירת המחדל; לכן הציון הוא אות מסייע בלבד",
+    caveat: buildCaveatText(d),
   }));
 
   panel.appendChild(buildModelDetails(d));

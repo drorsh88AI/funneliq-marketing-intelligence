@@ -25,7 +25,12 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 const VIEW_WIDTH = 400;
 const VIEW_HEIGHT = 225; // 16:9
-const PADDING = { top: 16, right: 16, bottom: 32, left: 16 };
+// top/bottom/left grew from 16/32/16 (P11A-D7): room for an English
+// chart title above the plot, an English X-axis name below the
+// per-bar tick labels, and a rotated English Y-axis name to its left
+// -- none of which existed in the SVG before this checkpoint (only the
+// per-bar tick labels, `xEnglish`, ever did).
+const PADDING = { top: 28, right: 16, bottom: 44, left: 28 };
 
 /** data: [{ xHebrew, xEnglish, value, lower?, upper? }], value may be
  * null (N/A -- 0-height bar). `lower`/`upper`, when given on ANY row,
@@ -33,8 +38,18 @@ const PADDING = { top: 16, right: 16, bottom: 32, left: 16 };
  * DESIGN.md §4's own shared rule for all four live charts: "טווחי
  * אי-ודאות ב-whisker עם מקרא טקסטואלי". `legend`, when given, renders
  * that textual legend as a caption paragraph under the chart -- this is
- * the "מקרא טקסטואלי" itself, never a second color-coded visual legend. */
-export function renderBarChart({ data, xLabel, yLabel, formatValue, legend, barClassName = "chart-bar" }) {
+ * the "מקרא טקסטואלי" itself, never a second color-coded visual legend.
+ *
+ * P11A-D7: `titleEnglish`/`xLabelEnglish`/`yLabelEnglish` are the
+ * chart's own chrome, rendered INSIDE the aria-hidden SVG in English
+ * (IA.md:957/DESIGN.md's own "כותרות/צירים/מקרא באנגלית" rule) --
+ * separate from `xLabel`/`yLabel`, which stay Hebrew and are used ONLY
+ * for the accessible fallback table's headers, per this module's own
+ * pre-existing convention (see header comment). A caller passing a
+ * `legend` for a whisker chart is responsible for that text being
+ * English too -- not mechanically enforced here, same as `xEnglish`
+ * per bar already isn't. */
+export function renderBarChart({ data, xLabel, yLabel, xLabelEnglish, yLabelEnglish, titleEnglish, formatValue, legend, barClassName = "chart-bar" }) {
   const wrapper = document.createElement("div");
   wrapper.className = "chart-live";
 
@@ -53,6 +68,32 @@ export function renderBarChart({ data, xLabel, yLabel, formatValue, legend, barC
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-hidden", "true"); // the table below is the accessible equivalent
   svg.classList.add("chart-live-svg");
+
+  // P11A-D7: title + both axis names, English, inside the SVG.
+  const title = document.createElementNS(SVG_NS, "text");
+  title.setAttribute("x", String(VIEW_WIDTH / 2));
+  title.setAttribute("y", "14");
+  title.setAttribute("text-anchor", "middle");
+  title.setAttribute("class", "chart-title");
+  title.textContent = titleEnglish;
+  svg.appendChild(title);
+
+  const xAxisName = document.createElementNS(SVG_NS, "text");
+  xAxisName.setAttribute("x", String(VIEW_WIDTH / 2));
+  xAxisName.setAttribute("y", String(VIEW_HEIGHT - 6));
+  xAxisName.setAttribute("text-anchor", "middle");
+  xAxisName.setAttribute("class", "chart-axis-name");
+  xAxisName.textContent = xLabelEnglish;
+  svg.appendChild(xAxisName);
+
+  const yAxisName = document.createElementNS(SVG_NS, "text");
+  yAxisName.setAttribute("x", "11");
+  yAxisName.setAttribute("y", String(PADDING.top + plotHeight / 2));
+  yAxisName.setAttribute("text-anchor", "middle");
+  yAxisName.setAttribute("class", "chart-axis-name");
+  yAxisName.setAttribute("transform", `rotate(-90 11 ${PADDING.top + plotHeight / 2})`);
+  yAxisName.textContent = yLabelEnglish;
+  svg.appendChild(yAxisName);
 
   const GRID_LINES = 4;
   for (let i = 0; i <= GRID_LINES; i++) {

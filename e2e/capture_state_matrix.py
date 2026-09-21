@@ -30,6 +30,18 @@ reader does not mistake them for oversights:
     -- not recaptured here.
   - 401/403/503/500 are bootstrap/shell-level branches (IA.md §9.3), not
     per-screen states -- one screenshot each, not one per screen.
+
+✅ Phase 11A checkpoint 8 (P11A-D11) added the five `*-success` functions
+below (one per connected screen -- Overview, shared prediction form, P4S,
+Budget Simulator, Follow-up): populated, live-rendered success states were
+the one cell CP12 above never captured (all prior captures are loading/
+error/empty/OOD), which is exactly the gap phase 11A's own remediation
+found -- every implementation bug it fixed sat on the success path, and
+zero assertions anywhere in the repo covered `.summary-recommendation`.
+Same harness, same route()-level mocking from fixtures.py -- ⛔ no
+hand-composed HTML and no Stitch mockup; these are NOT the same asset as
+`docs/design/*.jpg` (Stitch design export, phase 10, proves layout only,
+see docs/DESIGN.md §9.1) -- a different, screen-rendered proof.
 """
 from __future__ import annotations
 
@@ -172,6 +184,17 @@ def test_overview_error(mocked_page, mocked_context):
     shoot(mocked_page, "overview-error")
 
 
+def test_overview_success(mocked_page, mocked_context):
+    """P11A-D11 -- populated success render, real Chrome, real uvicorn."""
+    install_auth_mocks(mocked_context)
+    route_json(mocked_context, "**/api/me", fx.api_me())
+    route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    sign_in(mocked_page)
+    mocked_page.wait_for_selector(".tier-table", timeout=10_000)
+    assert mocked_page.query_selector("#screen-overview .panel-error") is None
+    shoot(mocked_page, "overview-success")
+
+
 # ---------------------------------------------------------------------
 # Shared prediction form (P2/P3/P4)
 # ---------------------------------------------------------------------
@@ -241,6 +264,33 @@ def test_shared_form_ood(mocked_page, mocked_context):
     shoot(mocked_page, "shared-form-ood")
 
 
+def test_shared_form_success(mocked_page, mocked_context):
+    """P11A-D11 -- all three panels (P2/P3/P4) populated, real Chrome,
+    real uvicorn. Also verifies D8's side-by-side layout (§9.2.2) with
+    live content, not just an empty grid. A non-empty prefill mock is
+    used (not `[]`) so the example picker itself is not left in its own
+    error state -- `.panel-error` is checked screen-wide, not just
+    inside the result panels, so that error would fail loudly too."""
+    route_json(mocked_context, "**/api/me", fx.api_me())
+    route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    install_prefill_mock(mocked_context, [SHARED_FORM_EXAMPLE_ROW])
+    sign_in_and_wait(mocked_page, mocked_context)
+    route_json(mocked_context, "**/api/predict/ltv", fx.ltv_prediction_success())
+    route_json(mocked_context, "**/api/predict/upsell", fx.propensity_prediction_success())
+    route_json(mocked_context, "**/api/predict/referral", fx.propensity_prediction_success())
+    mocked_page.click('a[data-route="predict"]')
+    mocked_page.wait_for_selector("#field-ad_budget")
+    for field, value in PREDICT_VALUES.items():
+        mocked_page.fill(f"#field-{field}", value)
+    mocked_page.check(".context-confirmation input[type=checkbox]")
+    mocked_page.click(".submit-button")
+    mocked_page.wait_for_selector(".prediction-panel-p2 .prediction-primary", timeout=10_000)
+    mocked_page.wait_for_selector(".prediction-panel-p3 .prediction-primary", timeout=10_000)
+    mocked_page.wait_for_selector(".prediction-panel-p4 .prediction-primary", timeout=10_000)
+    assert mocked_page.query_selector("#screen-predict .panel-error:not([hidden])") is None
+    shoot(mocked_page, "shared-form-success")
+
+
 # ---------------------------------------------------------------------
 # P4S
 # ---------------------------------------------------------------------
@@ -303,6 +353,30 @@ def test_p4s_ood(mocked_page, mocked_context):
     shoot(mocked_page, "p4s-ood")
 
 
+def test_p4s_success(mocked_page, mocked_context):
+    """P11A-D11 -- populated success render including business-context-card
+    (sourced from the real app/static/business_facts.json, not a mock --
+    conftest.py never routes that path), real Chrome, real uvicorn. A
+    non-empty prefill mock is used (not `[]`) so the example picker itself
+    is not left in its own error state -- `.panel-error` is checked
+    screen-wide, not just inside the result panel, so that error would
+    fail loudly too."""
+    route_json(mocked_context, "**/api/me", fx.api_me())
+    route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    install_prefill_mock(mocked_context, [P4S_EXAMPLE_ROW])
+    sign_in_and_wait(mocked_page, mocked_context)
+    route_json(mocked_context, "**/api/predict/super-customer", fx.super_customer_prediction_success())
+    mocked_page.click('a[data-route="super-customer"]')
+    mocked_page.wait_for_selector("#p4s-field-ad_budget")
+    for field in ("ad_budget", "num_leads", "leads_answered", "followup_1"):
+        mocked_page.fill(f"#p4s-field-{field}", PREDICT_VALUES[field])
+    mocked_page.check(".context-confirmation input[type=checkbox]")
+    mocked_page.click(".submit-button")
+    mocked_page.wait_for_selector(".prediction-panel-p4s .prediction-primary", timeout=10_000)
+    assert mocked_page.query_selector("#screen-super-customer .panel-error:not([hidden])") is None
+    shoot(mocked_page, "p4s-success")
+
+
 # ---------------------------------------------------------------------
 # Budget Simulator
 # ---------------------------------------------------------------------
@@ -326,6 +400,21 @@ def test_budget_error(mocked_page, mocked_context):
     mocked_page.click('a[data-route="budget"]')
     mocked_page.wait_for_selector("#screen-budget .panel-error:not([hidden])", timeout=10_000)
     shoot(mocked_page, "budget-error")
+
+
+def test_budget_success(mocked_page, mocked_context):
+    """P11A-D11 -- populated success render, real Chrome, real uvicorn.
+    Also verifies D8's two-column layout (table+chart, §9.2.2) and D8's
+    title deriving from sim.total_budget with live content, not an empty
+    screen."""
+    route_json(mocked_context, "**/api/me", fx.api_me())
+    route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    sign_in_and_wait(mocked_page, mocked_context)
+    route_json(mocked_context, "**/api/simulate/budget", fx.budget_simulation())
+    mocked_page.click('a[data-route="budget"]')
+    mocked_page.wait_for_selector(".strategy-table", timeout=10_000)
+    assert mocked_page.query_selector("#screen-budget .panel-error") is None
+    shoot(mocked_page, "budget-success")
 
 
 # ---------------------------------------------------------------------
@@ -356,3 +445,16 @@ def test_followup_error_partial(mocked_page, mocked_context):
     groups = mocked_page.query_selector_all(".followup-group")
     assert groups[1].query_selector(".panel-error") is not None
     shoot(mocked_page, "followup-error")
+
+
+def test_followup_success(mocked_page, mocked_context):
+    """P11A-D11 -- both groups (dropoff, calls_to_closed) populated, real
+    Chrome, real uvicorn."""
+    route_json(mocked_context, "**/api/me", fx.api_me())
+    route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/api/insights/followup", fx.followup_response())
+    sign_in_and_wait(mocked_page, mocked_context)
+    mocked_page.click('a[data-route="followup"]')
+    mocked_page.wait_for_selector(".followup-layout", timeout=10_000)
+    assert mocked_page.query_selector(".followup-layout .panel-error") is None
+    shoot(mocked_page, "followup-success")
