@@ -199,7 +199,7 @@ function buildOnce() {
   container.replaceChildren();
 
   // P11A-D9: the screen's own sole h1 -- IA.md §3's own title ("טופס
-  // החיזוי", the task-code parenthetical dropped as documentation-
+  // החיזוי", the task code parenthetical dropped as documentation-
   // internal notation, not product language). Every h3 on this screen
   // (the prefill section below, and each of the three P2/P3/P4 result
   // panels) previously had no h1/h2 above it at all.
