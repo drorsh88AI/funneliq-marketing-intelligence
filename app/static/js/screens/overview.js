@@ -139,6 +139,17 @@ session.onSessionEvent(({ epochRaised, stateCleared }) => {
 });
 
 function renderCapabilityIndex() {
+  // P11A-D9: an h2 must precede the five capability-card h3s below --
+  // verbatim from IA.md §2's own hierarchy line ("כותרת → אינדקס חמש
+  // היכולות → ..."), not new invented text. Returned as a fragment
+  // alongside the existing div so all three call sites (success/
+  // loading/error) get it automatically, without each needing its own
+  // edit.
+  const fragment = document.createDocumentFragment();
+  const heading = document.createElement("h2");
+  heading.textContent = "אינדקס חמש היכולות";
+  fragment.appendChild(heading);
+
   const el = document.createElement("div");
   el.className = "capability-index";
   for (const cap of CAPABILITIES) {
@@ -164,7 +175,8 @@ function renderCapabilityIndex() {
 
     el.appendChild(card);
   }
-  return el;
+  fragment.appendChild(el);
+  return fragment;
 }
 
 function tierLabelHe(row) {
@@ -290,12 +302,27 @@ function renderChart(tiers) {
     data: chartRows,
     xLabel: "רמת הוצאה חודשית",
     yLabel: "שיעור המרה",
+    titleEnglish: "Conversion Rate by Ad Budget Level",
+    xLabelEnglish: "Ad Budget Level",
+    yLabelEnglish: "Conversion Rate",
     formatValue: (v) => (v === null ? "N/A" : format.formatPercent(v, { decimals: 1 })),
   });
 }
 
+// P11A-D8/D9: the screen's own sole h1 -- IA.md §2's own hierarchy
+// ("כותרת → אינדקס חמש היכולות → ..."), reusing index.html's own
+// app-nav label for this route rather than inventing new text. A tiny
+// shared helper so all three render states get it identically, instead
+// of tripling the same two lines.
+function appendScreenHeading() {
+  const heading = document.createElement("h1");
+  heading.textContent = "סקירה כללית";
+  container.appendChild(heading);
+}
+
 function renderSuccess(tiers) {
   container.replaceChildren();
+  appendScreenHeading();
   container.appendChild(renderCapabilityIndex());
   container.appendChild(renderTierTable(tiers));
   container.appendChild(renderChart(tiers));
@@ -304,12 +331,14 @@ function renderSuccess(tiers) {
 
 function renderLoading() {
   container.replaceChildren();
+  appendScreenHeading();
   container.appendChild(renderCapabilityIndex());
   container.appendChild(status.loadingElement("טוען נתוני המרה…"));
 }
 
 function renderError(message) {
   container.replaceChildren();
+  appendScreenHeading();
   container.appendChild(renderCapabilityIndex());
   container.appendChild(status.errorElement(message, { onRetry: load }));
 }

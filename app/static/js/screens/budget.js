@@ -213,9 +213,15 @@ function buildChart(strategies) {
     data: chartRows,
     xLabel: "אסטרטגיה",
     yLabel: "רווח צפוי",
+    titleEnglish: "Expected Profit by Allocation Strategy",
+    xLabelEnglish: "Strategy",
+    yLabelEnglish: "Expected Profit",
     formatValue: (v, d) => `${format.formatCurrency(v)} (טווח: ${format.formatCurrency(d.lower)}–${format.formatCurrency(d.upper)})`,
     barClassName: "chart-bar-uncertain", // D10: a prediction, never --color-primary
-    legend: "הקו האנכי מעל כל עמודה מציג את טווח אי-הוודאות (95% Bootstrap, אחוזון 2.5–97.5) סביב הרווח הצפוי.",
+    // P11A-D7: English legend for the whisker chart -- the PREVIOUS
+    // text here was Hebrew, DESIGN.md:300-304's own "מקרא טקסטואלי"
+    // requirement (English, per D7) for every whisker chart.
+    legend: "The vertical line above each bar shows the uncertainty range (95% Bootstrap, 2.5-97.5 percentile) around the expected profit.",
   });
 }
 
@@ -256,6 +262,7 @@ function buildModelDetails(sim) {
  * match this response's own model_version. */
 function buildD9(sim) {
   const backtest = facts.getBudgetBacktest(sim.model_version);
+  let answer;
   let meaning;
   let action;
   if (backtest && backtest["500"] && backtest["2000"]) {
@@ -269,28 +276,54 @@ function buildD9(sim) {
     // on this screen (strategy-table, chart). No wording otherwise
     // deviates from the locked cells (DESIGN.md §6.1's own Budget
     // Simulator row), including their own lack of trailing punctuation.
+    answer = "100×500 מדורגת ראשונה מספרית, אך אינה המלצה לפעולה; שתי המובילות חופפות ובדיקת העבר של רמת 500 חלשה מאוד";
     const ratio = format.formatNumber(backtest["500"].predicted_per_customer / backtest["500"].actual_mean_per_customer, { decimals: 2 });
     meaning = `הדירוג לבדו אינו מכריע: טווחי 100×500 ו־25×2,000 חופפים, ובבדיקת עבר התחזית לרמת 500 הייתה גבוהה פי ${format.ltr(ratio)} מהתוצאה בפועל`;
     const n2000 = format.formatNumber(backtest["2000"].n_train_at_level);
     action = `לא לבצע הקצאה מלאה לפי הדירוג. אם בוחנים אחת מארבע החלופות, לבצע פיילוט מבוקר של 25×2,000, שלה ${format.ltr(n2000)} שורות אימון ובדיקת עבר קרובה יותר`;
   } else {
-    meaning = "הדירוג לבדו אינו מכריע: טווחי 100×500 ו־25×2,000 חופפים, ובדיקת עבר על רמת 500 מעלה סימן שאלה על התחזית שם. פירוט מדויק אינו זמין כרגע";
-    // Degraded, no invented "322" row count or backtest comparison
-    // claim -- same reasoning as buildOverlapAlert's own gated
-    // recommendation, applied to this layer instead of hiding it
-    // outright (D9's four layers are never optional, DESIGN.md §6).
-    action = "לא לבצע הקצאה מלאה לפי הדירוג. אם בוחנים אחת מארבע החלופות, פיילוט מבוקר בהיקף מוגבל עדיף על הקצאה מלאה";
+    // P11A-D6/DESIGN.md §6.1ג's own Budget Simulator rows, verbatim.
+    // The PREVIOUS degraded wording here still named the two specific
+    // strategies (100×500/25×2,000) and still recommended a controlled
+    // pilot -- exactly the two things D6/D1 forbid without the missing
+    // backtest evidence: `answer` used the HEALTHY text unconditionally
+    // (never gated at all, DESIGN.md §6.1's own row, not §6.1ג's), and
+    // `action` kept "פיילוט מבוקר בהיקף מוגבל עדיף" even with no
+    // evidence backing which alternative that pilot should be.
+    answer = "השוואה מלאה בין ארבע אסטרטגיות ההקצאה אינה זמינה כרגע; טבלת האסטרטגיות שלמטה מציגה את הנתונים הגולמיים בלבד";
+    meaning = "אין בסיס להכריע בין האסטרטגיות ללא ההשוואה המלאה; פירוט מדויק על ביצוע בפועל אינו זמין כרגע";
+    action = "לא לבצע הקצאה מלאה לפי הדירוג בלבד. אין בסיס מספיק להמליץ על חלופה מסוימת ללא הראיה החסרה";
   }
   return renderSummaryRecommendation({
-    answer: "100×500 מדורגת ראשונה מספרית, אך אינה המלצה לפעולה; שתי המובילות חופפות ובדיקת העבר של רמת 500 חלשה מאוד",
+    answer,
     meaning,
     action,
     caveat: "הסכומים הם רווח מצטבר צפוי ומניחים רשומות עצמאיות ואדיטיביות; אינם רווח בחודש הבא, אינם השפעה סיבתית ואינם הבטחה",
   });
 }
 
+// P11A-D8/D9: the screen's OWN sole h1 carries `total_budget`'s
+// display value (DESIGN.md:403/:457 both map the RESPONSE field
+// `BudgetSimulation.total_budget` to this heading, not a hand-typed
+// constant) -- this screen had NO heading of any level before this
+// checkpoint. In the success state it is read from the live `sim`
+// (a Codex review round correctly rejected an earlier draft that
+// hardcoded "₪50,000" even here, unconditionally on the schema's
+// current `Literal[50000]` -- the schema locks the VALUE, not this
+// screen's obligation to read it from the response rather than
+// duplicate it). loading/error render before any `sim` exists, so
+// they fall back to that same, currently-correct literal value --
+// never claiming a live figure that hasn't arrived yet. Also satisfies
+// D9's own explicit lock against two competing headings here: exactly
+// this one h1, nothing else.
+function appendScreenHeading(totalBudget) {
+  const amount = typeof totalBudget === "number" ? totalBudget : 50000;
+  container.appendChild(el("h1", { text: format.formatCurrency(amount) }));
+}
+
 function renderSuccess(sim) {
   container.replaceChildren();
+  appendScreenHeading(sim.total_budget);
   const sorted = [...sim.strategies].sort((a, b) => a.rank - b.rank);
   container.appendChild(buildOverlapAlert(sim));
   // IA.md §6: visible even when <details> is closed -- only the
@@ -299,19 +332,25 @@ function renderSuccess(sim) {
     className: "model-disclaimer",
     text: "הסכומים הם רווח מצטבר צפוי, לא רווח בחודש הבא; ההשוואה מניחה רשומות עצמאיות ואדיטיביות ואינה השפעה סיבתית.",
   }));
-  container.appendChild(buildStrategyTable(sorted));
-  container.appendChild(buildChart(sorted));
+  // P11A-D8: DESIGN.md:273's own layout -- "שתי עמודות בלבד: הטבלה
+  // בעמודה 1, הגרף (עם ההסבר -- הלגנד -- שלו) בעמודה 2", not stacked.
+  const resultsColumns = el("div", { className: "budget-results-columns" });
+  resultsColumns.appendChild(buildStrategyTable(sorted));
+  resultsColumns.appendChild(buildChart(sorted));
+  container.appendChild(resultsColumns);
   container.appendChild(buildD9(sim));
   container.appendChild(buildModelDetails(sim));
 }
 
 function renderLoading() {
   container.replaceChildren();
+  appendScreenHeading();
   container.appendChild(status.loadingElement("טוען את סימולציית התקציב…"));
 }
 
 function renderError(message) {
   container.replaceChildren();
+  appendScreenHeading();
   container.appendChild(status.errorElement(message, { onRetry: load }));
 }
 

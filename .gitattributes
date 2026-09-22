@@ -2,5 +2,12 @@
 # evidence in docs/planning/PHASE0.md and must stay identical on every platform.
 * text=auto
 scripts/verify_phase0.py -text
+# Vendored third-party bundle whose bytes must stay byte-identical to the
+# SRI hash locked in app/static/index.html (e2e/vendor/SOURCE.md). Without
+# this, `* text=auto` normalizes its few embedded CRLF/LF sequences on
+# checkout (Windows: LF->CRLF), silently changing the SHA-384 the browser
+# computes and breaking every E2E sign-in with no diff ever showing in
+# `git status` -- diagnosed 2026-09-20.
+e2e/vendor/supabase.min.js -text
 # Matplotlib SVG path data legitimately ends some coordinate lines with spaces.
 *.svg whitespace=-blank-at-eol

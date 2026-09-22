@@ -198,6 +198,13 @@ function buildDerivedFieldNode() {
 function buildOnce() {
   container.replaceChildren();
 
+  // P11A-D9: the screen's own sole h1 -- IA.md §3's own title ("טופס
+  // החיזוי", the task code parenthetical dropped as documentation-
+  // internal notation, not product language). Every h3 on this screen
+  // (the prefill section below, and each of the three P2/P3/P4 result
+  // panels) previously had no h1/h2 above it at all.
+  container.appendChild(el("h1", { text: "טופס החיזוי" }));
+
   const contextWrap = el("div", { className: "context-confirmation" });
   const contextLabel = el("label");
   const contextCheckbox = el("input", { type: "checkbox" });
@@ -220,7 +227,11 @@ function buildOnce() {
   container.appendChild(contextWrap);
 
   const prefillWrap = el("div", { className: "prefill-picker" });
-  prefillWrap.appendChild(el("h3", { text: "טעינת דוגמה היסטורית" }));
+  // P11A-D9: promoted from h3 -- this section header comes before the
+  // three P2/P3/P4 result-panel h3s (buildP2Panel/buildP3Panel/
+  // buildP4Panel), so an h2 must precede them somewhere on this screen
+  // (no level skip -- an h1 alone next to bare h3s is itself a gap).
+  prefillWrap.appendChild(el("h2", { text: "טעינת דוגמה היסטורית" }));
   const prefillBody = el("div", { className: "prefill-picker-body" });
   prefillWrap.appendChild(prefillBody);
   container.appendChild(prefillWrap);
@@ -549,7 +560,17 @@ function buildP2Panel(result) {
   // P11-D15: hidden ALONE on facts.json load failure or a
   // model_versions.P2 mismatch against this live response's own
   // model_version -- never affects the prediction above.
+  //
+  // P11A-D4: `meaning`/`action` below both depend on the SAME
+  // leverage.dominant_feature as the tip above -- they must share its
+  // gate. Leaving them open unconditionally (their pre-11A state) was
+  // exactly the leak D4 flags: the guard on the tip is theater if an
+  // equivalent claim escapes beside it uncovered. Degraded wording is
+  // the canonical text from DESIGN.md §6.1ג (P2 rows); `answer`/`caveat`
+  // are unaffected by this asset per that same table.
   const leverage = facts.getLtvLeverage(d.model_version);
+  let meaningText;
+  let actionText;
   if (leverage && leverage.dominant_feature) {
     const featureMeta = FIELD_META[leverage.dominant_feature];
     const featureLabel = featureMeta ? featureMeta.label : leverage.dominant_feature;
@@ -561,12 +582,17 @@ function buildP2Panel(result) {
       className: "model-disclaimer",
       text: "feature importance מתאר על מה המודל נשען, ואינו מוכיח סיבתיות; שינוי הפיצ'ר אינו מבטיח שינוי בתוצאה.",
     }));
+    meaningText = "הערכה לאורך החיים הכולל של לקוח שנרכש בקמפיין שהסתיים. במודלים שאומנו על הנתונים ההיסטוריים, מספר השיחות הממוצע עד סגירה היה האות החזק ביותר, אך אינו מוכיח שיותר שיחות מאריכות קשר";
+    actionText = "כשהקלט בתחום ואינו מסומן בתמיכה חלקית, להשתמש באומדן בזהירות לתכנון ופילוח; לבחון שינוי במדיניות השיחות רק בניסוי שמודד שימור בפועל";
+  } else {
+    meaningText = "הערכה לאורך החיים הכולל של לקוח שנרכש בקמפיין שהסתיים. פירוט הגורם המשפיע ביותר על ההערכה אינו זמין כרגע";
+    actionText = "כשהקלט בתחום ואינו מסומן בתמיכה חלקית, להשתמש באומדן בזהירות לתכנון ופילוח. המלצה ממוקדת לפי הגורם המשפיע ביותר אינה זמינה כרגע";
   }
 
   panel.appendChild(renderSummaryRecommendation({
     answer: `תחזית: ${format.formatNumber(rounded)} חודשים, טווח: ${format.formatNumber(lower)}–${format.formatNumber(upper)} חודשים`,
-    meaning: "הערכה לאורך החיים הכולל של לקוח שנרכש בקמפיין שהסתיים. במודלים שאומנו על הנתונים ההיסטוריים, מספר השיחות הממוצע עד סגירה היה האות החזק ביותר, אך אינו מוכיח שיותר שיחות מאריכות קשר",
-    action: "כשהקלט בתחום ואינו מסומן בתמיכה חלקית, להשתמש באומדן בזהירות לתכנון ופילוח; לבחון שינוי במדיניות השיחות רק בניסוי שמודד שימור בפועל",
+    meaning: meaningText,
+    action: actionText,
     caveat: "זהו טווח אי־ודאות, לא הבטחה. ב־OOD אין תחזית; בתמיכה חלקית אין החלטת פילוח לפי המודל בלבד",
   }));
 
@@ -650,7 +676,7 @@ function buildP4Panel(result) {
       action: "יש לבדוק את השדות המסומנים למטה מול הטווח המאומן, לתקן במידת הצורך ולשלוח שוב",
       caveat: "אם התוצאה אינה מכוילת, אין לפרש אותה כהסתברות ואין לפעול לפיה. גם אומדן מכויל אינו הבטחה או השפעה סיבתית; זהו חיזוי הפניה בלבד, לא ציון לקוח-על",
     }));
-    panel.appendChild(buildModelDetails(p3p4DetailRows(d), "עקומת הכיול המלאה מתועדת ב-REPORT.md."));
+    panel.appendChild(buildModelDetails(p3p4DetailRows(d), "עקומת הכיול המלאה אינה מוצגת כאן; מקומה בדוח הפרויקט."));
     return panel;
   }
 
@@ -677,7 +703,7 @@ function buildP4Panel(result) {
     caveat: "אם התוצאה אינה מכוילת, אין לפרש אותה כהסתברות ואין לפעול לפיה. גם אומדן מכויל אינו הבטחה או השפעה סיבתית; זהו חיזוי הפניה בלבד, לא ציון לקוח-על",
   }));
 
-  panel.appendChild(buildModelDetails(p3p4DetailRows(d), "עקומת הכיול המלאה מתועדת ב-REPORT.md."));
+  panel.appendChild(buildModelDetails(p3p4DetailRows(d), "עקומת הכיול המלאה אינה מוצגת כאן; מקומה בדוח הפרויקט."));
   return panel;
 }
 
