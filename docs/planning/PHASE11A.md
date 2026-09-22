@@ -471,12 +471,22 @@ Overview ⇒ תקרת 2–3 טורים, ⛔ לעולם לא 5 בשורה ברו�
 
 `planning_status`: `planning_in_progress` ⇒ **`approved_for_execution`**
 — ✅ **המשתמש אישר את התכנון 19.09.2026.**
-`execution_status`: **`not_started`**
+`execution_status`: `not_started` ⇒ `in_progress` (19.09.2026, checkpoint 0) ⇒ **`done`, 22.09.2026.**
 
 ⚠ **אישור התכנון ⛔ אינו הוראת ביצוע.** `execution_status` יזוז רק
 בהוראה נפרדת ומפורשת. ⛔ אין `git checkout -b`, commit, push, PR או
 merge לפני אותה הוראה, לפי פרוטוקול האישור הכפול.
-⛔ פאזה 12 נשארת מוקפאת (`planning_in_progress`) עד סגירת 11A.
+
+✅ **סגירה (22.09.2026):** כל עשרת ה-checkpoints (`CP1`–`CP10`) הושלמו
+על `fix/phase11a-remediation`. PR #32 (`fix/phase11a-remediation`→`main`)
+מוזג — merge commit `60f6b25`. שלושה commits: `a3455d0` (checkpoints
+1–9; שתי הריצות הראשונות עליו נכשלו על false-positive של סריקת סודות,
+לא רגרסיה אמיתית), `246bb7f` (תיקון ה-false-positive; שתי ריצות CI
+ירוקות), `3dbfedf` (evidence commit -- B50/B45 ב-`REQUIREMENTS.md`;
+שתי ריצות CI ירוקות). `main` המקומי סונכרן ב-fast-forward ואומת זהה
+ל-`origin/main`. פירוט מלא ב-`ROADMAP.html` checkpoints 1–10 ו-`codex-review.md`.
+⛔ פאזה 12 הייתה מוקפאת עד סגירת 11A; עם הסגירה ההקפאה הוסרה, אך זו
+חזרה לבדיקת שער 11→12 בלבד, ⛔ לא אישור ביצוע לפאזה 12.
 
 **מצב הביקורת:** אושר בביקורת Codex, 19.09.2026, לאחר שלושה סבבים על
 המסמך עצמו — ביקורת רוחב על `6e36c17..af07d6f` (שלושה פערי יישום) ⇐

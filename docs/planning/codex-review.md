@@ -900,3 +900,28 @@ CP9 הושלם לאחר ביקורת ב-21.09.2026; CP10 טרם החל. הבול
 `docs/planning/PHASE11.md` §ד3 (הבהרת מציאות נוספה, checkpoint 9 של
 11A) · `docs/planning/PHASE11.md` §ח1 (⛔ ללא שינוי — מקור לתהליך תשעת
 השלבים שגם CP10 של 11A מאמץ) · `ROADMAP.html` רשומת 11A.
+
+# [שולב] פאזה 11A — סגירה, 22.09.2026
+
+עשרת ה-checkpoints (`CP1`–`CP10`) הושלמו על `fix/phase11a-remediation`.
+שני סבבי ביקורת קוד עצמאיים על ה-diff המצטבר (השני על טווח ה-PR המלא
+`main...246bb7f`, 36 קבצים, לאחר שהראשון לא הוכיח כיסוי של קבצי `e2e/`
+חדשים) העלו ממצא קורקטיות אחד — `isValidBudgetBacktest` ב-`facts.js`
+דרש `actual_mean_per_customer` חיובי בשתי רמות ה-backtest אף ש-`budget.js`
+משתמש רק ברמת `"500"` כמכנה — תוקן ואומת (`e2e/test_10_facts_validation.py
+::test_case_4b`). זוג ריצות ה-CI הראשון (`push`+`pull_request`) נכשל על false-positive של סריקת
+סודות (הרצף `sk-c` בתוך המילה "task-code" בהערת קוד) — אובחן, תוקן
+בשינוי ניסוח יחיד, ואומת שהבדיקה עצמה לא הוחלשה. שלושה commits:
+`a3455d0` (checkpoints 1–9), `246bb7f` (תיקון ה-false-positive),
+`3dbfedf` (evidence commit — B50/B45 ב-`REQUIREMENTS.md`, שתיהן
+נשארות `planned`). שתי הריצות הראשונות (על `a3455d0`) נכשלו על ה-
+false-positive לעיל; שתי הריצות על `246bb7f` ושתי הריצות הסופיות על
+`3dbfedf` ירוקות. PR #32 מוזג ל-`main` — merge commit `60f6b25`,
+22.09.2026. `main` המקומי סונכרן ב-fast-forward, אומת זהה ל-`origin/main`.
+
+`execution_status` של 11A: `done`. שער 11→12 פתוח לבדיקה מחדש —
+⛔ זו אינה אישור ביצוע לפאזה 12, שנשארת `planning_status:
+planning_in_progress` ו-`execution_status: not_started`.
+
+הפניות: `docs/planning/PHASE11A.md` §י (הצהרת סטטוס) · `ROADMAP.html`
+checkpoint 10 (11A) · PR #32.
