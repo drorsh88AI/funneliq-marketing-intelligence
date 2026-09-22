@@ -78,6 +78,30 @@ able to explain every line, because that's what makes it yours"* לא הופיע
 ⛔ אפס שינוי ב-`owner`/`status`/`evidence` של שורות קיימות. הספירה הפעילה:
 41 `done`, ‏16 `planned`, ‏15 `gap`, אחת `N/A` ואחת `parent` — **74** בסך הכול.
 
+**עדכון שער `11→12` (סבב תיקון אחרי 11A), ‏22.09.2026 — טיוטה הממתינה
+לביקורת ולאישור:** ⛔ **אפס שינוי `status`** ואפס שינוי `source_quote`;
+הספירה נשארת 41 `done`, ‏16 `planned`, ‏15 `gap`, אחת `N/A` ואחת `parent`.
+תוקן `evidence` שהתיישן: `B55b` (הנוסח "התוכן והמימוש החי טרם קיימים"
+אינו נכון אחרי פאזה 11 ו-11A — מה שחסר הוא ראיית קבלה, לא מימוש), `B10`
+(ספירת "35/35" ספרה פונקציות כמקרים), `B56` (תאריך אימות הפריסה),
+ו-`B59` (רכיב המסע חודד). **מיפוי עשר השורות שפאזה 12 מאמתת**, כפי
+שנקבע ב-`PHASE12.md` §ו ובהכרעות המתוקנות שם:
+
+- `B10`/`B56` ⇒ `done` על ראיית **CP2** (session ושער ההתחברות החיים).
+- `B45`/`B50`/`B28`/`B36`/`B41`/`B52` ⇒ `done` על ראיית **CP4** (חשיפה
+  בדשבורד החי), כולל שער `P12-D9` ל-`B45`/`B50`.
+- `B55b` ⇒ `done` על **CP4 + מסע CP7**, ורק כאשר כל **חמש** שאלות
+  המייסדת קיבלו תשובה מנוסחת על הגרסה החיה — כולל שהבוחן **קרא בפועל**
+  את בלוקי ההמלצה, ⛔ לא רק שהמספרים הוצגו.
+- ⚠ CP7 (מסע הבוחן החיצוני, `P12-D10`) הוא תנאי לסגירת **הפאזה**, ⛔ אך
+  אינו תנאי לכל שורה: כשל CP7 אינו מוחק ראיית CP2/CP4 שנאספה, אלא מותיר
+  את הפאזה פתוחה.
+- `B59` ⇒ נשארת `planned` גם אחרי מסע מוצלח; רכיב התיעוד (`README.md`)
+  בבעלות פאזה 13.
+- ⚠ ל-`B45`/`B50`/`B28`/`B36`/`B41`/`B52` חל בנוסף שער `P12-D9`: הנוסח
+  הקנוני של `DESIGN.md` §6.1 חייב להופיע במסלול **הבריא** עם הערכים
+  החיים, בראיה חיובית — ⛔ היעדר נוסחי §6.1ג אינו ראיה מספקת.
+
 ## §04 GitHub
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
@@ -102,7 +126,7 @@ able to explain every line, because that's what makes it yours"* לא הופיע
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
 | **B9** | §04 | "Build a login screen using Supabase Auth (email + password at minimum)." | מסך התחברות email+password | 4 | — | 12 | done | `app/static/index.html` + `app.js`; 11 בדיקות ב-`test_auth.py` |
-| **B10** | §04 | "Handle the session properly: an unauthenticated visitor sees only the login screen; a signed-in user reaches the dashboard and predictions; sign-out works and clears the session." | ניהול session מלא כולל גישה לדשבורד ולחיזויים | 11 | 4, 10, 10A | 12 | planned | פאזה 11 (CP1, מוזגה ב-`c182b4b`) מימשה את שלושת חלקי הסעיף: מבקר לא מאומת רואה **רק** Login (ה-shell חסום עד `200` מ-`/api/me`); משתמש מחובר מגיע לדשבורד ולחמשת המסכים דרך hash router; `sign-out` מנקה session ומעלה epoch (`P11-D14`). שבעת ענפי ה-bootstrap (`P11-D13`) מובחנים. ראיה: מקרי הפרכה 6/7/8/9/9א–9ו/10/11/12 ב-`e2e/` (35/35, CP11) + `docs/design/states/bootstrap-*.jpg` (CP12). ⛔ חסר לסגירה: ראיית קבלה חיה מול הפריסה — מסע התחברות/יציאה אמיתי מול Supabase, בבעלות פאזה 12 |
+| **B10** | §04 | "Handle the session properly: an unauthenticated visitor sees only the login screen; a signed-in user reaches the dashboard and predictions; sign-out works and clears the session." | ניהול session מלא כולל גישה לדשבורד ולחיזויים | 11 | 4, 10, 10A | 12 | planned | פאזה 11 (CP1, מוזגה ב-`c182b4b`) מימשה את שלושת חלקי הסעיף: מבקר לא מאומת רואה **רק** Login (ה-shell חסום עד `200` מ-`/api/me`); משתמש מחובר מגיע לדשבורד ולחמשת המסכים דרך hash router; `sign-out` מנקה session ומעלה epoch (`P11-D14`). שבעת ענפי ה-bootstrap (`P11-D13`) מובחנים. ראיה: מקרי הפרכה 6/7/8/9/9א–9ו/10/11/12 ב-`e2e/` (CP11) + `docs/design/states/bootstrap-*.jpg` (CP12). ⚠ **תיקון ספירה, 22.09.2026:** הנוסח הקודם כאן ("35/35") ספר פונקציות כמקרים — `PHASE11A.md:27` קובע 30 מקרי הפרכה ב-32 פונקציות + 3 בדיקות תשתית = 35 פונקציות; כיום `e2e/` מכסה 46 מקרים (30 + 16 של 11A) ב-67 פונקציות. ⛔ חסר לסגירה: ראיית קבלה חיה מול הפריסה — מסע התחברות/יציאה אמיתי מול Supabase, ומסע בוחן חיצוני (`P12-D10`), בבעלות פאזה 12 |
 | **B11** | §04 | "Use the public anon key in the browser for the login flow — never expose the service key client-side. Keep any privileged operations server-side." | anon בדפדפן, service לעולם לא בצד לקוח | 4 | 9 | 12 | done | `test_config.py` — `"sb_secret" not in response.text`; `render.yaml` ללא `SUPABASE_SECRET_KEY` |
 
 ## §04 פריסה
@@ -194,11 +218,11 @@ able to explain every line, because that's what makes it yours"* לא הופיע
 |---|---|---|---|---|---|---|---|---|
 | **B54** | §06 | "A public GitHub repository — code, README.md, schema.sql, a CI workflow, and a commit history that shows how you worked." | חבילת ה-repo | parent | — | — | parent | ⛔ אינו נסגר עצמאית → B1, B2, B5, B6 |
 | **B55a** | §06 | "A live application URL on Railway — a real link you can share that actually answers the founder's questions." | URL ציבורי חי | 2 | — | 12 | done | `https://funneliq.onrender.com` חי; Render לפי B64; אימותים מתועדים ב־PHASE2 וב־PHASE9 |
-| **B55b** | §06 | "A live application URL on Railway — a real link you can share that actually answers the founder's questions." | האפליקציה הפרוסה **עונה בפועל** לשאלות המייסדת | 12 | 9, 10, 11, 13, 10A | 12 | planned | ⚠ ה-URL חי (B55a). 10A/CP5 מיפה את חמש התשובות לכרטיסי יכולת גנריים בלי לחשוף את ניסוח המשימה; התוכן והמימוש החי טרם קיימים |
-| **B56** | §06 | "A login-gated dashboard — a real Supabase Auth sign-in screen, not an open page, so the app behaves like the internal tool it's meant to be." | דשבורד מאחורי לוגין | 11 | 4, 10, 10A | 12 | planned | פאזה 11 (CP1): מסך התחברות Supabase Auth אמיתי (`signInWithPassword` דרך הלקוח הרשמי; ⛔ `anon/publishable key` בלבד בדפדפן), ⛔ לא דף פתוח — `authenticated-shell` מוצג רק אחרי `200` מ-`/api/me`, ו-`403` (ארגון שאינו `northbound`) מציג `forbidden-notice` ללא נתונים כלל. ראיה: מקרי הפרכה 6/9ב/12 + `docs/design/states/login-signin-error.jpg`/`bootstrap-403.jpg`; הפריסה החיה אומתה כמגישה את ה-SPA (שער 11→12, 18.09.2026). ⛔ חסר לסגירה: ראיית קבלה חיה — התחברות אמיתית מול Supabase, פאזה 12 |
+| **B55b** | §06 | "A live application URL on Railway — a real link you can share that actually answers the founder's questions." | האפליקציה הפרוסה **עונה בפועל** לשאלות המייסדת | 12 | 9, 10, 11, 13, 10A | 12 | planned | ⚠ ה-URL חי (B55a). 10A/CP5 מיפה את חמש התשובות לכרטיסי יכולת גנריים בלי לחשוף את ניסוח המשימה. ⚠ **עודכן 22.09.2026 — הנוסח הקודם ("התוכן והמימוש החי טרם קיימים") התיישן:** פאזה 11 מימשה את חמשת המסכים ופאזה 11A יישרה אותם לחוזה התכן, ובבדיקת השער נמצא שהפריסה מגישה את build 11A בפועל (8/8 הנכסים ש-11A שינתה — זהים ל-blob שלהם ב-`HEAD`). מה שחסר אינו המימוש אלא **ראיית הקבלה**: אף אחד עדיין לא קיבל מהגרסה החיה, בהתחברות אמיתית, תשובה מנוסחת לכל חמש השאלות. סגירה ⇐ CP4 + CP7 בפאזה 12, וכל **חמש** השאלות (⛔ לא ארבע, ⛔ לא "רובן") |
+| **B56** | §06 | "A login-gated dashboard — a real Supabase Auth sign-in screen, not an open page, so the app behaves like the internal tool it's meant to be." | דשבורד מאחורי לוגין | 11 | 4, 10, 10A | 12 | planned | פאזה 11 (CP1): מסך התחברות Supabase Auth אמיתי (`signInWithPassword` דרך הלקוח הרשמי; ⛔ `anon/publishable key` בלבד בדפדפן), ⛔ לא דף פתוח — `authenticated-shell` מוצג רק אחרי `200` מ-`/api/me`, ו-`403` (ארגון שאינו `northbound`) מציג `forbidden-notice` ללא נתונים כלל. ראיה: מקרי הפרכה 6/9ב/12 + `docs/design/states/login-signin-error.jpg`/`bootstrap-403.jpg`; הפריסה החיה אומתה כמגישה את ה-SPA (שער 11→12, 18.09.2026; אומת מחדש 22.09.2026 אחרי 11A — 8/8 הנכסים ש-11A שינתה מוגשים זהים ל-blob שלהם ב-`HEAD`). ⛔ חסר לסגירה: ראיית קבלה חיה — התחברות אמיתית מול Supabase, פאזה 12 |
 | **B57** | §06 | "A short write-up (nice to keep as REPORT.md) capturing your findings and the business recommendations from the work packages" | `REPORT.md` עם ממצאים והמלצות | 13 | 5, 6, 10A | 12 | planned | אינו קיים (אומת) |
 | **B58** | §06 | "A quick demo — an optional 3–5 minute screen-recording of the deployed app in action." | הקלטת דמו | — | — | — | N/A | אופציונלי בבריף; נדחה ביודעין ב-SPEC |
-| **B59** | §06 | "A stranger can open your live URL, sign in, get a prediction for a new customer, see the follow-up and budget insights, and read your recommendations — without you touching anything. Your repo tells them how it was built and how to run it themselves." | רף הסיום מקצה לקצה | 12 | 9, 10, 11, 13, 10A | 12 | planned | 10A/CP5 נעל הזנה עצמאית שאינה תלויה ב־prefill, אישורי הקשר ותוצאות עם פעולה/מגבלה גלויות. עדיין נדרשים מסע דפדפן בפאזה 12 ו־README בפאזה 13; API חי ומוקאפ אינם סוגרים את הרף |
+| **B59** | §06 | "A stranger can open your live URL, sign in, get a prediction for a new customer, see the follow-up and budget insights, and read your recommendations — without you touching anything. Your repo tells them how it was built and how to run it themselves." | רף הסיום מקצה לקצה | 12 | 9, 10, 11, 13, 10A | 12 | planned | 10A/CP5 נעל הזנה עצמאית שאינה תלויה ב־prefill, אישורי הקשר ותוצאות עם פעולה/מגבלה גלויות. עדיין נדרשים מסע דפדפן בפאזה 12 ו־README בפאזה 13; API חי ומוקאפ אינם סוגרים את הרף. ⚠ **חודד 22.09.2026 (`P12-D10`):** רכיב המסע נסגר רק על ידי **בוחן חיצוני** — אדם שאינו בונה המוצר, ממחשב/פרופיל דפדפן אחר ונקי, בלי עזרת המפתח בזמן הבדיקה — ועל ידי **כל שבע רגלי הנוסח**: URL · התחברות עצמאית · טופס נקי ⛔ בלי prefill/דוגמה · הזנה ידנית של לקוח חדש וקבלת חיזוי עבורו · צפייה ב-Follow-up וב-Budget · קריאה בפועל של בלוקי ההמלצה · אפס התערבות (תואם `SPEC.md:1764`/`:381`); ⛔ dry-run של המשתמש אינו תחליף, ובלעדיו CP7 ופאזה 12 נשארים פתוחים. ⛔ גם מסע מוצלח של בוחן חיצוני אינו מעביר את השורה ל-`done` בפאזה 12 — הרף כולל *"Your repo tells them how it was built"*, כלומר `README.md` בפאזה 13 |
 
 ## §07 עקרונות
 
