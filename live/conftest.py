@@ -268,6 +268,37 @@ def sign_in_via_browser(page: Page, email: str, password: str) -> None:
     page.click("#login-form button[type=submit]")
 
 
+def sign_in_via_api(email: str, password: str) -> str:
+    """Real sign-in against Supabase Auth's own REST endpoint (GoTrue),
+    without a browser -- the same password grant type supabase-js's own
+    signInWithPassword() uses under the hood, verified against this
+    exact deployment with a nonexistent probe account (never against a
+    real demo account) before this helper was written: POST
+    {supabase_url}/auth/v1/token?grant_type=password with the
+    publishable key returns a proper GoTrue error shape, confirming the
+    endpoint itself is right.
+
+    Reserved for checkpoint 3's direct-PostgREST RLS checks (P12-D4
+    channel 2), where a full browser page is unnecessary overhead.
+    Returns the real access_token (JWT) on success; raises for a failed
+    sign-in via raise_for_status() rather than returning something
+    falsy, so a wrong password fails loud instead of silently producing
+    an effectively-anonymous PostgrestReadOnly."""
+    config = live_config()
+    response = httpx.post(
+        f"{config['supabase_url']}/auth/v1/token",
+        params={"grant_type": "password"},
+        json={"email": email, "password": password},
+        # httpx sets Content-Type: application/json on its own whenever
+        # json= is passed -- an explicit duplicate here would only risk
+        # drifting from httpx's own serialization if that ever changes.
+        headers={"apikey": config["supabase_publishable_key"]},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
 @dataclass
 class PostgrestReadOnly:
     """P12-D4 channel 2: the only way live/ test code may talk to
