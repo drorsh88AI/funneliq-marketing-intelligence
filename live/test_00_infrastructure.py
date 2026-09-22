@@ -291,7 +291,11 @@ _SECRET_ENV_PATTERN = re.compile(
     r'os\.environ(\[|\.get\()\s*["\']SUPABASE_SECRET_KEY["\']|os\.getenv\(\s*["\']SUPABASE_SECRET_KEY["\']'
 )
 _PASSWORD_FROM_ENV_OR_FILE_PATTERN = re.compile(
-    r'os\.environ.*password|os\.getenv\([^)]*password|open\([^)]*\.env[^)]*\)',
+    r'os\.environ.*password'
+    r'|os\.getenv\([^)]*password'
+    r'|open\([^)]*\.env[^)]*\)'
+    r'|\.env["\'][^)]*\)\s*\.\s*read_(text|bytes)\s*\('
+    r'|load_dotenv\s*\(',
     re.IGNORECASE,
 )
 
@@ -302,7 +306,15 @@ def test_live_source_never_enables_recording_or_reads_secrets_from_disk_or_env()
     define them), which would otherwise make this test fail against
     itself. Future live/test_*.py files (checkpoint 2+) ARE scanned, so
     this stays a real guard against a future harness regression, not
-    just a check on conftest.py today."""
+    just a check on conftest.py today.
+
+    A heuristic, not a proof -- same honest limitation as
+    tests/test_supabase_client.py's own equivalent check for
+    SUPABASE_SECRET_KEY. Self-review finding: the original patterns
+    caught `open(...)`-style disk reads and `os.environ`/`os.getenv`
+    idioms, but missed `pathlib.Path(...).read_text()`/`.read_bytes()`
+    on a `.env`-referencing path and python-dotenv's own
+    `load_dotenv()` -- both now covered."""
     offenders = []
     for path in LIVE_DIR.glob("*.py"):
         if path.name == Path(__file__).name:

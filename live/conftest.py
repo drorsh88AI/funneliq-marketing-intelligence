@@ -238,12 +238,17 @@ def live_context(browser):
 
 @pytest.fixture
 def live_page(live_context: BrowserContext) -> Page:
-    """The mandatory browser route into the live deployment: every
-    live/ test that needs a page depends on THIS fixture, never on a
-    bare browser.new_context()/new_page() call of its own -- doing that
-    instead would silently skip the P12-D4 channel-1 guard live_context
-    installs. Navigates to LIVE_BASE_URL once, since every real
-    acceptance case starts there."""
+    """A convenience fixture for the common case: a page already
+    navigated to LIVE_BASE_URL, with no setup needed before that first
+    load. The one thing that must never be bypassed is `live_context`
+    itself (and the P12-D4 channel-1 guard it installs) -- NOT this
+    fixture specifically. A test that needs a listener or other setup
+    registered BEFORE the first navigation (e.g. checkpoint 2's network
+    assertions, which must not miss a request fired during
+    sign_in_via_browser's own initial goto) correctly calls
+    `live_context.new_page()` directly instead of using this fixture --
+    that page is still guarded, since the guard lives on the context,
+    not on how the page was created."""
     page = live_context.new_page()
     page.goto(LIVE_BASE_URL)
     return page
@@ -346,8 +351,3 @@ class RetryCounter:
                 last_exc = exc
                 print(f"live/ retry {attempt}/{self.max_attempts} after: {exc!r}")
         raise RuntimeError(f"exhausted {self.max_attempts} attempts") from last_exc
-
-
-@pytest.fixture
-def retry_counter() -> RetryCounter:
-    return RetryCounter()
