@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from supabase import Client, create_client
@@ -106,6 +107,24 @@ def current_user(token: str = Depends(access_token)) -> dict:
 
     try:
         response = client.auth.get_user(token)
+    except httpx.TransportError:
+        # D7א row 5's own category (network/timeout/upstream failure -> 503,
+        # not the caller's fault), extended to a real gap found live
+        # (Render logs, 2026-09-23, app/auth.py:108): supabase_auth's own
+        # gotrue_base_api.py only catches (HTTPStatusError, RuntimeError)
+        # around this call, so a raw transport-level exception (httpx.
+        # RemoteProtocolError: "Server disconnected", observed twice in
+        # that incident) was never wrapped into AuthRetryableError and
+        # propagated uncaught, to a plain 500. ⚠ A TransportError here
+        # only shows a communication failure on the way to Supabase Auth
+        # -- it does NOT prove the fault sits in Supabase's own
+        # infrastructure specifically (a network-path issue would look
+        # identical), and not every subclass necessarily fires strictly
+        # before a response is received. Mapped to the same 503 as
+        # AuthRetryableError because it belongs to the same category this
+        # dependency already treats as "not the caller's fault" -- not a
+        # new decision.
+        raise HTTPException(status_code=503, detail="Auth service temporarily unavailable")
     except AuthRetryableError:
         # Network/timeout/upstream 5xx -- Supabase's infrastructure, not the token.
         raise HTTPException(status_code=503, detail="Auth service temporarily unavailable")
