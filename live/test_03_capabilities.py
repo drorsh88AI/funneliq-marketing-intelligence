@@ -43,6 +43,7 @@ from app import schemas  # noqa: E402
 from conftest import (
     DEMO_NORTHBOUND_EMAIL,
     LIVE_BASE_URL,
+    Secret,
     sign_in_via_api,
     sign_in_via_browser,
 )
@@ -100,12 +101,12 @@ def _meta_model_version(task: str) -> str:
     return _meta_json(task)["model_version"]
 
 
-def _bearer_headers(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+def _bearer_headers(token: Secret) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token.reveal()}"}
 
 
 @pytest.fixture(scope="module")
-def northbound_token(demo_credentials: dict[str, str]) -> str:
+def northbound_token(demo_credentials: dict[str, Secret]) -> Secret:
     return sign_in_via_api(DEMO_NORTHBOUND_EMAIL, demo_credentials[DEMO_NORTHBOUND_EMAIL])
 
 

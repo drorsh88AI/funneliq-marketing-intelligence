@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import datetime
 import importlib.metadata
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import httpx
@@ -32,6 +35,7 @@ from conftest import (
     LiveCredentialError,
     PostgrestReadOnly,
     RetryCounter,
+    Secret,
     _opt_in_is_set,
     _opt_in_message,
     _prompt_password,
@@ -106,8 +110,73 @@ def test_credential_prompt_returns_the_typed_value_and_prompts_with_the_label():
         return "a-fake-password-never-real"
 
     value = _prompt_password(DEMO_NORTHBOUND_EMAIL, prompt=fake_prompt)
-    assert value == "a-fake-password-never-real"
+    assert isinstance(value, Secret), "_prompt_password must wrap its return value in Secret"
+    assert value.reveal() == "a-fake-password-never-real"
     assert DEMO_NORTHBOUND_EMAIL in seen_prompts[0]
+    assert "a-fake-password-never-real" not in repr(value)
+    assert "a-fake-password-never-real" not in str(value)
+
+
+def test_secret_never_leaks_into_pytest_failure_output(tmp_path):
+    """Found live, 2026-09-23: a real failed live/ test printed both
+    demo passwords in pytest's own traceback. `Secret` (this file's own
+    fix) is designed to make that structurally impossible -- this test
+    is the DIRECT proof, not an inspection of the code: it actually
+    invokes pytest as a subprocess against a disposable, throwaway test
+    file that keeps a `Secret`-wrapped FABRICATED sentinel value (never
+    a real credential) as a local variable and then deliberately fails,
+    with `--showlocals` -- a STRICTER setting than this project's own
+    pytest.ini (which sets neither `-l` nor `addopts` at all), so this
+    proof holds even if the environment this actually runs in has some
+    global `PYTEST_ADDOPTS`/plugin this repo cannot see or control.
+
+    Self-correction (same session): the first version of this test wrote
+    the sentinel as a Python literal directly into the throwaway file's
+    OWN source code -- `Secret('the-sentinel-here')` -- and the test then
+    correctly failed: pytest's failure report always echoes the SOURCE
+    LINE around a failing assert, so the literal leaked from the source
+    text itself, nothing to do with Secret's own redaction (the locals
+    dump right below it DID show `Secret(<redacted>)` correctly). That
+    is not the real threat model: no real password is ever written into
+    any .py file's source text in this harness -- getpass() reads it at
+    RUNTIME, into memory only (P12-D3). This version matches that: the
+    sentinel is read by the throwaway test from an environment variable
+    at runtime, so it never appears in the throwaway file's source text
+    at all -- the ONLY way it can reach pytest's output now is through
+    Secret's own repr/str, which is exactly the thing under test. (The
+    env var is this synthetic proof's OWN plumbing to avoid a source-code
+    literal -- not a claim that the real harness ever reads credentials
+    from env; it deliberately does not, and never will.)
+
+    Asserts the sentinel is absent from pytest's own combined
+    stdout+stderr, and that the throwaway test genuinely failed (a
+    trivial pass would make the absence check meaningless)."""
+    sentinel = "DUMMY-SECRET-4f8a9c21-never-a-real-credential"
+    throwaway = tmp_path / "test_throwaway_secret_leak_proof.py"
+    throwaway.write_text(
+        "import os, sys\n"
+        f"sys.path.insert(0, {str(LIVE_DIR)!r})\n"
+        "from conftest import Secret\n"
+        "\n"
+        "def test_deliberate_failure_with_secret_in_local_scope():\n"
+        "    demo_credentials = {'x': Secret(os.environ['LEAK_PROOF_SENTINEL'])}\n"
+        "    assert False, 'deliberate failure for the leak-proof test -- expected'\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "--showlocals", "-p", "no:cacheprovider", str(throwaway)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60,
+        env={**os.environ, "LEAK_PROOF_SENTINEL": sentinel},
+    )
+    combined_output = result.stdout + result.stderr
+    assert sentinel not in combined_output, (
+        "the sentinel leaked into pytest's own --showlocals output -- Secret's redaction "
+        f"does not actually hold under real pytest rendering:\n{combined_output}"
+    )
+    assert "1 failed" in combined_output, (
+        f"the throwaway test did not actually fail -- this proof needs a real failure, "
+        f"not a trivial pass:\n{combined_output}"
+    )
 
 
 # ---------------------------------------------------------------------------

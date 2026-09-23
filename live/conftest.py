@@ -86,7 +86,72 @@ class LiveCredentialError(RuntimeError):
     first requested the credentials fixture), never a silent skip."""
 
 
-def _prompt_password(label: str, prompt: Callable[[str], str] = getpass.getpass) -> str:
+class Secret:
+    """Wraps a credential (password or bearer token) so that, AS LONG AS
+    IT STAYS WRAPPED, its real value cannot render via repr()/str()/an
+    f-string/print() -- including inside a pytest traceback's locals
+    dump (`-l`/`--showlocals`, a plugin, or a user-side `PYTEST_ADDOPTS`
+    this repo's own pytest.ini cannot see or control), or a dataclass's
+    auto-generated `__repr__`. Found live, 2026-09-23: a failed live/
+    test printed both demo passwords in its traceback -- P12-D3's own
+    guarantee ("nothing here ever prints them") held for every EXPLICIT
+    call site in this file, but not for a local variable simply sitting
+    in scope when something else failed.
+
+    `.reveal()` is the only way to get the real string out, and the
+    convention every call site is SUPPOSED to follow is: call it inline,
+    in the same expression that needs it (an HTTP header, a
+    `page.fill()` call, a JSON body), never assigned to a new local name
+    -- but that is a per-call-site discipline this class cannot enforce
+    mechanically, only make easy to follow and easy to grep for. It has
+    already been violated once and caught by review, not by the type
+    system: two `f"Bearer {token}"` sites in test_04_performance_and_
+    resources.py silently sent the literal header 'Bearer <redacted>'
+    instead of `.reveal()`'s real value (2026-09-23, fixed same day) --
+    a real functional bug (every such request would 401), not merely a
+    cosmetic one. So: this class guarantees a WRAPPED value never
+    leaks. It does NOT guarantee every call site in this directory
+    reveals correctly and safely -- that is verified per file, e.g. by
+    test_secret_never_leaks_into_pytest_failure_output (test_00) and
+    test_bearer_headers_reveals_real_token_and_censors_later_failure_output
+    (test_04), each proving its OWN specific fixture/helper, not a
+    blanket claim about every path in live/.
+
+    A second, DIFFERENT limit -- empirically checked (2026-09-23, two
+    scratch probes against real httpx calls), not assumed: if the exact
+    call that consumes a revealed value is what fails (e.g. `httpx.get()`
+    itself raising `ConnectError`), `--showlocals` shows the real value
+    via THAT LIBRARY'S OWN internal frames (httpx's own request-building
+    code names its own `headers` parameter too) -- regardless of whether
+    this project's own code ever names a local `headers`. That is not
+    fixable from this class, or from this project's own discipline:
+    transmitting a real credential requires it to exist as a real string
+    at the moment of transmission, inside a library this project does
+    not control. What IS guaranteed -- and matches the actual 2026-09-23
+    incident's own shape, where the credential sat in scope through a
+    LATER, unrelated Playwright failure, not through the sign-in call
+    itself -- is that a failure AFTER the revealing call has already
+    returned normally never shows the value. Every reveal site in this
+    directory is structured that way: the call that consumes the real
+    value is expected to succeed or fail on its own terms (a 401, a
+    ConnectError) before anything else in that test can fail."""
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str):
+        self._value = value
+
+    def reveal(self) -> str:
+        return self._value
+
+    def __repr__(self) -> str:
+        return "Secret(<redacted>)"
+
+    def __str__(self) -> str:
+        return "<redacted>"
+
+
+def _prompt_password(label: str, prompt: Callable[[str], str] = getpass.getpass) -> Secret:
     """`prompt` is injectable so test_00_infrastructure.py can exercise
     the EOF/empty-answer failure paths with a fake, without a real
     terminal and without ever needing a real password."""
@@ -99,12 +164,14 @@ def _prompt_password(label: str, prompt: Callable[[str], str] = getpass.getpass)
         ) from exc
     if not value:
         raise LiveCredentialError(f"empty password entered for {label} -- refusing to continue")
-    return value
+    return Secret(value)
 
 
 @pytest.fixture(scope="session")
-def demo_credentials() -> dict[str, str]:
-    """P12-D3: prompted once per session, held in memory only. Only
+def demo_credentials() -> dict[str, Secret]:
+    """P12-D3: prompted once per session, held in memory only, wrapped
+    in `Secret` (see its own docstring) so the dict itself is safe to
+    have sitting in any test's local scope for the whole test body. Only
     consumed the first time a test actually depends on this fixture --
     checkpoint 1's own self-checks never do, so running `pytest -s
     live/` today (before checkpoint 2's real sign-in cases exist) never
@@ -254,21 +321,23 @@ def live_page(live_context: BrowserContext) -> Page:
     return page
 
 
-def sign_in_via_browser(page: Page, email: str, password: str) -> None:
+def sign_in_via_browser(page: Page, email: str, password: Secret) -> None:
     """Fills and submits the REAL login form against the live deployment
     -- the same selectors e2e/conftest.py's own sign_in() uses, since
     it's the same app.js code driving both. Reserved for checkpoint 2's
     real Auth cases; checkpoint 1 never calls this (it has no reason to
     sign in for a harness self-check), so it stays a plain helper here,
-    not a fixture."""
+    not a fixture. `password.reveal()` is called inline, in the same
+    expression `page.fill()` consumes -- never assigned to a local name
+    (Secret's own docstring explains why that distinction matters)."""
     page.goto(LIVE_BASE_URL)
     page.wait_for_selector("#login-section:not([hidden])", timeout=30_000)
     page.fill("#login-form input[name=email]", email)
-    page.fill("#login-form input[name=password]", password)
+    page.fill("#login-form input[name=password]", password.reveal())
     page.click("#login-form button[type=submit]")
 
 
-def sign_in_via_api(email: str, password: str) -> str:
+def sign_in_via_api(email: str, password: Secret) -> Secret:
     """Real sign-in against Supabase Auth's own REST endpoint (GoTrue),
     without a browser -- the same password grant type supabase-js's own
     signInWithPassword() uses under the hood, verified against this
@@ -280,15 +349,20 @@ def sign_in_via_api(email: str, password: str) -> str:
 
     Reserved for checkpoint 3's direct-PostgREST RLS checks (P12-D4
     channel 2), where a full browser page is unnecessary overhead.
-    Returns the real access_token (JWT) on success; raises for a failed
-    sign-in via raise_for_status() rather than returning something
-    falsy, so a wrong password fails loud instead of silently producing
-    an effectively-anonymous PostgrestReadOnly."""
+    Returns the real access_token (JWT), itself wrapped in `Secret` --
+    a bearer token is still a real credential (P12-D3's own reviewer
+    flagged this: check every fixture that returns a JWT, not just the
+    password ones) -- on success; raises for a failed sign-in via
+    raise_for_status() rather than returning something falsy, so a wrong
+    password fails loud instead of silently producing an
+    effectively-anonymous PostgrestReadOnly. `password.reveal()` is
+    called inline, in the same `json={...}` literal `httpx.post()`
+    consumes -- never assigned to a local name."""
     config = live_config()
     response = httpx.post(
         f"{config['supabase_url']}/auth/v1/token",
         params={"grant_type": "password"},
-        json={"email": email, "password": password},
+        json={"email": email, "password": password.reveal()},
         # httpx sets Content-Type: application/json on its own whenever
         # json= is passed -- an explicit duplicate here would only risk
         # drifting from httpx's own serialization if that ever changes.
@@ -296,7 +370,7 @@ def sign_in_via_api(email: str, password: str) -> str:
         timeout=30,
     )
     response.raise_for_status()
-    return response.json()["access_token"]
+    return Secret(response.json()["access_token"])
 
 
 @dataclass
@@ -311,13 +385,13 @@ class PostgrestReadOnly:
 
     base_url: str
     publishable_key: str
-    access_token: str | None = None
+    access_token: Secret | None = None
     rejected_attempts: list[str] = field(default_factory=list)
 
     def _headers(self) -> dict[str, str]:
         headers = {"apikey": self.publishable_key}
         if self.access_token:
-            headers["Authorization"] = f"Bearer {self.access_token}"
+            headers["Authorization"] = f"Bearer {self.access_token.reveal()}"
         return headers
 
     def get(self, path: str, params: dict[str, str] | None = None) -> httpx.Response:

@@ -18,10 +18,14 @@ node-id-only command would invite running it in isolation from a session
 where something else already touched the service moments before.
 
 0. `test_robots_txt_sentinel_logic`, `test_funneliq_index_marker_logic`,
-   and `test_deploy_sha_validation_logic` -- pure functions proven against
-   fabricated strings, no network, no credentials, no ordering constraint.
-   They give the positive-evidence checks inside cold start and the
-   restart/redeploy check their own independent, focused proof.
+   `test_deploy_sha_validation_logic`, and
+   `test_bearer_headers_reveals_real_token_and_censors_later_failure_output` --
+   pure functions/helpers proven against fabricated strings and a dummy
+   token, no network beyond a local subprocess pytest invocation, no real
+   credentials, no ordering constraint. They give the positive-evidence
+   checks inside cold start, the restart/redeploy check, and every real
+   `Authorization` header this file sends, their own independent, focused
+   proof.
 1. `test_cold_start_after_real_inactivity` -- prompts for demo-northbound's
    password via `demo_credentials` (getpass, in-process, zero network I/O)
    BEFORE the wait below. Render's free tier spins a web service down
@@ -104,8 +108,10 @@ run it.
 """
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -114,10 +120,12 @@ import httpx
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+LIVE_DIR = Path(__file__).resolve().parent
 
 from conftest import (
     DEMO_NORTHBOUND_EMAIL,
     LIVE_BASE_URL,
+    Secret,
     install_zero_write_guard,
     live_config,
     sign_in_via_api,
@@ -157,6 +165,12 @@ ROUTE_PAYLOADS = {
     "/api/predict/referral": FUNNEL_PAYLOAD,
     "/api/predict/super-customer": EARLY_FUNNEL_PAYLOAD,
 }
+
+
+def _bearer_headers(token: Secret) -> dict[str, str]:
+    """Built fresh at each call site, never bound to a long-lived local
+    -- the one and only place `.reveal()` is called in this file."""
+    return {"Authorization": f"Bearer {token.reveal()}"}
 
 
 # Render's own edge intercepts /robots.txt for a SPUN-DOWN free service
@@ -287,7 +301,80 @@ def test_deploy_sha_validation_logic():
     assert _sha_matches_origin_main("fffffff", real_sha) is False
 
 
-def test_cold_start_after_real_inactivity(demo_credentials: dict[str, str]):
+def test_bearer_headers_reveals_real_token_and_censors_later_failure_output(tmp_path):
+    """Codex review, 2026-09-23: two raw `f"Bearer {token}"` f-strings
+    survived in this file's own test_cold_start_after_real_inactivity and
+    test_journey_still_works_after_manual_redeploy (both now fixed, routed
+    through `_bearer_headers()`). Because `Secret.__str__` returns
+    '<redacted>', those two lines were silently sending the literal header
+    'Bearer <redacted>' -- not a logging cosmetic issue, a real one: every
+    request built that way would have failed with a real 401 against the
+    live service. Part 1 below catches exactly that class of bug: a test
+    that only checked "does Secret redact repr()" would stay green while
+    every real request 401'd.
+
+    Part 2 is a REAL, EMPIRICALLY-CHECKED limit, not an assumption --
+    verified directly (2026-09-23, two scratch probes) before writing
+    this test: if the SAME call that reveals a token is what fails
+    (e.g. httpx.get() itself raising a ConnectError), `--showlocals`
+    shows the real value via HTTPX'S OWN internal frames (its own
+    request-building code binds the header dict to a local named
+    `headers` too) -- REGARDLESS of whether this file's own code ever
+    names a local `headers`. That is not fixable from here: transmitting
+    a real credential requires the raw string to exist as a real string
+    at the moment of transmission, in a library this project does not
+    control. So this test deliberately does NOT claim that case is safe
+    -- it proves the case that actually matches the real 2026-09-23
+    incident: demo_credentials sat in the test's own frame for the WHOLE
+    test body, and a LATER, UNRELATED call (a Playwright wait, nothing
+    to do with the credential) is what failed. Mirrored here: the header
+    dict is built and consumed by a call that RETURNS NORMALLY, and only
+    AFTER that -- with no live reference to the revealed value left in
+    the failing frame -- does the deliberate failure happen. A FABRICATED
+    dummy token throughout, never a real credential.
+
+    Scope, precisely -- deliberately NOT a blanket claim: `Secret`
+    guarantees a WRAPPED value never leaks, for as long as it stays
+    wrapped. It does not and cannot guarantee that the exact call
+    transmitting a REVEALED value is itself leak-proof if that specific
+    call fails -- see the class docstring's own note on this."""
+    dummy_token = Secret("dummy-jwt-token-not-a-real-credential")
+    headers = _bearer_headers(dummy_token)
+    assert headers == {"Authorization": "Bearer dummy-jwt-token-not-a-real-credential"}, (
+        f"_bearer_headers() did not reveal the real token into the request header -- got {headers!r}"
+    )
+
+    throwaway = tmp_path / "test_throwaway_bearer_header_leak_proof.py"
+    throwaway.write_text(
+        "import os, sys\n"
+        f"sys.path.insert(0, {str(LIVE_DIR)!r})\n"
+        "from conftest import Secret\n"
+        "\n"
+        "def _send(headers):\n"
+        "    return len(headers)  # stands in for a real call that RETURNS NORMALLY\n"
+        "\n"
+        "def test_deliberate_failure_after_the_revealing_call_already_returned():\n"
+        "    token = Secret(os.environ['LEAK_PROOF_TOKEN'])\n"
+        "    _send({'Authorization': 'Bearer ' + token.reveal()})\n"
+        "    assert False, 'deliberate failure for the leak-proof test -- expected'\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "--showlocals", "-p", "no:cacheprovider", str(throwaway)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60,
+        env={**os.environ, "LEAK_PROOF_TOKEN": dummy_token.reveal()},
+    )
+    combined_output = result.stdout + result.stderr
+    assert dummy_token.reveal() not in combined_output, (
+        "the dummy token leaked into pytest's own --showlocals output for a failure "
+        f"AFTER the revealing call already returned normally:\n{combined_output}"
+    )
+    assert "1 failed" in combined_output, (
+        f"the throwaway test did not actually fail -- this proof needs a real failure:\n{combined_output}"
+    )
+
+
+def test_cold_start_after_real_inactivity(demo_credentials: dict[str, Secret]):
     """PHASE12.md CP5 + P12-D5 + falsification case 4: 'cold start אחרי
     חוסר פעילות => הבקשה הראשונה מסתיימת, והמסע ממשיך לעבוד.'
 
@@ -396,7 +483,7 @@ def test_cold_start_after_real_inactivity(demo_credentials: dict[str, str]):
     journey_start = time.monotonic()
     journey_response = httpx.post(
         f"{LIVE_BASE_URL}/api/predict/ltv",
-        headers={"Authorization": f"Bearer {token}"}, json=FUNNEL_PAYLOAD, timeout=60,
+        headers={"Authorization": f"Bearer {token.reveal()}"}, json=FUNNEL_PAYLOAD, timeout=60,
     )
     journey_elapsed = time.monotonic() - journey_start
     assert journey_response.status_code == 200, journey_response.text
@@ -413,12 +500,14 @@ def test_warm_latency_for_all_seven_routes(northbound_token: str):
     per route as CP5's own required evidence."""
     timings = {}
     for method, path in SEVEN_ROUTES:
-        headers = {"Authorization": f"Bearer {northbound_token}"}
         start = time.monotonic()
         if method == "GET":
-            response = httpx.get(f"{LIVE_BASE_URL}{path}", headers=headers, timeout=30)
+            response = httpx.get(f"{LIVE_BASE_URL}{path}", headers=_bearer_headers(northbound_token), timeout=30)
         else:
-            response = httpx.post(f"{LIVE_BASE_URL}{path}", headers=headers, json=ROUTE_PAYLOADS[path], timeout=30)
+            response = httpx.post(
+                f"{LIVE_BASE_URL}{path}", headers=_bearer_headers(northbound_token),
+                json=ROUTE_PAYLOADS[path], timeout=30,
+            )
         elapsed = time.monotonic() - start
         timings[path] = elapsed
         assert response.status_code == 200, f"{method} {path}: {response.status_code} {response.text}"
@@ -429,7 +518,7 @@ def test_warm_latency_for_all_seven_routes(northbound_token: str):
 
 
 @pytest.fixture(scope="module")
-def northbound_token(demo_credentials: dict[str, str]) -> str:
+def northbound_token(demo_credentials: dict[str, Secret]) -> Secret:
     return sign_in_via_api(DEMO_NORTHBOUND_EMAIL, demo_credentials[DEMO_NORTHBOUND_EMAIL])
 
 
@@ -482,7 +571,7 @@ def _prompt_redeploy_confirmation() -> str:
     return sha
 
 
-def test_journey_still_works_after_manual_redeploy(demo_credentials: dict[str, str], browser):
+def test_journey_still_works_after_manual_redeploy(demo_credentials: dict[str, Secret], browser):
     """PHASE12.md CP5 + falsification case 9: 'redeploy/restart =>
     המודלים נטענים והמסע עובד, בלי מצב תקוע.' Requires a MANUAL redeploy
     (see module docstring) confirmed via `_prompt_redeploy_confirmation`
@@ -500,13 +589,19 @@ def test_journey_still_works_after_manual_redeploy(demo_credentials: dict[str, s
     confirmed_sha = _prompt_redeploy_confirmation()
 
     token = sign_in_via_api(DEMO_NORTHBOUND_EMAIL, demo_credentials[DEMO_NORTHBOUND_EMAIL])
-    headers = {"Authorization": f"Bearer {token}"}
-
-    ltv_response = httpx.post(f"{LIVE_BASE_URL}/api/predict/ltv", headers=headers, json=FUNNEL_PAYLOAD, timeout=60)
+    # `_bearer_headers(token)` is called fresh at each call site below,
+    # not bound once to a `headers` local reused across both requests
+    # and left sitting in scope through the rest of this (long) test,
+    # including the whole browser portion below -- the shorter a raw-JWT
+    # dict's lifetime as a named local, the smaller the window any later
+    # failure's traceback could ever show it in.
+    ltv_response = httpx.post(
+        f"{LIVE_BASE_URL}/api/predict/ltv", headers=_bearer_headers(token), json=FUNNEL_PAYLOAD, timeout=60
+    )
     assert ltv_response.status_code == 200, ltv_response.text
     assert ltv_response.json()["point_estimate"] is not None, "post-redeploy P2 returned a null point_estimate"
 
-    budget_response = httpx.get(f"{LIVE_BASE_URL}/api/simulate/budget", headers=headers, timeout=60)
+    budget_response = httpx.get(f"{LIVE_BASE_URL}/api/simulate/budget", headers=_bearer_headers(token), timeout=60)
     assert budget_response.status_code == 200, budget_response.text
     strategies = budget_response.json()["strategies"]
     assert len(strategies) == 4 and all(s["point_estimate"] is not None for s in strategies), (
