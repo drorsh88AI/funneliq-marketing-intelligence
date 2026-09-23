@@ -689,3 +689,18 @@ memory usage"; ושורת הסיכון "קודקס אינו זמין" הוסרה
 `execution_status` נשאר `not_started` עד סגירת שער התכנון (§ה1, CP0):
 commit ייעודי על ענף תכנון → PR → CI → merge ל-`main`, ורק אז נפתח
 `test/acceptance`. אין באישור זה פתיחת ענף מוקדמת ואין הרצה של `live/`.
+
+✅ **פאזה 12 נסגרה — 2026-09-24, הוראת המשתמש המפורשת "מאשר מיזוג PR #35
+ל-main".** `CP0`–`CP9` הושלמו (ר' `ROADMAP.html` לראיה המלאה של כל
+checkpoint); שער §ט (הרצה משולבת מחייבת) נסגר באותו יום —
+`pytest -s -x live/`, 52 passed, 1389.07 שניות, Chrome `153.0.8010.54`,
+מול `main`@`a349f7f`. `PR #35` (`test/acceptance` → `main`) מוזג
+כ-merge commit `242cc1e`; CI על `main` ירוק; `main` המקומי סונכרן
+ב-fast-forward. `execution_status`: `in_progress` ⇒ **`done`**.
+⚠ **מה נשאר פתוח, במפורש, ובהתאם לתכנון המקורי — ⛔ לא ממצא חדש
+שהוחמץ:** `B55b` נשארת `planned` (ממצאי שימושיות + ציון P4S נמוך/חוזר,
+`docs/acceptance/EVIDENCE.md` §ד/§ה, טרם הוכרעו); `B59` נשארת `planned`
+עד רכיב התיעוד (`README.md`) בפאזה 13 — זו הייתה ההכרעה הנעולה כבר
+בתכנון (§ו לעיל), ⛔ לא סטייה מסגירת הפאזה. תיקון `httpx.TransportError`
+→`503` ב-`app/auth.py` (commit `e0c7286`) מאומת ע"י `tests/test_auth.py`
+בלבד — ⛔ לא ע"י הרצת ה-live לעיל, שבוצעה מול הגרסה שקדמה לו.
