@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from supabase_auth.errors import AuthApiError, AuthInvalidJwtError, AuthRetryableError
@@ -93,6 +94,23 @@ def test_me_when_gotrue_5xx_is_503_not_401(monkeypatch):
 def test_me_when_network_retryable_is_503_not_401(monkeypatch):
     """D7א row 5: connection/timeout error -- must not be mapped to 401."""
     exc = AuthRetryableError("connection failed", status=0)
+    monkeypatch.setattr(auth, "get_supabase", lambda: _FakeClient(exc=exc))
+    response = client.get("/api/me", headers={"Authorization": "Bearer whatever"})
+    assert response.status_code == 503
+
+
+def test_me_when_remote_protocol_error_is_503_not_401(monkeypatch):
+    """A real gap found live (Render logs, 2026-09-23, app/auth.py:108):
+    httpx.RemoteProtocolError ('Server disconnected') is a raw transport
+    failure -- neither an HTTPStatusError nor a RuntimeError, the only
+    two supabase_auth's own gotrue_base_api.py catches around this exact
+    call -- so it was never wrapped into AuthRetryableError and
+    previously propagated raw. Treated as the same D7א category as
+    AuthRetryableError (a communication failure on the way to Supabase
+    Auth, not proof the token itself is bad, ⛔ not proof the fault sits
+    in Supabase's own infrastructure specifically) -- must not be a bare
+    500, and must not be mistaken for a bad token either."""
+    exc = httpx.RemoteProtocolError("Server disconnected")
     monkeypatch.setattr(auth, "get_supabase", lambda: _FakeClient(exc=exc))
     response = client.get("/api/me", headers={"Authorization": "Bearer whatever"})
     assert response.status_code == 503

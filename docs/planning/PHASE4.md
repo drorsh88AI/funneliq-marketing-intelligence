@@ -116,6 +116,7 @@ Email provider panel (רק Email OTP expiration) — ואין דרך לשנות 
 | JWT פגום בצד הלקוח | `AuthInvalidJwtError` | **401** | credential לא תקין |
 | GoTrue החזיר 5xx | `AuthApiError` עם `status ≥ 500` | **503** | ⚠ `500` **אינו** ברשימת ה-network codes ולכן מגיע כאן — מיפויו ל-401 היה מדווח תקלת upstream כבעיית credentials |
 | כשל רשת / timeout / upstream 502‑530 | `AuthRetryableError` | **503** | תקלת תשתית |
+| ⚠ כשל תקשורת ברמת ה-transport בדרך לאימות Supabase (נוסף 2026-09-24, נצפה חי ב-Render logs, 2026-09-23, `app/auth.py:108`, פעמיים, `RemoteProtocolError: Server disconnected`) | `httpx.TransportError` (למשל `RemoteProtocolError`) | **503** | מטופל באותה קטגוריה כמו `AuthRetryableError` — כשל בדרך אל Supabase, ⛔ **לא הוכחה** שהתקלה בהכרח בתשתית Supabase עצמה (יכול להיות גם כשל בנתיב הרשת), ⛔ ולא הוכחה שכל תת-מחלקה של `httpx.TransportError` בהכרח מתרחשת לפני תגובה כלשהי — הידוע בפועל הוא ש-`supabase_auth`'s `gotrue_base_api.py` עוטף רק `(HTTPStatusError, RuntimeError)` סביב הקריאה, כך שחריגת transport גולמית חומקת ולא נעטפת ל-`AuthRetryableError` |
 | כל השאר | `AuthUnknownError` וכו' | **500** (מתפשט) | לא לבלוע שגיאות לא מוכרות |
 
 `get_supabase()` נקרא **מחוץ** ל-`try`. אין `except Exception` רחב.

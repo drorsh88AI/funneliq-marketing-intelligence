@@ -31,10 +31,12 @@ import json
 import math
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import httpx
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -70,6 +72,26 @@ FORM_VALUES = {
 # browser entirely.
 FUNNEL_PAYLOAD = {**FORM_VALUES, "not_closed": FORM_VALUES["followup_5"] - FORM_VALUES["closed"]}
 EARLY_FUNNEL_PAYLOAD = {k: FORM_VALUES[k] for k in ("ad_budget", "num_leads", "leads_answered", "followup_1")}
+
+# test_p2_d9_layers_show_live_evidence's own wait for the shared form's
+# predict.js:808 Promise.all([ltv, upsell, referral, facts.init()]) to
+# settle -- P2's panel cannot render before ALL FOUR resolve, referral
+# included. A real focused run (2026-09-23) timed out at the original 15s
+# bound waiting on this exact selector, before any D9/model_version
+# assertion ever ran, reproduced when the test ran alone (not explained
+# by the combined-directory run's cross-file test reordering). ⚠ The
+# Promise.all above explains why P2's panel CAN be delayed by referral --
+# it does NOT by itself establish that referral (as opposed to some other
+# request, or an error state that never resolved) was the actual cause of
+# THIS timeout; that diagnosis is exactly what the try/except diagnostics
+# below exist to produce on the next run, not something already proven
+# here. The bound reused below (45s = 3x the original 15s) matches CP6's
+# own fix for its two waits on this identical Promise.all
+# (live/test_05_edge_cases.py's PREDICT_PROMISE_ALL_WAIT_MS, derived
+# there from predict/referral's CP5 warm-latency measurement of 9.750s in
+# isolation) -- reused for consistency since it is the same code path,
+# not re-derived independently.
+PREDICT_PROMISE_ALL_WAIT_MS = 45_000
 
 # Local, pre-network validation against the real request schemas
 # (app/schemas.py) -- a payload mistake fails here, immediately, instead
@@ -313,23 +335,108 @@ def test_p2_d9_layers_show_live_evidence(live_context, demo_credentials, live_bu
     real shared form, captures the exact POST /api/predict/ltv response
     that produced the on-screen panel, and checks the four D9 layers
     against that response's own numbers -- not a second, independent
-    call that could (in principle) diverge."""
+    call that could (in principle) diverge.
+
+    Diagnostic-only note, 2026-09-23: a real focused run of this test
+    alone timed out at the original 15s bound waiting for
+    '.prediction-panel-p2 .summary-recommendation', before reaching any
+    D9/model_version assertion -- see PREDICT_PROMISE_ALL_WAIT_MS above
+    for the mechanism that can explain a delay (predict.js's shared
+    Promise.all, same code path as CP6's own diagnosed timeout). ⚠ That
+    mechanism is not itself proof of what actually delayed THIS run --
+    which request, or whether an error state rendered instead of a
+    result -- only a plausible explanation for why a longer, still-finite
+    wait is reasonable. The wait below now uses that bound, and, only if
+    a Playwright TimeoutError is still raised, prints the same kind of
+    structural network/panel diagnostics CP6's
+    test_path_failure_shows_error_and_recovers_on_retry already
+    established -- method/URL/status and panel class presence only,
+    never a request/response body, header, or anything from
+    #login-form -- specifically so the next run's actual cause can be
+    read off directly, not inferred. Any other exception is left
+    unlabeled and re-raised as itself, not misreported as a timeout."""
     captured = {}
+    network_log: list[str] = []
+    nav_start = time.monotonic()
     page = live_context.new_page()
 
     def _on_response(response):
         if response.url.endswith("/api/predict/ltv") and response.request.method == "POST":
             captured["ltv"] = response.json()
 
+    def _relevant(url: str) -> bool:
+        return any(marker in url for marker in ("/api/predict/", "/api/simulate/", "business_facts.json"))
+
+    def _log_response(response):
+        if _relevant(response.url):
+            elapsed = time.monotonic() - nav_start
+            network_log.append(f"t+{elapsed:.2f}s RESPONSE {response.request.method} {response.url} -> {response.status}")
+
+    def _log_request_failed(request):
+        if _relevant(request.url):
+            elapsed = time.monotonic() - nav_start
+            failure = request.failure or "unknown"
+            network_log.append(f"t+{elapsed:.2f}s REQUEST-FAILED {request.method} {request.url} ({failure})")
+
+    def _panel_snapshot(page) -> str:
+        """Structural only -- which of {error, real result, neither yet}
+        each panel is in, never the panel's own text content."""
+        lines = []
+        for name in ("p2", "p3", "p4"):
+            selector = f".prediction-panel-{name}"
+            exists = page.query_selector(selector) is not None
+            has_error = page.query_selector(f"{selector} .panel-error") is not None
+            has_primary = page.query_selector(f"{selector} .prediction-primary") is not None
+            lines.append(f"  {selector}: exists={exists} panel-error={has_error} prediction-primary={has_primary}")
+        return "\n".join(lines)
+
     page.on("response", _on_response)
+    page.on("response", _log_response)
+    page.on("requestfailed", _log_request_failed)
     sign_in_via_browser(page, DEMO_NORTHBOUND_EMAIL, demo_credentials[DEMO_NORTHBOUND_EMAIL])
     page.wait_for_selector("#authenticated-shell:not([hidden])", timeout=30_000)
 
     _open_predict(page)
     _fill_predict(page, FORM_VALUES)
     page.check(".context-confirmation input[type=checkbox]")
+    nav_start = time.monotonic()  # reset: the window that matters is from submit, not from page load
     page.click(".submit-button")
-    page.wait_for_selector(".prediction-panel-p2 .summary-recommendation", timeout=15_000)
+
+    # Races the success selector against .panel-error (a single
+    # comma-separated CSS selector matches whichever appears first, same
+    # querySelector semantics Playwright uses under the hood) -- a real
+    # server-side error should fail this test immediately with what
+    # actually happened, not sit through the full 45s waiting for a
+    # result that predict.js will never render once ANY of ltv/upsell/
+    # referral's Promise.all members rejects or resolves to an error
+    # panel (predict.js:829-833, blocked/stale aside -- a hard failure on
+    # any of the three still lands here since submitState only ever
+    # becomes "done").
+    try:
+        page.wait_for_selector(
+            ".prediction-panel-p2 .summary-recommendation, .prediction-panel-p2 .panel-error",
+            timeout=PREDICT_PROMISE_ALL_WAIT_MS,
+        )
+    except PlaywrightTimeoutError:
+        print(
+            "\ntest_p2_d9_layers_show_live_evidence diagnostics (Playwright TimeoutError -- neither "
+            ".summary-recommendation nor .panel-error appeared on .prediction-panel-p2 after "
+            f"{PREDICT_PROMISE_ALL_WAIT_MS}ms):\n"
+            + "\n".join(network_log or ["  (no matching network events captured)"])
+            + "\npanel state at the moment of timeout:\n"
+            + _panel_snapshot(page)
+        )
+        raise
+
+    if page.query_selector(".prediction-panel-p2 .panel-error") is not None:
+        error_text = page.text_content(".prediction-panel-p2 .panel-error")
+        pytest.fail(
+            "test_p2_d9_layers_show_live_evidence: .prediction-panel-p2 rendered "
+            f".panel-error instead of a result -- error text: {error_text!r}\n"
+            + "\n".join(network_log or ["  (no matching network events captured)"])
+            + "\npanel state at the moment of failure:\n"
+            + _panel_snapshot(page)
+        )
 
     assert "ltv" in captured, "POST /api/predict/ltv was never captured -- submit did not fire it"
     d = schemas.LtvPrediction.model_validate(captured["ltv"])

@@ -118,6 +118,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LIVE_DIR = Path(__file__).resolve().parent
@@ -135,6 +136,21 @@ from conftest import (
 # Render's own documented free-tier inactivity spin-down window is 15
 # minutes (https://render.com/docs/free). 16 minutes = 1-minute margin.
 COLD_START_WAIT_SECONDS = 16 * 60
+
+# test_journey_still_works_after_manual_redeploy's browser-side wait for
+# '.prediction-panel-p2 .prediction-primary' submits the same shared
+# predict.js form as test_03_capabilities.py's D9 tests, so it goes
+# through the identical predict.js:808 Promise.all([ltv, upsell,
+# referral, facts.init()]) -- P2's panel cannot render before ALL FOUR
+# resolve. ⚠ This is a plausible mechanism, not a diagnosis: this file's
+# own interrupted combined-run F for this test has no traceback, so
+# raising this bound does NOT claim to explain that specific failure --
+# it only removes one known, already-documented source of false timeouts
+# (referral's own CP5 warm-latency measurement of 9.750s in isolation)
+# before any further diagnosis is possible. Same bound as
+# test_03_capabilities.py's PREDICT_PROMISE_ALL_WAIT_MS, reused for
+# consistency since it is the same code path.
+PREDICT_PROMISE_ALL_WAIT_MS = 45_000
 
 # The seven business routes (P12-D14's own list) -- method, path, and
 # whether it needs a request body.
@@ -611,8 +627,39 @@ def test_journey_still_works_after_manual_redeploy(demo_credentials: dict[str, S
     config = live_config()
     context = browser.new_context(service_workers="block")
     install_zero_write_guard(context, config["supabase_url"])
+    network_log: list[str] = []
+    nav_start = time.monotonic()
+
+    def _relevant(url: str) -> bool:
+        return any(marker in url for marker in ("/api/predict/", "/api/simulate/", "business_facts.json"))
+
+    def _log_response(response):
+        if _relevant(response.url):
+            elapsed = time.monotonic() - nav_start
+            network_log.append(f"t+{elapsed:.2f}s RESPONSE {response.request.method} {response.url} -> {response.status}")
+
+    def _log_request_failed(request):
+        if _relevant(request.url):
+            elapsed = time.monotonic() - nav_start
+            failure = request.failure or "unknown"
+            network_log.append(f"t+{elapsed:.2f}s REQUEST-FAILED {request.method} {request.url} ({failure})")
+
+    def _panel_snapshot(page) -> str:
+        """Structural only -- which of {error, real result, neither yet}
+        each panel is in, never the panel's own text content."""
+        lines = []
+        for name in ("p2", "p3", "p4"):
+            selector = f".prediction-panel-{name}"
+            exists = page.query_selector(selector) is not None
+            has_error = page.query_selector(f"{selector} .panel-error") is not None
+            has_primary = page.query_selector(f"{selector} .prediction-primary") is not None
+            lines.append(f"  {selector}: exists={exists} panel-error={has_error} prediction-primary={has_primary}")
+        return "\n".join(lines)
+
     try:
         page = context.new_page()
+        page.on("response", _log_response)
+        page.on("requestfailed", _log_request_failed)
         sign_in_via_browser(page, DEMO_NORTHBOUND_EMAIL, demo_credentials[DEMO_NORTHBOUND_EMAIL])
         page.wait_for_selector("#authenticated-shell:not([hidden])", timeout=30_000)
 
@@ -621,8 +668,21 @@ def test_journey_still_works_after_manual_redeploy(demo_credentials: dict[str, S
         for field, value in FORM_VALUES.items():
             page.fill(f"#field-{field}", str(value))
         page.check(".context-confirmation input[type=checkbox]")
+        nav_start = time.monotonic()  # reset: the window that matters is from submit, not from page load
         page.click(".submit-button")
-        page.wait_for_selector(".prediction-panel-p2 .prediction-primary", timeout=15_000)
+
+        try:
+            page.wait_for_selector(".prediction-panel-p2 .prediction-primary", timeout=PREDICT_PROMISE_ALL_WAIT_MS)
+        except PlaywrightTimeoutError:
+            print(
+                "\ntest_journey_still_works_after_manual_redeploy diagnostics (Playwright "
+                f"TimeoutError waiting for .prediction-panel-p2 .prediction-primary after "
+                f"{PREDICT_PROMISE_ALL_WAIT_MS}ms):\n"
+                + "\n".join(network_log or ["  (no matching network events captured)"])
+                + "\npanel state at the moment of timeout:\n"
+                + _panel_snapshot(page)
+            )
+            raise
 
         primary_text = page.text_content(".prediction-panel-p2 .prediction-primary")
         assert primary_text and "תחזית" in primary_text, (
