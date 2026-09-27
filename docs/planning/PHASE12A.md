@@ -236,8 +236,11 @@ calibration, אומת שאין חפיפה):
    `Number(rawValue)` → `form.values[name]`.
 2. `super-customer.js:679` (`submitForm`): `payload = {...form.values}`.
 3. `api.js:124` (`predictSuperCustomer`) → `api.js:107-111`
-   (`postJson`): `JSON.stringify(payload)` + `Authorization: Bearer`
-   (JWT המשתמש) → `POST /api/predict/super-customer`.
+   (`postJson`, בונה את בקשת ה-POST: `Content-Type: application/json`
+   + `JSON.stringify(payload)` כגוף) → `api.js:61-76` (`call`, הפונקציה
+   המשותפת ש-`postJson` קוראת לה בפועל: **שם**, ⛔ לא ב-`postJson`
+   עצמו, מתווספת כותרת `Authorization: Bearer` עם ה-JWT של המשתמש
+   לפני שליחת ה-`fetch`) → `POST /api/predict/super-customer`.
 4. `app/predict.py:228-229`: `EarlyFunnelInput` מפענח/מאמת את גוף
    הבקשה (`app/schemas.py:156-177`).
 5. `predict.py:237` (`values = body.model_dump()`) → `predict.py:252`

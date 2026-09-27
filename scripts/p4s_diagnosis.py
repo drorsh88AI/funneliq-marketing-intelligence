@@ -31,7 +31,9 @@ sys.path.insert(0, str(REPO_ROOT))
 from app.features import budget_tier, target_values  # noqa: E402
 from app.inference import predict_if_in_domain  # noqa: E402
 from scripts.load_data import load_and_verify_csv  # noqa: E402
-from scripts.train import split_task, task_population  # noqa: E402
+# scripts.train pulls in catboost/lightgbm/xgboost -- imported lazily,
+# inside run_a2() only, so a plain `from scripts.p4s_diagnosis import
+# js_math_round` (e.g. a rounding-only test) never pays for it.
 
 CSV_PATH = REPO_ROOT / "funnel_marketing_data.csv"
 FROZEN_EXAMPLES_PATH = REPO_ROOT / "docs" / "frozen_examples.json"
@@ -48,11 +50,25 @@ def js_math_round(x: float) -> int:
     probability * 100 is always >= 0) -- Python's own builtin `round()`
     is NOT a substitute: it's round-half-to-even (banker's rounding,
     round(0.5)==0, round(2.5)==2), while `Math.round` always rounds a
-    tie up (Math.round(0.5)===1, Math.round(2.5)===3). `floor(x+0.5)`
-    is the standard, exact translation of `Math.round`'s own spec for
-    x >= 0 (Codex finding, CP1 review, 27.09.2026)."""
+    tie up (Math.round(0.5)===1, Math.round(2.5)===3).
+
+    🆕 (Codex finding, second CP1 review round, 27.09.2026): `floor(x +
+    0.5)` is NOT a safe translation -- adding 0.5 in floating point can
+    itself round the SUM up to the next representable double before
+    `floor` ever runs. Confirmed empirically (`node -e
+    "console.log(Math.round(0.49999999999999994))"` -> 0): `0.5 +
+    0.49999999999999994` rounds to exactly `1.0` in IEEE-754 double
+    arithmetic, so `floor(x + 0.5)` wrongly returns `1` for an `x` that
+    is, and remains, strictly less than 0.5. Computing the fractional
+    part via SUBTRACTION instead (`x - floor(x)`) never has this
+    problem here: `x` is always in [0, 100] and `floor(x)` is a small
+    exact integer, so the subtraction is exact per IEEE-754 (no
+    intermediate rounding) -- verified against real V8 (Node) on
+    0.49999999999999994, 0.5, 1.5, 2.5, 0.5000000000000001: all five
+    match exactly."""
     assert x >= 0, "js_math_round only mirrors Math.round's non-negative-input behavior"
-    return math.floor(x + 0.5)
+    n = math.floor(x)
+    return n + 1 if (x - n) >= 0.5 else n
 
 
 def score_one(meta: dict, values: dict) -> dict:
@@ -106,6 +122,8 @@ def run_a1(meta: dict, df) -> None:
 
 
 def run_a2(df) -> None:
+    from scripts.train import split_task, task_population
+
     print("\n=== A2: super-customer rate by budget_tier, TRAIN ONLY (not Holdout) ===")
     parts = split_task(df, "P4S")
     train_ids = set(parts["train"])
