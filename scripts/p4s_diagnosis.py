@@ -21,6 +21,7 @@ quality (§ג's own explicit limits)."""
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -42,6 +43,18 @@ M2_SCENARIO = {"ad_budget": 3300, "num_leads": 45, "leads_answered": 30, "follow
 OLD_PREFILL_LIMIT = 1000
 
 
+def js_math_round(x: float) -> int:
+    """Matches JS `Math.round` exactly for a non-negative float (a
+    probability * 100 is always >= 0) -- Python's own builtin `round()`
+    is NOT a substitute: it's round-half-to-even (banker's rounding,
+    round(0.5)==0, round(2.5)==2), while `Math.round` always rounds a
+    tie up (Math.round(0.5)===1, Math.round(2.5)===3). `floor(x+0.5)`
+    is the standard, exact translation of `Math.round`'s own spec for
+    x >= 0 (Codex finding, CP1 review, 27.09.2026)."""
+    assert x >= 0, "js_math_round only mirrors Math.round's non-negative-input behavior"
+    return math.floor(x + 0.5)
+
+
 def score_one(meta: dict, values: dict) -> dict:
     """A1's own local scoring rule: Math.round(p*100), no labels
     (`app.inference` directly, mirroring app/predict.py's own
@@ -50,7 +63,7 @@ def score_one(meta: dict, values: dict) -> dict:
     if out_of_range:
         return {"in_domain": False, "out_of_range_features": out_of_range}
     p = float(raw[0][1])
-    return {"in_domain": True, "event_probability": p, "displayed_score": round(p * 100)}
+    return {"in_domain": True, "event_probability": p, "displayed_score": js_math_round(p * 100)}
 
 
 def run_a1(meta: dict, df) -> None:
