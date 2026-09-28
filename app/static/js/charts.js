@@ -12,12 +12,15 @@
 //   - viewBox-based SVG, no hardcoded pixel width/height -- responsive,
 //     16:9 aspect ratio (Desktop, §4.1); CSS gives it width:100%.
 //   - a subtle grid.
-//   - chart chrome (axis tick labels) in English -- the SVG is
-//     aria-hidden and decorative; the table below is the actual
-//     accessible content, so its own headers/row labels are in
-//     Hebrew, matching the rest of the UI (DESIGN.md's "כותרות/צירים/
-//     מקרא באנגלית" rule governs the SVG's own chrome, not this
-//     separately-named accessible fallback).
+//   - 12A, 27.09.2026 (tester finding O3: "לא ברור מה הגרף אמור
+//     להציג, למה הכותרת באנגלית"; overturns S11/P11A-D7): chart
+//     chrome (title, axis names, per-bar category labels) is now
+//     Hebrew, matching the accessible fallback table below it. Only
+//     the chart's own title keeps a small English subtitle line
+//     (the original term, for anyone cross-referencing code/exports).
+//     The SVG itself stays aria-hidden -- decorative, not a second
+//     accessible surface -- this only changes what the decoration
+//     itself says.
 //   - up to five semantic colors -- this bar-chart variant uses one
 //     (--color-primary, per tokens.css's own comment: "The Overview
 //     conversion chart uses --color-primary as its bar fill").
@@ -25,31 +28,56 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 const VIEW_WIDTH = 400;
 const VIEW_HEIGHT = 225; // 16:9
-// top/bottom/left grew from 16/32/16 (P11A-D7): room for an English
-// chart title above the plot, an English X-axis name below the
-// per-bar tick labels, and a rotated English Y-axis name to its left
-// -- none of which existed in the SVG before this checkpoint (only the
-// per-bar tick labels, `xEnglish`, ever did).
-const PADDING = { top: 28, right: 16, bottom: 44, left: 28 };
+// top grew again, 28->36 (12A): room for a second, smaller title line
+// (the English subtitle) under the Hebrew main title -- bottom/left
+// unchanged from P11A-D7 (an X-axis name below the per-bar tick
+// labels, a rotated Y-axis name to its left).
+const PADDING = { top: 36, right: 16, bottom: 44, left: 28 };
 
-/** data: [{ xHebrew, xEnglish, value, lower?, upper? }], value may be
- * null (N/A -- 0-height bar). `lower`/`upper`, when given on ANY row,
- * draw a whisker (a vertical range line + caps) over that bar --
- * DESIGN.md §4's own shared rule for all four live charts: "טווחי
- * אי-ודאות ב-whisker עם מקרא טקסטואלי". `legend`, when given, renders
- * that textual legend as a caption paragraph under the chart -- this is
- * the "מקרא טקסטואלי" itself, never a second color-coded visual legend.
+/** data: [{ xHebrew, xEnglish, value, lower?, upper? }]. `value` may be
+ * null -- rendered as a labeled "אין נתונים" gap, never a 0-height bar
+ * (IA.md:112: conversion_rate null -> N/A, ⛔ never a zero column; that
+ * rule is about the VALUE, and a chart silently drawing a real 0-height
+ * bar for a missing value violates it just as much as the table would).
+ * `lower`/`upper`, when given on ANY row, draw a whisker (a vertical
+ * range line + caps) over that bar -- DESIGN.md §4's own shared rule
+ * for all four live charts: "טווחי אי-ודאות ב-whisker עם מקרא
+ * טקסטואלי". `legend`, when given, renders that textual legend as a
+ * caption paragraph under the chart -- this is the "מקרא טקסטואלי"
+ * itself, never a second color-coded visual legend.
  *
- * P11A-D7: `titleEnglish`/`xLabelEnglish`/`yLabelEnglish` are the
- * chart's own chrome, rendered INSIDE the aria-hidden SVG in English
- * (IA.md:957/DESIGN.md's own "כותרות/צירים/מקרא באנגלית" rule) --
- * separate from `xLabel`/`yLabel`, which stay Hebrew and are used ONLY
- * for the accessible fallback table's headers, per this module's own
- * pre-existing convention (see header comment). A caller passing a
- * `legend` for a whisker chart is responsible for that text being
- * English too -- not mechanically enforced here, same as `xEnglish`
- * per bar already isn't. */
-export function renderBarChart({ data, xLabel, yLabel, xLabelEnglish, yLabelEnglish, titleEnglish, formatValue, legend, barClassName = "chart-bar" }) {
+ * 12A, 27.09.2026 (overturns P11A-D7/S11 for chart chrome -- tester
+ * finding O3): `title` is the chart's own Hebrew title, rendered
+ * INSIDE the aria-hidden SVG; `titleEnglish` becomes a small subtitle
+ * line under it, ⛔ no longer the only title. `xLabel`/`yLabel` (also
+ * used by the accessible fallback table's headers, per this module's
+ * pre-existing convention) now render the axis names too -- the
+ * `xLabelEnglish`/`yLabelEnglish` params this checkpoint removes had
+ * no other purpose. Per-bar category ticks read `d.xHebrew` (`xEnglish`
+ * stays on each data row for callers that still find it useful
+ * elsewhere; the SVG itself no longer reads it). A caller passing a
+ * `legend` writes it in Hebrew now, matching everything else here. */
+// `extraColumn` (12A, 27.09.2026): optional `{ label, formatValue(d) }`,
+// inserts one more Hebrew-headed column into the fallback table,
+// BETWEEN the row header (xHebrew) and the value column -- for a
+// caller whose data carries more than one number per category (e.g.
+// Overview's n_records alongside conversion_rate). Still ONE fallback
+// table for the chart, not a second one: the mandatory rule above
+// ("תמיד מרנדר את שניהם יחד") is about the chart never shipping
+// without ITS OWN fallback, not about how many columns that table has.
+// Undefined by default -- every existing caller (budget.js,
+// followup.js) is unaffected.
+// `midCaptions` (12A, 28.09.2026, Overview O2/O4 DOM-order fix):
+// optional string[], each rendered as its own `<p class="screen-intro">`
+// (the last one also gets `screen-intro-end`) and inserted INSIDE this
+// same .chart-live wrapper, between the SVG and the fallback table --
+// for a caller (Overview) whose explanatory text belongs between the
+// chart and its accessible table, without splitting the component into
+// two separately-returned nodes: renderBarChart() always returns ONE
+// .chart-live element containing the SVG and the fallback table,
+// exactly like every other caller (budget.js, followup.js). Undefined
+// by default -- those two callers are unaffected.
+export function renderBarChart({ data, xLabel, yLabel, title, titleEnglish, formatValue, legend, extraColumn, barClassName = "chart-bar", midCaptions }) {
   const wrapper = document.createElement("div");
   wrapper.className = "chart-live";
 
@@ -69,21 +97,33 @@ export function renderBarChart({ data, xLabel, yLabel, xLabelEnglish, yLabelEngl
   svg.setAttribute("aria-hidden", "true"); // the table below is the accessible equivalent
   svg.classList.add("chart-live-svg");
 
-  // P11A-D7: title + both axis names, English, inside the SVG.
-  const title = document.createElementNS(SVG_NS, "text");
-  title.setAttribute("x", String(VIEW_WIDTH / 2));
-  title.setAttribute("y", "14");
-  title.setAttribute("text-anchor", "middle");
-  title.setAttribute("class", "chart-title");
-  title.textContent = titleEnglish;
-  svg.appendChild(title);
+  // 12A: Hebrew main title + a small English subtitle under it,
+  // inside the SVG. Two separate <text> elements, not two tspans on
+  // one, so the subtitle's own smaller class fully controls its size.
+  const titleEl = document.createElementNS(SVG_NS, "text");
+  titleEl.setAttribute("x", String(VIEW_WIDTH / 2));
+  titleEl.setAttribute("y", "13");
+  titleEl.setAttribute("text-anchor", "middle");
+  titleEl.setAttribute("class", "chart-title");
+  titleEl.textContent = title;
+  svg.appendChild(titleEl);
 
+  const subtitleEl = document.createElementNS(SVG_NS, "text");
+  subtitleEl.setAttribute("x", String(VIEW_WIDTH / 2));
+  subtitleEl.setAttribute("y", "24");
+  subtitleEl.setAttribute("text-anchor", "middle");
+  subtitleEl.setAttribute("class", "chart-title-subtitle");
+  subtitleEl.textContent = titleEnglish;
+  svg.appendChild(subtitleEl);
+
+  // Axis names: Hebrew (xLabel/yLabel), same strings the accessible
+  // fallback table's own headers already use below.
   const xAxisName = document.createElementNS(SVG_NS, "text");
   xAxisName.setAttribute("x", String(VIEW_WIDTH / 2));
   xAxisName.setAttribute("y", String(VIEW_HEIGHT - 6));
   xAxisName.setAttribute("text-anchor", "middle");
   xAxisName.setAttribute("class", "chart-axis-name");
-  xAxisName.textContent = xLabelEnglish;
+  xAxisName.textContent = xLabel;
   svg.appendChild(xAxisName);
 
   const yAxisName = document.createElementNS(SVG_NS, "text");
@@ -92,7 +132,7 @@ export function renderBarChart({ data, xLabel, yLabel, xLabelEnglish, yLabelEngl
   yAxisName.setAttribute("text-anchor", "middle");
   yAxisName.setAttribute("class", "chart-axis-name");
   yAxisName.setAttribute("transform", `rotate(-90 11 ${PADDING.top + plotHeight / 2})`);
-  yAxisName.textContent = yLabelEnglish;
+  yAxisName.textContent = yLabel;
   svg.appendChild(yAxisName);
 
   const GRID_LINES = 4;
@@ -108,25 +148,49 @@ export function renderBarChart({ data, xLabel, yLabel, xLabelEnglish, yLabelEngl
   }
 
   data.forEach((d, i) => {
-    const value = typeof d.value === "number" ? d.value : 0;
-    const barHeight = (value / chartMax) * plotHeight;
     const x = PADDING.left + i * (barWidth + barGap);
-    const y = PADDING.top + plotHeight - barHeight;
+    const hasValue = typeof d.value === "number";
 
-    const rect = document.createElementNS(SVG_NS, "rect");
-    rect.setAttribute("x", String(x));
-    rect.setAttribute("y", String(y));
-    rect.setAttribute("width", String(barWidth));
-    rect.setAttribute("height", String(Math.max(barHeight, 0)));
-    rect.setAttribute("class", barClassName);
-    svg.appendChild(rect);
+    if (hasValue) {
+      const barHeight = (d.value / chartMax) * plotHeight;
+      const y = PADDING.top + plotHeight - barHeight;
+      const rect = document.createElementNS(SVG_NS, "rect");
+      rect.setAttribute("x", String(x));
+      rect.setAttribute("y", String(y));
+      rect.setAttribute("width", String(barWidth));
+      rect.setAttribute("height", String(Math.max(barHeight, 0)));
+      rect.setAttribute("class", barClassName);
+      svg.appendChild(rect);
+    } else {
+      // 12A (IA.md:112, tester finding "null נראה כאפס בגרף"): no bar
+      // at all for a missing value -- drawing one at height 0 would be
+      // visually indistinguishable from a real 0%, exactly what the
+      // table's own "N/A, never a zero column" rule already forbids.
+      // A short baseline dash + "N/A" label mark the category as
+      // present with no data, not silently absent and not zero.
+      const dash = document.createElementNS(SVG_NS, "line");
+      dash.setAttribute("x1", String(x + barWidth * 0.3));
+      dash.setAttribute("x2", String(x + barWidth * 0.7));
+      dash.setAttribute("y1", String(PADDING.top + plotHeight));
+      dash.setAttribute("y2", String(PADDING.top + plotHeight));
+      dash.setAttribute("class", "chart-bar-missing");
+      svg.appendChild(dash);
+
+      const naLabel = document.createElementNS(SVG_NS, "text");
+      naLabel.setAttribute("x", String(x + barWidth / 2));
+      naLabel.setAttribute("y", String(PADDING.top + plotHeight - 4));
+      naLabel.setAttribute("text-anchor", "middle");
+      naLabel.setAttribute("class", "chart-bar-missing-label");
+      naLabel.textContent = "N/A";
+      svg.appendChild(naLabel);
+    }
 
     const label = document.createElementNS(SVG_NS, "text");
     label.setAttribute("x", String(x + barWidth / 2));
     label.setAttribute("y", String(VIEW_HEIGHT - PADDING.bottom + 16));
     label.setAttribute("text-anchor", "middle");
     label.setAttribute("class", "chart-axis-label");
-    label.textContent = d.xEnglish;
+    label.textContent = d.xHebrew;
     svg.appendChild(label);
 
     if (typeof d.lower === "number" && typeof d.upper === "number") {
@@ -157,6 +221,15 @@ export function renderBarChart({ data, xLabel, yLabel, xLabelEnglish, yLabelEngl
 
   wrapper.appendChild(svg);
 
+  if (midCaptions && midCaptions.length) {
+    midCaptions.forEach((text, i) => {
+      const p = document.createElement("p");
+      p.className = i === midCaptions.length - 1 ? "screen-intro screen-intro-end" : "screen-intro";
+      p.textContent = text;
+      wrapper.appendChild(p);
+    });
+  }
+
   // Accessible fallback table -- part of the SAME component, always
   // rendered alongside the SVG (own overflow-x container, DESIGN.md
   // §4.1: "לעולם לא גלילת גוף העמוד").
@@ -166,7 +239,8 @@ export function renderBarChart({ data, xLabel, yLabel, xLabelEnglish, yLabelEngl
 
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  for (const heading of [xLabel, yLabel]) {
+  const headings = extraColumn ? [xLabel, extraColumn.label, yLabel] : [xLabel, yLabel];
+  for (const heading of headings) {
     const th = document.createElement("th");
     th.textContent = heading;
     headRow.appendChild(th);
@@ -181,6 +255,11 @@ export function renderBarChart({ data, xLabel, yLabel, xLabelEnglish, yLabelEngl
     rowHeader.setAttribute("scope", "row");
     rowHeader.textContent = d.xHebrew;
     row.appendChild(rowHeader);
+    if (extraColumn) {
+      const extraCell = document.createElement("td");
+      extraCell.textContent = extraColumn.formatValue(d);
+      row.appendChild(extraCell);
+    }
     const cell = document.createElement("td");
     cell.textContent = formatValue ? formatValue(d.value, d) : String(d.value ?? "");
     row.appendChild(cell);

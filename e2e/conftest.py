@@ -478,6 +478,11 @@ class DeferredRoute:
                 raise TimeoutError("no request arrived at the deferred route in time")
             page.wait_for_timeout(50)
 
+    def request_url(self, index: int = 0) -> str:
+        """The captured request's own URL -- for tests asserting on the
+        actual query the frontend sent, not just that A request arrived."""
+        return self._routes[index].request.url
+
     def release(self, *, status: int = 200, payload: dict | list | None = None, body: str = "") -> None:
         route = self._routes.pop(0)
         if payload is not None:
@@ -498,8 +503,9 @@ def route_deferred(context: BrowserContext, url_pattern: str) -> DeferredRoute:
 def install_prefill_mock(context: BrowserContext, rows: list[dict], *, status: int = 200) -> None:
     """Mocks supabase-prefill.js's own REST call -- read directly out of
     that file: `client.from("funnel_records").select(columns).eq(...)
-    .order(...).limit(...)`, which supabase-js's PostgREST client turns
-    into `GET {supabase_url}/rest/v1/funnel_records?...`. Matches BOTH
+    .in("source_row_id", FROZEN_EXAMPLE_IDS).order(...)`, which
+    supabase-js's PostgREST client turns into
+    `GET {supabase_url}/rest/v1/funnel_records?...`. Matches BOTH
     the shared form's and P4S's own separate prefill (different
     `select=` columns, same table/path) -- callers needing to
     distinguish them would register a narrower pattern afterward

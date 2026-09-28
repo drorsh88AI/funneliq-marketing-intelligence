@@ -79,18 +79,17 @@
                                      style.css --color-border; see
                                      --color-on-primary above for why. */
 
-  /* Budget tiers -- an ORDERED sequential ramp (Low -> Mid -> High), not
-     three unrelated hues, so the visual order matches the logical order.
-     ⚠ These backgrounds are for tier-table rows (paired with their own
-     text below) ONLY -- too light to use as standalone chart-bar fills
-     (tier-1/2 fail the 3:1 graphical-vs-page-bg check on their own).
-     The Overview conversion chart uses --color-primary as its bar fill. */
-  --color-tier-1-bg: #dbeafe;  /* Low */
+  /* 12A, 27.09.2026: Overview's own tier-table (the three-step Low/
+     Mid/High background ramp this pair used to be part of) was
+     removed -- it showed the same data as the chart's own mandatory
+     accessible fallback table, with less detail (tester finding, O4).
+     --color-tier-2-bg/fg and --color-tier-3-bg/fg had no other
+     consumer and were removed with it. --color-tier-1-bg/fg survives
+     only because #signout-button:hover also uses it (style.css) --
+     unrelated to budget tiers; kept as a plain fg/bg pair, not part of
+     any ramp anymore. */
+  --color-tier-1-bg: #dbeafe;
   --color-tier-1-fg: #1e3a8a;  /* vs tier-1-bg: 8.49:1 */
-  --color-tier-2-bg: #93c5fd;  /* Mid */
-  --color-tier-2-fg: #1e3a8a;  /* vs tier-2-bg: 5.74:1 */
-  --color-tier-3-bg: #1d4ed8;  /* High */
-  --color-tier-3-fg: #ffffff;  /* vs tier-3-bg: 6.70:1 */
 
   /* =====================================================================
      State tokens (DESIGN.md §3.2). Each is a declared fg/bg pair so

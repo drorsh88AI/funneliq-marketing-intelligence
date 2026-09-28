@@ -126,8 +126,14 @@ def test_1_declared_fg_bg_pairs_meet_normal_text_contrast(tokens):
 # ---------------------------------------------------------------------------
 # Test 2 -- >=3:1 for the interface-critical graphical fills named in
 # DESIGN.md's D10 palette (docs/DESIGN.md SS3.1): the four
-# prediction/observed-outcome colors, plus the darkest tier step used
-# as a solid fill in the tier table.
+# prediction/observed-outcome colors.
+#
+# 12A, 27.09.2026: --color-tier-3-bg (and -2-bg/fg, -3-fg) were removed
+# from tokens.css along with Overview's tier-table itself (tester
+# finding O4: it duplicated the chart's own mandatory accessible
+# fallback table). --color-tier-1-bg/fg survives for an unrelated
+# consumer (#signout-button:hover) but is a plain fg/bg pair now, not
+# a graphical fill needing this 3:1 check.
 # ---------------------------------------------------------------------------
 
 GRAPHICAL_ROLE_TOKENS = (
@@ -135,7 +141,6 @@ GRAPHICAL_ROLE_TOKENS = (
     "--color-positive",
     "--color-negative",
     "--color-uncertain",
-    "--color-tier-3-bg",
 )
 
 

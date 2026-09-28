@@ -211,17 +211,18 @@ function buildChart(strategies) {
   }));
   return charts.renderBarChart({
     data: chartRows,
-    xLabel: "אסטרטגיה",
-    yLabel: "רווח צפוי",
+    title: "רווח מצטבר צפוי לפי אופן חלוקת התקציב",
     titleEnglish: "Expected Profit by Allocation Strategy",
-    xLabelEnglish: "Strategy",
-    yLabelEnglish: "Expected Profit",
+    xLabel: "אופן החלוקה (קמפיינים × תקציב לקמפיין)",
+    yLabel: "רווח מצטבר צפוי (₪)",
     formatValue: (v, d) => `${format.formatCurrency(v)} (טווח: ${format.formatCurrency(d.lower)}–${format.formatCurrency(d.upper)})`,
     barClassName: "chart-bar-uncertain", // D10: a prediction, never --color-primary
-    // P11A-D7: English legend for the whisker chart -- the PREVIOUS
-    // text here was Hebrew, DESIGN.md:300-304's own "מקרא טקסטואלי"
-    // requirement (English, per D7) for every whisker chart.
-    legend: "The vertical line above each bar shows the uncertainty range (95% Bootstrap, 2.5-97.5 percentile) around the expected profit.",
+    // 12A, 27.09.2026 (overturns P11A-D7's English-legend rule for
+    // chart chrome -- §ז1, "✅ הוכרע: הכול בעברית"): Hebrew legend,
+    // spelling out what the whisker range is (bootstrap resampling
+    // uncertainty) and, per §ז1's own note, that it is NOT a
+    // prediction interval for the actual future profit.
+    legend: "הקו האנכי בכל עמודה מראה את טווח האומדן (95%, דגימה חוזרת של נתוני האימון): עד כמה האומדן משתנה כשחוזרים על החישוב. הקו יכול לרדת גם מתחת לראש העמודה. זה אינו טווח לרווח שיתקבל בפועל.",
   });
 }
 

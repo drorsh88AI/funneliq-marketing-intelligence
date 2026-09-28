@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -38,10 +39,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # The REAL shared-form prefill query, byte-for-byte the same shape
 # supabase-prefill.js's own fetchSharedFormPrefill() sends
 # (app/static/js/supabase-prefill.js: SHARED_FORM_COLUMNS,
-# .eq("purchased", 1), .order("source_row_id", {ascending: true}),
-# .limit(PREFILL_LIMIT=1000)). Self-review finding: selecting only
-# source_row_id proves the RLS gate opens or closes, but not that real
-# PREFILL DATA -- the actual columns the shared form needs -- comes
+# .eq("purchased", 1), .in("source_row_id", FROZEN_EXAMPLE_IDS),
+# .order("source_row_id", {ascending: true})). PHASE12A.md §ו.2
+# (28.09.2026) replaced the old "up to 1,000 rows" query (audit finding
+# F2/S2) with a filter on the 10 committed frozen ids
+# (docs/frozen_examples.json) -- structurally cross-checked against
+# supabase-prefill.js's own copy of the list by
+# tests/test_frozen_examples.py. Self-review finding (pre-12A): selecting
+# only source_row_id proves the RLS gate opens or closes, but not that
+# real PREFILL DATA -- the actual columns the shared form needs -- comes
 # back. Used identically in all three RLS tests below (anon,
 # northbound, noorg), since the claim being tested is about what THIS
 # EXACT query does for each identity, not a simplified stand-in.
@@ -50,11 +56,16 @@ SHARED_FORM_COLUMNS = [
     "followup_1", "followup_2", "followup_3", "followup_4", "followup_5",
     "calls_to_closed", "calls_to_not_closed", "customer_acquisition_cost",
 ]
+_FROZEN_MANIFEST = json.loads(
+    (REPO_ROOT / "docs" / "frozen_examples.json").read_text(encoding="utf-8")
+)["examples"]
+FROZEN_EXAMPLE_IDS = [e["source_row_id"] for e in _FROZEN_MANIFEST]
+FROZEN_MANIFEST_BY_ID = {e["source_row_id"]: e for e in _FROZEN_MANIFEST}
 PREFILL_PARAMS = {
     "select": ",".join(SHARED_FORM_COLUMNS),
     "purchased": "eq.1",
+    "source_row_id": f"in.({','.join(str(i) for i in FROZEN_EXAMPLE_IDS)})",
     "order": "source_row_id.asc",
-    "limit": "1000",
 }
 
 
@@ -96,10 +107,19 @@ def test_demo_northbound_prefill_returns_rows_under_real_rls(demo_credentials):
 
     Self-review finding: selecting only source_row_id (limit 5) proved
     the gate opened, but not that real PREFILL DATA comes back -- this
-    now sends the exact SHARED_FORM_COLUMNS/purchased/order/limit query
-    supabase-prefill.js's fetchSharedFormPrefill() actually sends, and
-    checks the returned rows carry every column the shared form needs,
-    not just that some row exists."""
+    now sends the exact SHARED_FORM_COLUMNS/purchased/id-filter/order
+    query supabase-prefill.js's fetchSharedFormPrefill() actually sends,
+    and checks the returned rows carry every column the shared form
+    needs, not just that some row exists.
+
+    Review finding (post-CP4, 28.09.2026): a bare "len(rows) > 0" with a
+    10-id `.in()` filter proves the gate opens, but NOT that Supabase's
+    live data actually matches docs/frozen_examples.json (the file's
+    whole reason to exist is to prove the deployed rows are what the app
+    claims they are) -- a live row silently diverging from the committed
+    manifest (edited row, wrong CSV load, id typo) would have passed the
+    old assertion. Now asserts exactly 10 rows, the exact id SET, and
+    every shared-form column's exact value against the manifest."""
     config = live_config()
     token = sign_in_via_api(DEMO_NORTHBOUND_EMAIL, demo_credentials[DEMO_NORTHBOUND_EMAIL])
     client = PostgrestReadOnly(
@@ -110,10 +130,22 @@ def test_demo_northbound_prefill_returns_rows_under_real_rls(demo_credentials):
     response = client.get("/funnel_records", params=PREFILL_PARAMS)
     assert response.status_code == 200
     rows = response.json()
-    assert len(rows) > 0, "demo-northbound got zero rows -- the RLS gate did not open"
-    assert set(SHARED_FORM_COLUMNS) <= set(rows[0].keys()), (
-        f"prefill row is missing expected columns: got {sorted(rows[0].keys())}"
+    assert len(rows) == 10, f"expected all 10 frozen examples, got {len(rows)}: {rows}"
+    returned_ids = {row["source_row_id"] for row in rows}
+    assert returned_ids == set(FROZEN_EXAMPLE_IDS), (
+        f"returned ids {sorted(returned_ids)} != manifest ids {sorted(FROZEN_EXAMPLE_IDS)}"
     )
+    for row in rows:
+        expected = FROZEN_MANIFEST_BY_ID[row["source_row_id"]]
+        mismatches = {
+            col: (row[col], expected[col])
+            for col in SHARED_FORM_COLUMNS
+            if row[col] != expected[col]
+        }
+        assert not mismatches, (
+            f"source_row_id={row['source_row_id']}: live Supabase data diverges from "
+            f"docs/frozen_examples.json -- (live, manifest) per column: {mismatches}"
+        )
 
 
 def test_demo_noorg_prefill_returns_zero_rows_under_real_rls(demo_credentials):

@@ -442,6 +442,11 @@ def test_prefill_failure_does_not_block_manual_entry(live_context, demo_credenti
     page.wait_for_selector("#authenticated-shell:not([hidden])", timeout=30_000)
 
     page.click('a[data-route="predict"]')
+    page.wait_for_selector("#field-ad_budget", timeout=15_000)
+    # PHASE12A.md §ו.2 (28.09.2026): the picker is now a folded <details>
+    # below the form -- open it before its (hidden-while-collapsed)
+    # error state becomes visible.
+    page.click(".prefill-picker summary")
     page.wait_for_selector(".prefill-picker .panel-error", timeout=15_000)
     assert "שגיאה בטעינת הדוגמאות" in page.text_content(".prefill-picker .panel-error")
 

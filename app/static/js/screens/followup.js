@@ -128,11 +128,10 @@ function buildStagesGroup(stagesPart) {
   group.appendChild(el("h2", { text: "נשירה" }));
   group.appendChild(charts.renderBarChart({
     data: chartRows,
-    xLabel: "שלב מעקב",
-    yLabel: "שיעור נשירה",
+    title: "כמה לידים נושרים בכל שלב מעקב",
     titleEnglish: "Drop-off Rate by Follow-up Stage",
-    xLabelEnglish: "Follow-up Stage",
-    yLabelEnglish: "Drop-off Rate",
+    xLabel: "שלב המעקב",
+    yLabel: "שיעור נשירה",
     formatValue: (v) => (v === null ? "N/A" : format.formatPercent(v, { decimals: 1 })),
   }));
   group.appendChild(renderSummaryRecommendation(computeStagesD9(rows)));
@@ -213,12 +212,17 @@ function buildCallsGroup(callsPart) {
   group.appendChild(el("h2", { text: "מספר שיחות עד סגירה" }));
   group.appendChild(charts.renderBarChart({
     data: chartRows,
-    xLabel: "מספר שיחות",
-    yLabel: "מספר רשומות",
+    // §יב-2 R2 (Codex round, approved by the user 24.09.2026): "בממוצע"
+    // in the title itself, so it can't be misread as a per-deal count.
+    title: "בממוצע, כמה שיחות נדרשו עד סגירת עסקה",
     titleEnglish: "Record Count by Number of Calls to Close",
-    xLabelEnglish: "Number of Calls",
-    yLabelEnglish: "Number of Records",
+    xLabel: "ממוצע שיחות עד סגירה (לשורה)",
+    yLabel: "מספר שורות בנתונים",
     formatValue: (v) => format.formatNumber(v),
+    // §יב-2 R2 (final, simplified wording): only rows with at least
+    // one closed deal are counted -- the same population the mean/
+    // median/mode figures below already use (computeCallsStats).
+    legend: `כל עמודה מראה בכמה מקרים בנתוני העבר זה היה ממוצע השיחות עד סגירה. נכללו רק מקרים שבהם נסגרה לפחות עסקה אחת (${format.formatNumber(stats.populationN)} מקרים).`,
   }));
   group.appendChild(renderSummaryRecommendation(computeCallsD9(stats)));
   return group;
