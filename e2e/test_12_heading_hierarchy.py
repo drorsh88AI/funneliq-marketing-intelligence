@@ -108,7 +108,10 @@ def test_super_customer_screen_heading_hierarchy_after_submit(mocked_page, mocke
 def test_budget_screen_heading_hierarchy_and_locked_h1_text(mocked_page, mocked_context):
     """D8's own lock: the sole h1 carries `total_budget`'s display value
     (DESIGN.md:403/:457) -- D9's own note that this single heading must
-    satisfy BOTH D8 and D9 together, not two competing headings."""
+    satisfy BOTH D8 and D9 together, not two competing headings.
+
+    §יג-6 (CP6, 29.09.2026): "₪50,000" alone didn't say what the number
+    WAS -- now prefixed with "תקציב פרסום חודשי: "."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
     route_json(mocked_context, "**/api/simulate/budget", fx.budget_simulation())
@@ -120,7 +123,7 @@ def test_budget_screen_heading_hierarchy_and_locked_h1_text(mocked_page, mocked_
     levels = _heading_levels(mocked_page, "#screen-budget")
     _assert_valid_heading_hierarchy(levels)
     assert levels == [1]  # no h3 anywhere on this screen -- one h1 is already sufficient
-    assert mocked_page.text_content("#screen-budget h1") == "₪50,000"
+    assert mocked_page.text_content("#screen-budget h1") == "תקציב פרסום חודשי: ₪50,000"
 
 
 def test_budget_h1_is_derived_from_response_not_hardcoded(mocked_page, mocked_context):
@@ -144,7 +147,7 @@ def test_budget_h1_is_derived_from_response_not_hardcoded(mocked_page, mocked_co
 
     mocked_page.click('a[data-route="budget"]')
     mocked_page.wait_for_selector("#screen-budget .strategy-table", timeout=10_000)
-    assert mocked_page.text_content("#screen-budget h1") == "₪12,345"
+    assert mocked_page.text_content("#screen-budget h1") == "תקציב פרסום חודשי: ₪12,345"
 
 
 def test_followup_screen_heading_hierarchy(mocked_page, mocked_context):

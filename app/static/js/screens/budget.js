@@ -90,73 +90,59 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
-/** "25×₪2,000" style composition strings, built from the LIVE
- * allocations array -- never a hardcoded strategy_id -> label table,
- * so a future contract value is described correctly rather than
- * silently mismatched.
+/** "100 קמפיינים × ₪500" style composition strings, built from the LIVE
+ * allocations array -- never a hardcoded strategy_id -> label table, so
+ * a future contract value is described correctly rather than silently
+ * mismatched. `PHASE12A.md` §ז1's own approved chart-value wording is
+ * "100 קמפיינים × ₪500" (spelled-out "קמפיינים"), not the bare
+ * "100×₪500" a prior version of this function rendered -- a real gap
+ * `e2e/test_11_chart_english_chrome.py` never asserted on (it only
+ * checks chart title/subtitle/axis names, not Budget's per-bar tick
+ * text), found by re-reading the approved table directly against the
+ * live chart rather than trusting that test's silence.
  *
  * Self-review finding, 2026-09-15: the original version wrapped only
  * the count in format.ltr() and left "×" and the currency figure bare
  * -- inconsistent with IA.md line 956 ("מספרים... וסימני מטבע ב-LTR
- * בתוך container של RTL") and with predict.js's own precedent for a
- * multi-token LTR expression (its derived-field value wraps the WHOLE
- * "followup_5 (13) − closed (2)" string in ONE ltr() call, not each
- * number separately). Each count×currency pair is now isolated as one
- * unit; only the Hebrew " + " joiner between multi-level strategies
- * stays outside it. */
+ * בתוך container של RTL"). Now that a Hebrew word sits between the two
+ * numeric tokens, they can no longer share one isolate the way
+ * predict.js's own all-numeric "followup_5 (13) − closed (2)" does --
+ * count and currency are wrapped SEPARATELY, with "קמפיינים" and "×"
+ * left as plain (direction-neutral/Hebrew) text between them. */
 function compositionText(allocations) {
   return allocations
-    .map((a) => format.ltr(`${format.formatNumber(a.count)}×${format.formatCurrency(a.ad_budget)}`))
+    .map((a) => `${format.ltr(format.formatNumber(a.count))} קמפיינים × ${format.ltr(format.formatCurrency(a.ad_budget))}`)
     .join(" + ");
 }
 
-/** The veto+pilot recommendation's quantitative backing (8.60, 322 rows)
- * is business_facts.json's own budget_backtest -- IA.md §6 + DESIGN.md's
- * P11-D15-extended note are explicit that a load failure or
- * model_versions.P6 mismatch hides "המלצת התקציב והמספר 8.60" TOGETHER,
- * "אין להחליפם בהמלצה לפי rank בלבד" (must not substitute a rank-only
- * recommendation). So unlike super-customer.js's/this screen's own D9
- * "meaning" layer (which degrades to a NUMBER-FREE sentence), this
- * specific recommendation is hidden OUTRIGHT when the asset is
- * unavailable -- only the always-present overlap sentence and the
- * general (non-backtest) disclaimer remain. IA.md's own blockquote
- * (§6, "תיקון CP9") is the verbatim source for the available-data text. */
+/** §יג-6 (PHASE12A.md, ביקורת Codex, 28.09.2026): the box used to name
+ * hardcoded strategies ("100×500"/"25×2,000") and carry the full
+ * backtest-backed recommendation paragraph itself -- duplicating the
+ * bottom D9 section's own "חשוב לדעת"/meaning content, and depending on
+ * business_facts.json for a component DESIGN.md §1.4 locks as "הרכיב
+ * הבולט ביותר במסך" (so it must not disappear just because that asset
+ * failed to load). Shortened to a pure `top_two_overlap`-driven pointer
+ * -- no strategy names, no business_facts dependency, no duplicated
+ * explanation; the full explanation lives ONLY in buildD9() below.
+ * Renders nothing at all when `top_two_overlap` is false (the project's
+ * frozen dataset never actually reaches that branch; IA.md only
+ * permits, not locks, wording for it, and no test exercises it). */
 function buildOverlapAlert(sim) {
+  if (!sim.top_two_overlap) return null;
+  // Review finding, CP6 round 2 (29.09.2026): "ר' הסבר מלא למטה" is a
+  // promise -- buildD9()'s own degraded branch (business_facts.json
+  // missing/mismatched) does NOT actually explain the overlap at all,
+  // it only says the comparison itself is unavailable. Same gating
+  // condition and same wording ("בדיקת העבר... חסרה") as that branch,
+  // so the two halves of the screen never contradict each other.
   const backtest = facts.getBudgetBacktest(sim.model_version);
+  const hasFullExplanation = Boolean(backtest && backtest["500"] && backtest["2000"]);
   const wrap = el("div", { className: "overlap-alert", role: "alert" });
-
-  // Live-driven (top_two_overlap), independent of business_facts.
-  if (sim.top_two_overlap) {
-    wrap.appendChild(el("p", { text: "ההבדל בין שתי האסטרטגיות המובילות אינו חד-משמעי; אין הכרזה על אסטרטגיה מנצחת." }));
-  } else {
-    // This module's own composition (see header comment) -- IA.md only
-    // permits, not locks, a specific sentence for this branch, which
-    // the project's frozen dataset never actually reaches
-    // (top_two_overlap is currently true).
-    const rank1 = sim.strategies.find((s) => s.rank === 1);
-    wrap.appendChild(el("p", { text: `האסטרטגיה המדורגת ראשונה (${compositionText(rank1.allocations)}) מועדפת לפי המודל -- ⛔ אין בכך הבטחת רווח.` }));
-  }
-
-  if (backtest && backtest["500"] && backtest["2000"]) {
-    // Resolved by explicit user decision (2026-09-15), per PHASE11.md
-    // §ב's own two clean options: the display shows whatever the real
-    // calculation produces, not a value chosen to match a prior
-    // document. Standard rounding (this module's usual
-    // format.formatNumber, decimals: 2 -- no Math.floor) of the live
-    // ratio (predicted_per_customer / actual_mean_per_customer at
-    // level 500) gives 8.60. SPEC.md/IA.md/DESIGN.md were corrected
-    // from "8.59" to "8.60" to match (all three cited the same,
-    // apparently pre-existing, arithmetic slip).
-    const ratio = format.formatNumber(backtest["500"].predicted_per_customer / backtest["500"].actual_mean_per_customer, { decimals: 2 });
-    const n2000 = format.formatNumber(backtest["2000"].n_train_at_level);
-    wrap.appendChild(el("p", {
-      text: `100×500 מדורגת ראשונה מספרית, אך אינה המלצה: הטווח שלה חופף ל-25×2,000, ובבדיקת עבר רמת 500 הוערכה פי ${format.ltr(ratio)} מהתוצאה בפועל (${format.ltr(n2000)} שורות אימון ב-25×2,000). אין לבצע לפיה הקצאה מלאה; אם בוחנים חלופה, ההמלצה היא פיילוט מבוקר של 25×2,000.`,
-    }));
-  }
-  // Asset unavailable/mismatched: no substitute rank-based
-  // recommendation is shown here (explicitly forbidden) -- the always-
-  // present disclaimer paragraph (rendered by the caller, right after
-  // this component) and the strategy table are all that remain.
+  wrap.appendChild(el("p", {
+    text: hasFullExplanation
+      ? "טווחי האומדן של שתי דרכי החלוקה המובילות חופפים — ר' הסבר מלא למטה."
+      : "טווחי האומדן של שתי דרכי החלוקה המובילות חופפים; ההסבר המלא אינו זמין כרגע, כי בדיקת העבר הדרושה לו חסרה.",
+  }));
   return wrap;
 }
 
@@ -255,33 +241,51 @@ function buildModelDetails(sim) {
   return details;
 }
 
-/** DESIGN.md §6.1's own Budget Simulator row -- fixed prose, no
- * placeholders. Only the "meaning"/"action" layers' specific figures
- * (8.60, 322) depend on business_facts.json; degrades gracefully
- * (P11-D15, same pattern as super-customer.js's own D9 "meaning"
- * fallback) if that asset failed to load or model_versions.P6 does not
- * match this response's own model_version. */
+/** DESIGN.md §6.1's own Budget Simulator row (§יג-6/§ט-4, approved
+ * 24.09.2026 -- replaces the pre-approval "100x500"/"25x2000" draft
+ * wording this function used to carry). Only the "meaning"/"caveat"
+ * layers' specific figures (789,594 / 530,953 point estimates, 8.60
+ * ratio) depend on live `sim.strategies`/business_facts.json; the
+ * caveat's ratio sentence degrades gracefully (P11-D15, same pattern as
+ * super-customer.js's own D9 "meaning" fallback) if that asset failed
+ * to load or model_versions.P6 does not match this response's own
+ * model_version -- ALL FOUR layers then switch to the DEGRADED,
+ * genuinely different wording below (DESIGN.md §6.1ג), never a
+ * word-for-word copy of the healthy one. */
 function buildD9(sim) {
   const backtest = facts.getBudgetBacktest(sim.model_version);
   let answer;
   let meaning;
   let action;
+  let caveat;
   if (backtest && backtest["500"] && backtest["2000"]) {
     // Resolved by explicit user decision (2026-09-15) -- see
     // buildOverlapAlert()'s own comment for the full derivation.
     // Standard rounding, no Math.floor: gives 8.60, matching
     // SPEC.md/IA.md/DESIGN.md after their own correction from "8.59".
-    // "×" used here and in the fixed layers below, in place of DESIGN.md's
-    // own code-formatted "100x500"/"25x2000" tokens -- for visual
-    // consistency with compositionText()'s own "×" formatting elsewhere
-    // on this screen (strategy-table, chart). No wording otherwise
-    // deviates from the locked cells (DESIGN.md §6.1's own Budget
-    // Simulator row), including their own lack of trailing punctuation.
-    answer = "100×500 מדורגת ראשונה מספרית, אך אינה המלצה לפעולה; שתי המובילות חופפות ובדיקת העבר של רמת 500 חלשה מאוד";
+    answer = "הדירוג לבדו אינו מכריע בין שתי דרכי החלוקה המובילות (100×500 ו-25×2,000)";
+    const s100x500 = sim.strategies.find((s) => s.strategy_id === "100x500");
+    const s25x2000 = sim.strategies.find((s) => s.strategy_id === "25x2000");
+    // Review finding, CP6 round 2: this sentence used to assert
+    // "overlap" unconditionally on backtest availability alone, so a
+    // live `top_two_overlap=false` (never seen on the frozen dataset,
+    // but not schema-impossible either) would have the overlap-alert
+    // box correctly disappear while THIS text still claimed the ranges
+    // overlap -- a direct contradiction between the two halves of the
+    // screen. Only this one factual clause is now conditional; the
+    // "answer"/"action" layers below stay as approved regardless of
+    // overlap -- DESIGN.md's own action-gating table is explicit that
+    // "rank 1 אינו אישור להקצאה מלאה" (no full allocation) holds "גם אם
+    // החפיפה false", so no other wording here depends on this flag.
+    const overlapClause = sim.top_two_overlap
+      ? "אבל טווחי האומדן של שתיהן חופפים — אין כאן מבחן שמוכיח הבדל או שוויון"
+      : "וטווחי האומדן של שתיהן אינם חופפים";
+    meaning = `בתחזית המודל, 100 קמפיינים של ₪500 (${format.formatCurrency(s100x500.point_estimate)}) מדורגים לפני 25 קמפיינים של ₪2,000 (${format.formatCurrency(s25x2000.point_estimate)}); ${overlapClause}`;
+    action = "לא להעביר את מלוא ה-₪50,000 לפי הדירוג. אם בוחנים שינוי, להתחיל בניסוי בהיקף מוגבל, בקמפיינים של ₪2,000, ולמדוד את הרווח המצטבר בפועל לפני שמרחיבים";
     const ratio = format.formatNumber(backtest["500"].predicted_per_customer / backtest["500"].actual_mean_per_customer, { decimals: 2 });
-    meaning = `הדירוג לבדו אינו מכריע: טווחי 100×500 ו־25×2,000 חופפים, ובבדיקת עבר התחזית לרמת 500 הייתה גבוהה פי ${format.ltr(ratio)} מהתוצאה בפועל`;
-    const n2000 = format.formatNumber(backtest["2000"].n_train_at_level);
-    action = `לא לבצע הקצאה מלאה לפי הדירוג. אם בוחנים אחת מארבע החלופות, לבצע פיילוט מבוקר של 25×2,000, שלה ${format.ltr(n2000)} שורות אימון ובדיקת עבר קרובה יותר`;
+    // Three sentences, all visible (§ט-4, approved 24.09.2026) -- joined
+    // into this component's own single "caveat" paragraph slot.
+    caveat = `למה לא פשוט לבחור בדרך הראשונה? החישוב שלה לא יציב. כשחוזרים עליו, התוצאה משתנה מאוד, ולפעמים יוצאת נמוכה כמו של הדרך השנייה. לכן אי אפשר לקבוע שהיא באמת טובה יותר. בדקנו את המודל על נתוני עבר: בתקציב של ₪500 הוא חזה רווח ממוצע גבוה פי ${format.ltr(ratio)} ממה שהיה בפועל. בתקציב של ₪2,000 התחזית הייתה קרובה למציאות. המספרים הם הערכה של הרווח הכולל שהלקוחות יביאו לאורך זמן. זה לא הרווח של החודש הבא, וזו לא הבטחה.`;
   } else {
     // P11A-D6/DESIGN.md §6.1ג's own Budget Simulator rows, verbatim.
     // The PREVIOUS degraded wording here still named the two specific
@@ -290,16 +294,21 @@ function buildD9(sim) {
     // backtest evidence: `answer` used the HEALTHY text unconditionally
     // (never gated at all, DESIGN.md §6.1's own row, not §6.1ג's), and
     // `action` kept "פיילוט מבוקר בהיקף מוגבל עדיף" even with no
-    // evidence backing which alternative that pilot should be.
-    answer = "השוואה מלאה בין ארבע אסטרטגיות ההקצאה אינה זמינה כרגע; טבלת האסטרטגיות שלמטה מציגה את הנתונים הגולמיים בלבד";
+    // evidence backing which alternative that pilot should be. §יג-6
+    // (סבב ביקורת Codex, 28.09.2026): `answer` also called the model's
+    // own estimates "נתונים גולמיים בלבד" -- misleading (these are model
+    // forecasts, not raw observations) and repeated "אינה זמינה" twice;
+    // fixed without touching `meaning` (already correct -- P11-D6 נעל).
+    answer = "השוואה מלאה בין ארבע אסטרטגיות ההקצאה אינה זמינה כרגע — בדיקת העבר הדרושה להמלצה חסרה; אומדני המודל עדיין מוצגים בטבלה שלמטה";
     meaning = "אין בסיס להכריע בין האסטרטגיות ללא ההשוואה המלאה; פירוט מדויק על ביצוע בפועל אינו זמין כרגע";
     action = "לא לבצע הקצאה מלאה לפי הדירוג בלבד. אין בסיס מספיק להמליץ על חלופה מסוימת ללא הראיה החסרה";
+    caveat = "הסכומים הם רווח מצטבר צפוי ומניחים רשומות עצמאיות ואדיטיביות; אינם רווח בחודש הבא, אינם השפעה סיבתית ואינם הבטחה";
   }
   return renderSummaryRecommendation({
     answer,
     meaning,
     action,
-    caveat: "הסכומים הם רווח מצטבר צפוי ומניחים רשומות עצמאיות ואדיטיביות; אינם רווח בחודש הבא, אינם השפעה סיבתית ואינם הבטחה",
+    caveat,
   });
 }
 
@@ -317,16 +326,19 @@ function buildD9(sim) {
 // never claiming a live figure that hasn't arrived yet. Also satisfies
 // D9's own explicit lock against two competing headings here: exactly
 // this one h1, nothing else.
+// §יג-6 (PHASE12A.md): "₪50,000" alone didn't say what the number WAS --
+// no other word on the screen named it either at that point in the DOM.
 function appendScreenHeading(totalBudget) {
   const amount = typeof totalBudget === "number" ? totalBudget : 50000;
-  container.appendChild(el("h1", { text: format.formatCurrency(amount) }));
+  container.appendChild(el("h1", { text: `תקציב פרסום חודשי: ${format.formatCurrency(amount)}` }));
 }
 
 function renderSuccess(sim) {
   container.replaceChildren();
   appendScreenHeading(sim.total_budget);
   const sorted = [...sim.strategies].sort((a, b) => a.rank - b.rank);
-  container.appendChild(buildOverlapAlert(sim));
+  const overlapAlert = buildOverlapAlert(sim);
+  if (overlapAlert) container.appendChild(overlapAlert);
   // IA.md §6: visible even when <details> is closed -- only the
   // methodological breakdown itself collapses.
   container.appendChild(el("p", {

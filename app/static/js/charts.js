@@ -34,6 +34,42 @@ const VIEW_HEIGHT = 225; // 16:9
 // labels, a rotated Y-axis name to its left).
 const PADDING = { top: 36, right: 16, bottom: 44, left: 28 };
 
+/** Splits a per-bar category label into display lines at its own
+ * structural separators -- " + " (between allocations, budget.js's own
+ * `compositionText` joiner) and " × " (between a campaign count and its
+ * per-campaign currency, within one allocation). CP8 round 3 (Codex
+ * finding, relayed by the user, 29.09.2026, exact split decided by the
+ * user): every allocation always renders as two lines ("100 קמפיינים" /
+ * "× ₪500"), not just when it happens to be too long for one line --
+ * simpler and more predictable than a width-based heuristic wrap, which
+ * an earlier attempt here got wrong (guessed a Hebrew character width
+ * that didn't hold, verified only after live labels still visibly
+ * touched their neighbors in an actual screenshot). A label with no
+ * such separators (Overview, Follow-up) returns unchanged as a single
+ * line -- neither ever contains " + " or " × ", so this is a no-op for
+ * them, byte-identical to before.
+ *
+ * Every returned line, concatenated back with no separator, reproduces
+ * the ORIGINAL string exactly (continuation lines keep their own
+ * leading space/joiner) -- this is a pure rendering/line-break change,
+ * never a content change, so it can never desync from
+ * budget.js's own approved wording. */
+function splitChartLabelLines(text) {
+  const groups = text.split(" + ");
+  const lines = [];
+  groups.forEach((group, gi) => {
+    const parts = group.split(" × ");
+    parts.forEach((part, pi) => {
+      let piece = part;
+      if (pi > 0) piece = ` × ${piece}`;
+      else if (gi > 0) piece = ` ${piece}`;
+      if (pi === parts.length - 1 && gi < groups.length - 1) piece = `${piece} +`;
+      lines.push(piece);
+    });
+  });
+  return lines;
+}
+
 /** data: [{ xHebrew, xEnglish, value, lower?, upper? }]. `value` may be
  * null -- rendered as a labeled "אין נתונים" gap, never a 0-height bar
  * (IA.md:112: conversion_rate null -> N/A, ⛔ never a zero column; that
@@ -87,9 +123,22 @@ export function renderBarChart({ data, xLabel, yLabel, title, titleEnglish, form
   const chartMax = max > 0 ? max : 1; // avoid a degenerate 0-height chart
 
   const plotWidth = VIEW_WIDTH - PADDING.left - PADDING.right;
-  const plotHeight = VIEW_HEIGHT - PADDING.top - PADDING.bottom;
   const barGap = 12;
   const barWidth = (plotWidth - barGap * (data.length - 1)) / data.length;
+
+  // Dynamic bottom padding (CP8 round 3): a label split into more than
+  // one line must not shrink or crowd its neighbors to fit -- the axis
+  // area reserves however many lines the longest split label actually
+  // needs (1 for Overview/Follow-up, up to 4 for Budget's own two-
+  // allocation strategy), so `plotHeight` (and every position derived
+  // from it below) shrinks only for the charts that actually need the
+  // room. Font size is unchanged (the user's own decision) -- only the
+  // reserved vertical space grows.
+  const labelLines = data.map((d) => splitChartLabelLines(String(d.xHebrew)));
+  const maxLabelLines = Math.max(1, ...labelLines.map((lines) => lines.length));
+  const LABEL_LINE_HEIGHT = 11; // viewBox units, matches the "1.1em" dy at the 10px axis-label font-size
+  const bottomPadding = PADDING.bottom + (maxLabelLines - 1) * LABEL_LINE_HEIGHT;
+  const plotHeight = VIEW_HEIGHT - PADDING.top - bottomPadding;
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`);
@@ -185,12 +234,23 @@ export function renderBarChart({ data, xLabel, yLabel, title, titleEnglish, form
       svg.appendChild(naLabel);
     }
 
+    // CP8 round 3 (§ decided by the user, 29.09.2026): each of this
+    // bar's precomputed lines (splitChartLabelLines(), above) becomes
+    // its own <tspan> -- Overview/Follow-up got exactly one line here
+    // before this checkpoint and still do (byte-identical rendering).
     const label = document.createElementNS(SVG_NS, "text");
-    label.setAttribute("x", String(x + barWidth / 2));
-    label.setAttribute("y", String(VIEW_HEIGHT - PADDING.bottom + 16));
+    const labelX = String(x + barWidth / 2);
+    label.setAttribute("x", labelX);
+    label.setAttribute("y", String(VIEW_HEIGHT - bottomPadding + 16));
     label.setAttribute("text-anchor", "middle");
     label.setAttribute("class", "chart-axis-label");
-    label.textContent = d.xHebrew;
+    labelLines[i].forEach((line, li) => {
+      const tspan = document.createElementNS(SVG_NS, "tspan");
+      tspan.setAttribute("x", labelX);
+      if (li > 0) tspan.setAttribute("dy", "1.1em");
+      tspan.textContent = line;
+      label.appendChild(tspan);
+    });
     svg.appendChild(label);
 
     if (typeof d.lower === "number" && typeof d.upper === "number") {

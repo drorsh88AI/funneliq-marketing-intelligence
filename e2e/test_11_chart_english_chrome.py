@@ -53,6 +53,11 @@ def _chrome_texts_from_handle(handle):
 
 
 _HEBREW_RANGE = range(0x0590, 0x05FF + 1)
+_LTR_ISOLATE_START, _LTR_ISOLATE_END = chr(0x2066), chr(0x2069)
+
+
+def _ltr(s: str) -> str:
+    return f"{_LTR_ISOLATE_START}{s}{_LTR_ISOLATE_END}"
 
 
 def _assert_has_hebrew(*texts):
@@ -105,6 +110,25 @@ def test_budget_chart_has_hebrew_title_axis_names_and_legend(mocked_page, mocked
     _assert_has_hebrew(title, x_name, y_name)
     assert subtitle == "Expected Profit by Allocation Strategy"
     _assert_all_english(subtitle)
+
+    # Per-bar category tick labels (budget.js's own `compositionText`) --
+    # PHASE12A.md §ז1's approved chart value is "100 קמפיינים × ₪500"
+    # (spelled-out "קמפיינים"), not the bare "100×₪500" a prior version
+    # rendered. This is the exact gap that slipped through CP8's first
+    # pass: this test only checked title/subtitle/axis names, never the
+    # per-bar values themselves. fx.budget_simulation()'s own fixed
+    # rank order (100x500, 25x2000, 10x5000, 2x20000_1x10000).
+    tick_labels = mocked_page.query_selector_all("#screen-budget .chart-live-svg .chart-axis-label")
+    assert len(tick_labels) == 4
+    tick_texts = [label.text_content() for label in tick_labels]
+    assert tick_texts == [
+        f"{_ltr('100')} קמפיינים × {_ltr('₪500')}",
+        f"{_ltr('25')} קמפיינים × {_ltr('₪2,000')}",
+        f"{_ltr('10')} קמפיינים × {_ltr('₪5,000')}",
+        f"{_ltr('2')} קמפיינים × {_ltr('₪20,000')} + {_ltr('1')} קמפיינים × {_ltr('₪10,000')}",
+    ]
+    for label in tick_texts:
+        _assert_has_hebrew(label)
 
     # Budget's chart has a whisker (lower/upper bound per strategy) --
     # DESIGN.md:300-304's own mandatory textual legend, Hebrew per 12A

@@ -865,7 +865,7 @@ D14 — אחד בלי השני מטעה לגבי משמעות הציון), ול�
 
 | שדה | אלמנט UI |
 |---|---|
-| `total_budget` | כותרת — `₪50,000` |
+| `total_budget` | כותרת — 🆕 (12A, §יג-6) "תקציב פרסום חודשי: ₪50,000", ⛔ לא `₪50,000` בלבד |
 | `interval_method` · `bootstrap_percentiles` · `bootstrap_iterations` | `<details>` |
 | `top_two_overlap` | **הודעת החפיפה** — הרכיב הבולט ביותר במסך (§6) |
 | `strategy_id` · `rank` | שורת האסטרטגיה ומיקומה בדירוג |

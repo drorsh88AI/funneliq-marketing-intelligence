@@ -62,6 +62,12 @@ def test_case_21_p6_model_version_mismatch_hides_recommendation_keeps_table(mock
     overlap_text = mocked_page.text_content(".overlap-alert")
     assert "8.6" not in overlap_text  # the backtest-backed ratio sentence is gone
     assert "100×500 מדורגת ראשונה" not in overlap_text
+    # Review finding, CP6 round 2 (29.09.2026): the box's own "ר' הסבר
+    # מלא למטה" pointer must not survive when there IS no full
+    # explanation below (buildD9()'s own degraded branch never explains
+    # the overlap, only that the comparison itself is unavailable).
+    assert "ר' הסבר מלא למטה" not in overlap_text
+    assert "בדיקת העבר הדרושה לו חסרה" in overlap_text
     # The always-present strategy table survives untouched.
     rows = mocked_page.query_selector_all(".strategy-row")
     assert len(rows) == 4
@@ -69,7 +75,14 @@ def test_case_21_p6_model_version_mismatch_hides_recommendation_keeps_table(mock
 
 def test_case_24_top_two_overlap_blocks_winner_declaration(mocked_page, mocked_context):
     """24. top_two_overlap=true ⇒ אין הכרזה על אסטרטגיה מנצחת ואין
-    100x500 כהמלצה."""
+    100x500 כהמלצה.
+
+    §יג-6 (סבב ביקורת Codex, 28.09.2026): the overlap-alert box no longer
+    carries the backtest-backed recommendation paragraph or names either
+    strategy -- that full explanation moved to buildD9() below (assumed
+    by the two tests right after this one), leaving only a short,
+    top_two_overlap-driven pointer to it. No winner is ever declared
+    here or there."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
     route_json(mocked_context, "**/business_facts.json", _facts("P6-linear-e2e"))
@@ -79,11 +92,41 @@ def test_case_24_top_two_overlap_blocks_winner_declaration(mocked_page, mocked_c
     mocked_page.click('a[data-route="budget"]')
     mocked_page.wait_for_selector(".overlap-alert", timeout=10_000)
     overlap_text = mocked_page.text_content(".overlap-alert")
-    assert "אין הכרזה על אסטרטגיה מנצחת" in overlap_text
-    # The backtest sentence, when present, explicitly disclaims itself
-    # as a recommendation ("אינה המלצה") -- never framed as a winner.
-    assert "100×500 מדורגת ראשונה מספרית, אך אינה המלצה" in overlap_text
-    assert "האסטרטגיה המדורגת ראשונה" not in overlap_text  # the OTHER (non-overlap) branch's own wording
+    assert "טווחי האומדן של שתי דרכי החלוקה המובילות חופפים" in overlap_text
+    # No strategy named, no ranking claim, no recommendation duplicated
+    # here (all of that lives only in buildD9() now).
+    assert "100×500" not in overlap_text
+    assert "25×2,000" not in overlap_text
+    assert "אינה המלצה" not in overlap_text
+    assert "האסטרטגיה המדורגת ראשונה" not in overlap_text  # the (now-removed) non-overlap branch's own wording
+
+
+def test_overlap_alert_absent_when_not_overlapping(mocked_page, mocked_context):
+    """§יג-6: the box is `top_two_overlap`-driven ONLY now -- it renders
+    nothing at all (not even a substitute rank-based message) when that
+    flag is false, since IA.md never locks a specific sentence for that
+    branch and no live data ever reaches it (the frozen dataset's own
+    top_two_overlap is always true).
+
+    Review finding, CP6 round 2 (29.09.2026): the box disappearing is not
+    enough on its own -- buildD9()'s own "meaning" layer used to assert
+    the ranges overlap unconditionally on backtest availability alone,
+    which would contradict the (now correctly absent) box. Verifies the
+    bottom summary's own overlap clause follows the same live flag."""
+    route_json(mocked_context, "**/api/me", fx.api_me())
+    route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/business_facts.json", _facts("P6-linear-e2e"))
+    route_json(mocked_context, "**/api/simulate/budget", fx.budget_simulation(top_two_overlap=False, model_version="P6-linear-e2e"))
+    sign_in_and_wait(mocked_page, mocked_context)
+
+    mocked_page.click('a[data-route="budget"]')
+    mocked_page.wait_for_selector(".strategy-table", timeout=10_000)
+    assert mocked_page.query_selector(".overlap-alert") is None
+
+    layers = _read_budget_d9_layers(mocked_page)
+    meaning_text = next(layer["text"] for layer in layers if layer["key"] == "meaning")
+    assert "אינם חופפים" in meaning_text
+    assert "מבחן שמוכיח הבדל או שוויון" not in meaning_text  # the overlap-true-only clause
 
 
 # ---------------------------------------------------------------------------
@@ -205,16 +248,67 @@ assert _BUDGET_RATIO == "8.60" and _BUDGET_N2000 == "322", (
     f"DESIGN.md's own row both assume, or investigate why they moved"
 )
 
+def _budget_caveat_cell_to_display_text(cell, ratio):
+    """The healthy caveat cell's own structure (DESIGN.md sec 6.1, unlike
+    every OTHER cell here) is "**שלושה משפטים, כולם גלויים:** "s1" "s2"
+    "s3"" -- a documentation label (NOT rendered) followed by three
+    double-quoted sentences that ARE the literal text, joined into one
+    paragraph (renderSummaryRecommendation's own single-<p> caveat slot,
+    same as super-customer.js's merged caveat). Review finding, CP6
+    (29.09.2026): an earlier draft of this bridge copied
+    _BUDGET_DEGRADED_LAYERS["caveat"] here instead, based on a
+    misreading of the DEGRADED table's OWN "מקור" column note ("זהה
+    למצב תקין") as if it meant "this text equals the healthy caveat" --
+    it actually describes GATING (not asset-dependent), not text
+    equality. DESIGN.md sec 6.1's own elaborate three-sentence caveat
+    and sec 6.1c's simple one-sentence caveat are genuinely different
+    texts for genuinely different states here (unlike P4S, where they
+    really are identical)."""
+    sentences = re.findall(r'"([^"]*)"', cell)
+    assert len(sentences) == 3, f"expected 3 quoted sentences in the healthy caveat cell, got {len(sentences)}: {cell!r}"
+    text = " ".join(sentences)
+    text = re.sub(
+        r"\{יחס בדיקת העבר לרמת 500[^}]*\}",
+        f"{_LTR_ISOLATE_START}{ratio}{_LTR_ISOLATE_END}",
+        text,
+    )
+    return text
+
+
+# The two point estimates ({רווח מצטבר צפוי לרמת 500}/{...2,000}) come
+# from fixtures.py's own `budget_simulation()` -- the SAME payload
+# test_p11a_cp4_p6_matching_shows_full_backtest_in_all_four_layers below
+# actually routes -- read directly from it, never retyped as separate
+# float literals.
+_matching_sim = fx.budget_simulation(model_version="P6-linear-e2e")
+_strategy_100x500 = next(s for s in _matching_sim["strategies"] if s["strategy_id"] == "100x500")
+_strategy_25x2000 = next(s for s in _matching_sim["strategies"] if s["strategy_id"] == "25x2000")
+
+
+def _format_currency(value):
+    return f"₪{value:,.0f}"
+
+
 _BUDGET_HEALTHY_LAYERS = {
     "answer": _budget_matrix_cell_to_display_text(_budget_healthy_row[1].strip()),
-    "meaning": _budget_matrix_cell_to_display_text(_budget_healthy_row[2].strip()).replace(
-        _BUDGET_RATIO, f"{_LTR_ISOLATE_START}{_BUDGET_RATIO}{_LTR_ISOLATE_END}"
+    "meaning": (
+        _budget_matrix_cell_to_display_text(_budget_healthy_row[2].strip())
+        .replace("{רווח מצטבר צפוי לרמת 500}", _format_currency(_strategy_100x500["point_estimate"]))
+        .replace("{רווח מצטבר צפוי לרמת 2,000}", _format_currency(_strategy_25x2000["point_estimate"]))
     ),
-    "action": _budget_matrix_cell_to_display_text(_budget_healthy_row[3].strip()).replace(
-        _BUDGET_N2000, f"{_LTR_ISOLATE_START}{_BUDGET_N2000}{_LTR_ISOLATE_END}"
-    ),
-    "caveat": _BUDGET_DEGRADED_LAYERS["caveat"],  # DESIGN.md's own "זהה למצב תקין" note on this row
+    "action": _budget_matrix_cell_to_display_text(_budget_healthy_row[3].strip()),
+    "caveat": _budget_caveat_cell_to_display_text(_budget_healthy_row[4].strip(), _BUDGET_RATIO),
 }
+
+# The healthy and degraded caveats are genuinely different texts here
+# (see _budget_caveat_cell_to_display_text's own docstring) -- assert
+# that difference explicitly, so a future regression that makes them
+# equal again (e.g. reverting to the pre-CP6 shared caveat) fails loudly
+# here instead of just silently matching the wrong fixture.
+assert _BUDGET_HEALTHY_LAYERS["caveat"] != _BUDGET_DEGRADED_LAYERS["caveat"], (
+    "Budget's healthy and degraded caveats are unexpectedly identical -- "
+    "DESIGN.md sec 6.1/6.1c define them as different texts for this target"
+)
 
 # Falsification case 9's anchors for THIS screen: no ranking claim, no
 # overvaluation ratio, no pilot recommendation may survive in the
@@ -272,5 +366,8 @@ def test_p11a_cp4_p6_matching_shows_full_backtest_in_all_four_layers(mocked_page
     # Falsification case 9's negative check, in the OTHER direction --
     # the healthy state must not have accidentally kept the degraded
     # wording (a "cheap way to pass 1-10 is to always degrade" style bug
-    # would also fail here, since degraded rows never mention the ratio).
-    assert rendered["caveat"] == _BUDGET_DEGRADED_LAYERS["caveat"]
+    # would also fail here: the module-level assert above already proves
+    # _BUDGET_HEALTHY_LAYERS["caveat"] != _BUDGET_DEGRADED_LAYERS["caveat"],
+    # and the equality check just above this one would fail if the DOM
+    # actually rendered the degraded text instead).
+    assert rendered["caveat"] != _BUDGET_DEGRADED_LAYERS["caveat"]
