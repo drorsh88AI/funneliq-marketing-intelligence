@@ -887,6 +887,11 @@ button {
   font-size: var(--font-size-sm);
 }
 
+.p4s-score-explanation {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-base);
+}
+
 .p4s-definitions p {
   margin: 0 0 var(--space-1);
 }
