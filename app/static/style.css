@@ -440,6 +440,20 @@ button {
   font-size: var(--model-disclaimer-font-size);
 }
 
+/* CP11 (PHASE12A.md, ביקורת הבוחן החוזר, 30.09.2026, בחירת Codex באפשרות B):
+   P3/P4S's own action text now embeds "\n• " per condition so a reader
+   can't skip over one mid-sentence -- the tester's completions showed
+   exactly that failure mode. Scoped to ONLY these two panels' own
+   action layer, ⛔ not every screen's: no other screen's `action`
+   string contains a newline today, so this rule would be a no-op for
+   them regardless, but scoping it explicitly (rather than a bare
+   `.summary-layer-action .summary-layer-text`) is what the user asked
+   for and keeps the blast radius visible in the selector itself. */
+.prediction-panel-p3 .summary-layer-action .summary-layer-text,
+.prediction-panel-p4s .summary-layer-action .summary-layer-text {
+  white-space: pre-line;
+}
+
 /* checkpoint 9 self-review finding, 2026-09-15: the STANDALONE
    .model-disclaimer class -- used on its own <p> across predict.js
    (P2 leverage caveat, P3/P4 uncalibrated warnings), super-customer.js
