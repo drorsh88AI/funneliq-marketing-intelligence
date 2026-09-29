@@ -459,10 +459,9 @@ function panelFailureMessage(result) {
   return "אירעה שגיאה. נסו לשלוח את הטופס שוב.";
 }
 
-/** IA.md §9.2: "בפאנל OOD: 'אין מספיק נתונים לחיזוי אמין' + הסיבה
- * הקונקרטית (איזה שדה, מחוץ לאיזה גבול) + בלי מספר." The concrete
- * per-field reason line's exact wording beyond the server's own
- * `message` is this module's own composition. */
+/** IA.md §9.2: each OOD panel explains the field and bounds in Hebrew.
+ * The API warning.message may be English, so visible wording comes from
+ * the structured feature/value/min/max fields instead. */
 function buildOodBanner(warnings) {
   const banner = el("div", { className: "ood-banner", role: "alert" });
   banner.appendChild(el("p", { className: "ood-banner-title" }, [
@@ -472,9 +471,12 @@ function buildOodBanner(warnings) {
   for (const w of warnings.filter((x) => x.code === "ood_feature_out_of_range")) {
     const meta = FIELD_META[w.feature];
     const featureLabel = meta ? meta.label : w.feature;
+    const displayValue = (value) => ["ad_budget", "customer_acquisition_cost"].includes(w.feature)
+      ? format.formatCurrency(value)
+      : format.formatNumber(value);
     banner.appendChild(el("p", {
       className: "ood-banner-reason",
-      text: `${w.message} — ${featureLabel} (${format.ltr(w.feature)}): ${format.ltr(format.formatNumber(w.value))}, טווח מאומן: ${format.ltr(`${format.formatNumber(w.min)}–${format.formatNumber(w.max)}`)}`,
+      text: `הערך ${format.ltr(displayValue(w.value))} בשדה ${featureLabel} מחוץ לטווח שהמודל למד (${format.ltr(`${displayValue(w.min)}–${displayValue(w.max)}`)}), ולכן אין תוצאה בפאנל הזה. אפשר להזין תרחיש חדש שלא הופיע בעבר, כל עוד כל הערכים בטווח ותקינים.`,
     }));
   }
   return banner;
