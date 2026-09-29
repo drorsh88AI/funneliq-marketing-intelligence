@@ -75,11 +75,16 @@ def test_case_1_loading_example_then_editing_field_clears_result_and_relabels(mo
     # Loading an example alone already clears the prior result.
     assert mocked_page.query_selector(".prediction-panel-p2 .prediction-primary") is None
     assert "דוגמה היסטורית" in mocked_page.text_content(".input-summary")
-
-    # IA.md §3.3: input-details collapses by default once a valid
-    # example loads -- re-open it before filling a field. (Two
-    # <details> exist on this screen now -- scope to this one.)
-    mocked_page.click(".input-details summary")
+    # Selecting an example opens the populated fields and returns the
+    # viewport/focus to them, even though the picker is below the form.
+    assert mocked_page.eval_on_selector(".input-details", "el => el.open") is True
+    assert mocked_page.input_value("#field-ad_budget") == "4000"
+    assert mocked_page.is_visible("#field-ad_budget")
+    assert mocked_page.evaluate("""() => {
+        const rect = document.querySelector('#field-ad_budget').getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= window.innerHeight;
+    }""")
+    assert mocked_page.evaluate("document.activeElement.matches('.input-details summary')")
     mocked_page.fill("#field-ad_budget", "7777")
     assert mocked_page.query_selector(".prediction-panel-p2 .prediction-primary") is None
     assert "תרחיש שנערך" in mocked_page.text_content(".input-summary")
