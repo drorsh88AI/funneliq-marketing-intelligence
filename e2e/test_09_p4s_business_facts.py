@@ -302,6 +302,13 @@ def test_p4s_business_facts_available_shows_full_profile_and_live_caveat(mocked_
     mocked_page.click(".submit-button")
 
     mocked_page.wait_for_selector(".prediction-panel-p4s .prediction-primary", timeout=10_000)
+    explanation = mocked_page.locator(".prediction-panel-p4s .p4s-score-explanation")
+    assert explanation.is_visible()
+    assert explanation.inner_text() == (
+        f"ציון {_ltr(str(_P4S_SCORE))} מתוך 100 פירושו שהמודל מעריך סיכוי של "
+        f"כ־{_ltr(str(_P4S_SCORE) + '%')} שהרוכש יעמוד בהגדרת לקוח-על. "
+        "זהו אומדן, לא הבטחה או ציון איכות."
+    )
     card_text = mocked_page.text_content(".prediction-panel-p4s .business-context-card")
     assert "16.0%" in card_text
     assert "NaN" not in card_text
@@ -343,6 +350,7 @@ def test_p4s_ood_caveat_still_built_from_response_without_recall(mocked_page, mo
     mocked_page.click(".submit-button")
 
     mocked_page.wait_for_selector(".prediction-panel-p4s .ood-banner", timeout=10_000)
+    assert mocked_page.query_selector(".prediction-panel-p4s .p4s-score-explanation") is None
     reason = mocked_page.text_content(".prediction-panel-p4s .ood-banner-reason")
     assert reason == (
         f"הערך {_ltr('₪50,000')} בשדה רמת הוצאת פרסום חודשית מחוץ לטווח "

@@ -621,6 +621,10 @@ function buildP4SPanel(result) {
   // P4's own {X}% (IA.md §3א.5's own distinction table).
   const score = Math.round(d.event_probability * 100);
   panel.appendChild(el("p", { className: "prediction-primary", text: `ציון לקוח-על: ${format.ltr(String(score))}` }));
+  panel.appendChild(el("p", {
+    className: "p4s-score-explanation",
+    text: `ציון ${format.ltr(String(score))} מתוך 100 פירושו שהמודל מעריך סיכוי של כ־${format.ltr(`${score}%`)} שהרוכש יעמוד בהגדרת לקוח-על. זהו אומדן, לא הבטחה או ציון איכות.`,
+  }));
 
   panel.appendChild(buildDefinitions(d));
   panel.appendChild(el("p", {
