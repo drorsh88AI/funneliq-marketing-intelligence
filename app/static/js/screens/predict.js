@@ -818,8 +818,12 @@ function applyExample(row, index) {
   submitState = "idle";
   submitResults = null;
   syncFieldValuesToDom();
-  nodes.detailsEl.open = false; // IA.md §3.3: closed by default after a valid example loads
+  nodes.detailsEl.open = true;
   updateDynamic();
+  // The picker sits below the form. Bring the populated fields back into
+  // view so selecting an example does not leave only its summary visible.
+  nodes.detailsEl.querySelector("summary").focus({ preventScroll: true });
+  nodes.detailsEl.scrollIntoView({ behavior: "auto", block: "start" });
 }
 
 function clearForm() {
