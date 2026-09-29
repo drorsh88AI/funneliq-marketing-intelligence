@@ -87,3 +87,37 @@ def test_case_15_ood_confined_to_p2_only(mocked_page, mocked_context):
     assert mocked_page.query_selector(".prediction-panel-p3 .ood-banner") is None
     assert mocked_page.query_selector(".prediction-panel-p4 .prediction-primary") is not None
     assert mocked_page.query_selector(".prediction-panel-p4 .ood-banner") is None
+
+
+def test_predict_ood_all_panels_explain_bounds_in_hebrew(mocked_page, mocked_context):
+    """An English API warning must not leak into any of the three OOD panels."""
+    route_json(mocked_context, "**/api/me", fx.api_me())
+    route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    route_json(mocked_context, "**/rest/v1/funnel_records*", [])
+    sign_in_and_wait(mocked_page, mocked_context)
+
+    payloads = {
+        "ltv": fx.ltv_prediction_ood(feature="ad_budget", value=50000, lo=500, hi=20000),
+        "upsell": fx.propensity_prediction_ood(feature="ad_budget", value=50000, lo=500, hi=20000),
+        "referral": fx.propensity_prediction_ood(feature="ad_budget", value=50000, lo=500, hi=20000),
+    }
+    for task, payload in payloads.items():
+        payload["warnings"][0]["message"] = "ad_budget is outside the observed training range"
+        route_json(mocked_context, f"**/api/predict/{task}", payload)
+
+    mocked_page.click('a[data-route="predict"]')
+    mocked_page.wait_for_selector("#field-ad_budget")
+    for field, value in {**PREDICT_VALUES, "ad_budget": "50000"}.items():
+        mocked_page.fill(f"#field-{field}", value)
+    mocked_page.check(".context-confirmation input[type=checkbox]")
+    mocked_page.click(".submit-button")
+
+    for panel in ("p2", "p3", "p4"):
+        selector = f".prediction-panel-{panel}"
+        mocked_page.wait_for_selector(f"{selector} .ood-banner-reason", timeout=10_000)
+        assert mocked_page.query_selector(f"{selector} .prediction-primary") is None
+        reason = mocked_page.text_content(f"{selector} .ood-banner-reason")
+        assert "רמת הוצאת פרסום חודשית" in reason
+        assert "₪50,000" in reason and "₪500–₪20,000" in reason
+        assert "מחוץ לטווח שהמודל למד" in reason
+        assert "ad_budget" not in reason and "outside the observed training range" not in reason
