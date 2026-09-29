@@ -112,7 +112,11 @@ def _degraded_layers_for(target):
     for target_cell, layer_cell, wording_cell, _source_cell in _degradation_rows:
         if target_cell.strip("*") != target:
             continue
-        layers[_ROW_LABEL_TO_D9_KEY[layer_cell.strip()]] = wording_cell.strip()
+        # CP11 (30.09.2026): `<br>` keeps a multi-condition action cell
+        # on one markdown table line; translate back to the real `\n`
+        # the live DOM's textContent carries (harmless no-op for every
+        # other target/layer, none of which contain "<br>").
+        layers[_ROW_LABEL_TO_D9_KEY[layer_cell.strip()]] = wording_cell.strip().replace("<br>", "\n")
     assert set(layers) == set(_D9_EXPECTED_KEYS), (
         f"docs/DESIGN.md sec 6.1c: expected exactly the 4 {target!r} rows, "
         f"got {sorted(layers)}"

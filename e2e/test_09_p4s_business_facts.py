@@ -129,7 +129,12 @@ _P4S_DEGRADED_LAYERS = {}
 for _target_cell, _layer_cell, _wording_cell, _source_cell in _degradation_rows:
     if _target_cell.strip("*") != "P4S":
         continue
-    _P4S_DEGRADED_LAYERS[_P4S_ROW_LABEL_TO_D9_KEY[_layer_cell.strip()]] = _wording_cell.strip()
+    # CP11 (30.09.2026): the action cell's condition checklist uses
+    # `<br>` to keep the markdown TABLE row on one line (a literal `\n`
+    # would break _extract_markdown_table's own per-line parsing) --
+    # translated back to the real `\n` the live DOM's textContent has
+    # (style.css renders it via `white-space: pre-line`).
+    _P4S_DEGRADED_LAYERS[_P4S_ROW_LABEL_TO_D9_KEY[_layer_cell.strip()]] = _wording_cell.strip().replace("<br>", "\n")
 assert set(_P4S_DEGRADED_LAYERS) == set(_D9_EXPECTED_KEYS), (
     f"docs/DESIGN.md sec 6.1c: expected exactly the 4 P4S rows "
     f"{sorted(_P4S_ROW_LABEL_TO_D9_KEY)}, got {sorted(_P4S_DEGRADED_LAYERS)} -- "
@@ -173,7 +178,7 @@ _P4S_HEALTHY_LAYERS = {
         .replace("{X}", f"{_LTR_ISOLATE_START}{_P4S_SCORE}{_LTR_ISOLATE_END}")
         .replace("{Y}", _P4S_BASE_RATE_PCT)
     ),
-    "action": _p4s_healthy_row[3].strip(),
+    "action": _p4s_healthy_row[3].strip().replace("<br>", "\n"),
     "caveat": (
         _p4s_healthy_row[4].strip()
         .replace("{p4s_model_algorithm}", f"{_LTR_ISOLATE_START}{_P4S_MODEL_ALGORITHM}{_LTR_ISOLATE_END}")
