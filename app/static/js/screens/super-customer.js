@@ -413,9 +413,12 @@ function buildOodBanner(warnings) {
   for (const w of warnings.filter((x) => x.code === "ood_feature_out_of_range")) {
     const meta = FIELD_META[w.feature];
     const featureLabel = meta ? meta.label : w.feature;
+    const displayValue = (value) => w.feature === "ad_budget"
+      ? format.formatCurrency(value)
+      : format.formatNumber(value);
     banner.appendChild(el("p", {
       className: "ood-banner-reason",
-      text: `${w.message} — ${featureLabel} (${format.ltr(w.feature)}): ${format.ltr(format.formatNumber(w.value))}, טווח מאומן: ${format.ltr(`${format.formatNumber(w.min)}–${format.formatNumber(w.max)}`)}`,
+      text: `הערך ${format.ltr(displayValue(w.value))} בשדה ${featureLabel} מחוץ לטווח שהמודל למד (${format.ltr(`${displayValue(w.min)}–${displayValue(w.max)}`)}), ולכן לא חושב ציון. אפשר להזין תרחיש חדש שלא הופיע בעבר, כל עוד כל הערכים בטווח ותקינים.`,
     }));
   }
   return banner;
