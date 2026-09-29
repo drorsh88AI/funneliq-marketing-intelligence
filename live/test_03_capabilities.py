@@ -531,7 +531,7 @@ def test_p4s_d9_layers_show_live_evidence(live_context, demo_credentials, live_b
     profile = live_business_facts["super_customer_profile"]
     assert profile, "business_facts.json.super_customer_profile missing -- meaning would degrade"
 
-    # super-customer.js:557-558,569-575 (buildP4SPanel, healthy branch)
+    # super-customer.js buildP4SPanel, healthy branch (12A wording).
     score = _js_round(d.event_probability * 100)
     base_rate_pct = _format_percent(d.base_rate)
     pct1 = _format_percent(profile["pct_of_purchased"], decimals=1)
@@ -539,25 +539,24 @@ def test_p4s_d9_layers_show_live_evidence(live_context, demo_credentials, live_b
     cac_super = _format_currency(profile["cac_super_mean"], decimals=2)
     cac_population = _format_currency(profile["cac_population_mean"], decimals=2)
     pct3 = _format_percent(profile["cac_savings_pct"], decimals=1)
-    roc_auc = _format_number(d.metrics.holdout.roc_auc, decimals=3)
-    pr_auc = _format_number(d.metrics.holdout.pr_auc, decimals=3)
-
     expected = {
-        "answer": f"ציון לקוח-על: {_ltr(score)} מתוך 100, מול שיעור הבסיס שחזר: {base_rate_pct}",
+        "answer": f"ציון לקוח-על: {_ltr(score)} מתוך 100, לעומת שיעור היסטורי של {base_rate_pct} בקרב כלל הרוכשים",
         "meaning": (
             f"היסטורית, לקוחות-על היו {pct1} מהרוכשים, יצרו {pct2} מהרווח "
             f"המצטבר; עלות הרכישה הממוצעת שלהם הייתה {cac_super}, לעומת "
             f"{cac_population}, כלומר נמוכה ב-{pct3}. זהו פרופיל תיאורי"
         ),
         "action": (
-            "רק כשהקלט בתחום, אין סימון תמיכה חלקית והנטייה מעל הבסיס, "
+            "רק כשהקלט בתחום, אין סימון תמיכה חלקית והנטייה מעל השיעור ההיסטורי, "
             "אפשר להשתמש בציון כאות מסייע לבדיקה ידנית של רוכש ידוע. בכל "
             "מצב אחר אין תעדוף לפי המודל"
         ),
         "caveat": (
-            f"תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. "
-            f"{_ltr(d.model_algorithm)} נמדד ב-Holdout עם ROC-AUC {roc_auc} "
-            f"ו-PR-AUC {pr_auc}; הציון הוא אות מסייע בלבד, לא תעדוף אוטומטי"
+            "תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. לקוחות עם אותם נתוני רשומה "
+            "מקבלים תמיד את אותו ציון. בבדיקת עבר, בתוך תקציב של ₪2,000–5,000 לחודש — "
+            "שם רוב לקוחות-העל מרוכזים — הציון כמעט לא הבחין בין לקוחות (מדד ההבחנה "
+            "המספרי מופיע ב'פרטי המודל'). התוקף של הציון ללקוח חדש שטרם נצפה לא הוכח; "
+            "הציון הוא אות מסייע בלבד, לא תעדוף אוטומטי"
         ),
     }
 
@@ -565,6 +564,42 @@ def test_p4s_d9_layers_show_live_evidence(live_context, demo_credentials, live_b
     _assert_well_formed_d9_layers(layers)
     rendered = {layer["key"]: layer["text"] for layer in layers}
     assert rendered == expected, f"P4S D9 layers != expected: {rendered!r} != {expected!r}"
+    assert page.is_visible(".prediction-panel-p4s .prediction-primary")
+    assert page.text_content(".prediction-panel-p4s .prediction-primary") == f"ציון לקוח-על: {_ltr(score)}"
+
+
+def test_p4s_ood_displays_approved_hebrew_without_score(live_context, demo_credentials):
+    """CP10: one real P4S OOD submission, response and visible explanation."""
+    bounds = _meta_json("P4S")["ood_bounds"]["ad_budget"]
+    ood_budget = 50000
+    assert ood_budget > bounds["max"]
+    captured = {}
+    page = live_context.new_page()
+
+    def _on_response(response):
+        if response.url.endswith("/api/predict/super-customer") and response.request.method == "POST":
+            captured["p4s"] = response.json()
+
+    page.on("response", _on_response)
+    sign_in_via_browser(page, DEMO_NORTHBOUND_EMAIL, demo_credentials[DEMO_NORTHBOUND_EMAIL])
+    page.wait_for_selector("#authenticated-shell:not([hidden])", timeout=30_000)
+    _open_p4s(page)
+    _fill_p4s(page, {**EARLY_FUNNEL_PAYLOAD, "ad_budget": ood_budget})
+    page.check(".context-confirmation input[type=checkbox]")
+    page.click(".submit-button")
+    page.wait_for_selector(".prediction-panel-p4s .ood-banner-reason", timeout=15_000)
+
+    assert "p4s" in captured
+    d = schemas.SuperCustomerPrediction.model_validate(captured["p4s"])
+    assert d.in_training_domain is False and d.event_probability is None
+    assert page.query_selector(".prediction-panel-p4s .prediction-primary") is None
+    warning = next(w for w in d.warnings if w.code == "ood_feature_out_of_range" and w.feature == "ad_budget")
+    expected = (
+        f"הערך {_ltr(_format_currency(warning.value))} בשדה רמת הוצאת פרסום חודשית "
+        f"מחוץ לטווח שהמודל למד ({_ltr(f'{_format_currency(warning.min)}–{_format_currency(warning.max)}')}), "
+        "ולכן לא חושב ציון. אפשר להזין תרחיש חדש שלא הופיע בעבר, כל עוד כל הערכים בטווח ותקינים."
+    )
+    assert page.text_content(".prediction-panel-p4s .ood-banner-reason") == expected
 
 
 def test_budget_d9_layers_show_live_evidence(live_context, demo_credentials, live_business_facts):

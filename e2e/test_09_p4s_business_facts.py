@@ -71,6 +71,10 @@ _P4S_HOLDOUT_PR_AUC = "0.234"  # formatNumber(0.234, decimals=3)
 _LTR_ISOLATE_START, _LTR_ISOLATE_END = chr(0x2066), chr(0x2069)
 
 
+def _ltr(value):
+    return f"{_LTR_ISOLATE_START}{value}{_LTR_ISOLATE_END}"
+
+
 def _p4s_prediction_payload(ood=False, **kwargs):
     """SuperCustomerPrediction payload with model_algorithm/holdout
     metrics overridden to the deliberately-distinct values above --
@@ -318,10 +322,9 @@ def test_p4s_ood_caveat_still_built_from_response_without_recall(mocked_page, mo
     """buildCaveatText(d) is called from BOTH the OOD branch and the
     healthy branch of buildP4SPanel() -- this test exercises the OOD
     one specifically (neither test_08's existing coverage nor this
-    file's other two tests ever reach it). `in_training_domain=false`
-    comes straight from the mocked response, so this needs no special
-    field values to actually trigger OOD server-side -- the frontend
-    branches on `d.in_training_domain` alone."""
+    file's other two tests ever reach it). The mocked response flags
+    `ad_budget=50000` as OOD, matching the submitted form value, and
+    checks the approved Hebrew explanation without the raw API message."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
     route_json(mocked_context, "**/rest/v1/funnel_records*", [])
@@ -331,13 +334,22 @@ def test_p4s_ood_caveat_still_built_from_response_without_recall(mocked_page, mo
     route_json(mocked_context, "**/business_facts.json", _p4s_business_facts(_MATCHING_SUPER_CUSTOMER_PROFILE))
     sign_in_and_wait(mocked_page, mocked_context)
 
-    route_json(mocked_context, "**/api/predict/super-customer", _p4s_prediction_payload(ood=True))
+    route_json(mocked_context, "**/api/predict/super-customer", _p4s_prediction_payload(
+        ood=True, feature="ad_budget", value=50000, lo=500, hi=20000,
+    ))
     _open_p4s(mocked_page)
-    _fill_p4s(mocked_page, P4S_ROW)
+    _fill_p4s(mocked_page, {**P4S_ROW, "ad_budget": 50000, "followup_1": 55})
     mocked_page.check(".context-confirmation input[type=checkbox]")
     mocked_page.click(".submit-button")
 
     mocked_page.wait_for_selector(".prediction-panel-p4s .ood-banner", timeout=10_000)
+    reason = mocked_page.text_content(".prediction-panel-p4s .ood-banner-reason")
+    assert reason == (
+        f"הערך {_ltr('₪50,000')} בשדה רמת הוצאת פרסום חודשית מחוץ לטווח "
+        f"שהמודל למד ({_ltr('₪500–₪20,000')}), ולכן לא חושב ציון. "
+        "אפשר להזין תרחיש חדש שלא הופיע בעבר, כל עוד כל הערכים בטווח ותקינים."
+    )
+    assert mocked_page.query_selector(".prediction-panel-p4s .prediction-primary") is None
     layers = _read_p4s_d9_layers(mocked_page)
     _assert_well_formed_d9_layers(layers)
     rendered = {layer["key"]: layer["text"] for layer in layers}
