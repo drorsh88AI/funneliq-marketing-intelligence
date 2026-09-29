@@ -508,23 +508,67 @@ def test_p4s_d9_layers_show_live_evidence(live_context, demo_credentials, live_b
     numbers plus the live business_facts.json.super_customer_profile
     (getSuperCustomerProfile() has no model_version gate -- facts.js:192-198)."""
     captured = {}
+    network_log: list[str] = []
+    submit_start = None
     page = live_context.new_page()
 
     def _on_response(response):
         if response.url.endswith("/api/predict/super-customer") and response.request.method == "POST":
-            captured["p4s"] = response.json()
+            captured["status"] = response.status
+            captured["response_elapsed"] = time.monotonic() - submit_start
+            network_log.append(f"P4S POST response status={response.status} at t+{captured['response_elapsed']:.1f}s")
+            if response.status == 200:
+                captured["p4s"] = response.json()
+        elif response.url.endswith("/business_facts.json") and submit_start is not None:
+            network_log.append(f"business_facts.json response status={response.status} at t+{time.monotonic() - submit_start:.1f}s")
 
+    def _on_request_failed(request):
+        if request.url.endswith("/api/predict/super-customer") and request.method == "POST":
+            network_log.append(f"P4S POST request failed at t+{time.monotonic() - submit_start:.1f}s: {request.failure or 'unknown'}")
+
+    def _on_request(request):
+        if request.url.endswith("/api/predict/super-customer") and request.method == "POST":
+            network_log.append(f"P4S POST request started at t+{time.monotonic() - submit_start:.1f}s")
+
+    page.on("request", _on_request)
     page.on("response", _on_response)
+    page.on("requestfailed", _on_request_failed)
     sign_in_via_browser(page, DEMO_NORTHBOUND_EMAIL, demo_credentials[DEMO_NORTHBOUND_EMAIL])
     page.wait_for_selector("#authenticated-shell:not([hidden])", timeout=30_000)
 
     _open_p4s(page)
     _fill_p4s(page, EARLY_FUNNEL_PAYLOAD)
     page.check(".context-confirmation input[type=checkbox]")
+    submit_start = time.monotonic()
     page.click(".submit-button")
-    page.wait_for_selector(".prediction-panel-p4s .summary-recommendation", timeout=15_000)
+    # A healthy P4S request reaches the lazy-loaded artifact; OOD returns
+    # before loading it. The prior 15s wait timed out on the first healthy
+    # live run without revealing whether the request was slow or failed.
+    # Use a finite 45s bound and distinguish success, error, and loading.
+    try:
+        page.wait_for_selector(
+            ".prediction-panel-p4s .summary-recommendation, .prediction-panel-p4s .panel-error",
+            timeout=45_000,
+        )
+    except PlaywrightTimeoutError:
+        pytest.fail(
+            "P4S healthy result did not render within 45s. "
+            f"panel-loading={page.query_selector('.panel-loading') is not None}; "
+            f"prediction-panel={page.query_selector('.prediction-panel-p4s') is not None}; "
+            f"network={network_log or ['no relevant response captured']}"
+        )
+    if page.query_selector(".prediction-panel-p4s .panel-error") is not None:
+        pytest.fail(
+            "P4S rendered a panel error instead of a score: "
+            f"{page.text_content('.prediction-panel-p4s .panel-error')!r}; "
+            f"network={network_log or ['no relevant response captured']}"
+        )
 
-    assert "p4s" in captured, "POST /api/predict/super-customer was never captured"
+    assert "p4s" in captured, f"successful POST /api/predict/super-customer was never captured; network={network_log}"
+    print(
+        f"P4S healthy: POST status=200 after {captured['response_elapsed']:.1f}s; "
+        f"result visible after {time.monotonic() - submit_start:.1f}s"
+    )
     d = schemas.SuperCustomerPrediction.model_validate(captured["p4s"])
     assert d.in_training_domain is True
 
