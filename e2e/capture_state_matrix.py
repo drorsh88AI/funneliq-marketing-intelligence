@@ -190,7 +190,12 @@ def test_overview_success(mocked_page, mocked_context):
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
     sign_in(mocked_page)
-    mocked_page.wait_for_selector(".tier-table", timeout=10_000)
+    # 12A, 27.09.2026: the screen's own separate .tier-table was removed
+    # (tester finding: showed the same data as the chart's own mandatory
+    # accessible fallback table, with less detail) -- the chart's single
+    # fallback table (now carrying both n_records and conversion_rate
+    # via extraColumn) is the only tabular view left.
+    mocked_page.wait_for_selector(".chart-fallback-table", timeout=10_000)
     assert mocked_page.query_selector("#screen-overview .panel-error") is None
     shoot(mocked_page, "overview-success")
 
@@ -208,6 +213,10 @@ def test_shared_form_loading(mocked_page, mocked_context):
     sign_in_and_wait(mocked_page, mocked_context)
     prefill_route = route_deferred(mocked_context, "**/rest/v1/funnel_records*")
     mocked_page.click('a[data-route="predict"]')
+    mocked_page.wait_for_selector("#field-ad_budget", timeout=10_000)
+    # §ו.2 (12A): the picker is folded by default -- open it to capture
+    # its own loading spinner.
+    mocked_page.click(".prefill-picker summary")
     mocked_page.wait_for_selector(".prefill-picker-body .panel-loading", timeout=10_000)
     shoot(mocked_page, "shared-form-loading")
     prefill_route.release(payload=[SHARED_FORM_EXAMPLE_ROW])
@@ -301,6 +310,10 @@ def test_p4s_loading(mocked_page, mocked_context):
     sign_in_and_wait(mocked_page, mocked_context)
     prefill_route = route_deferred(mocked_context, "**/rest/v1/funnel_records*")
     mocked_page.click('a[data-route="super-customer"]')
+    mocked_page.wait_for_selector("#p4s-field-ad_budget", timeout=10_000)
+    # §ו.2 (12A, CP5): P4S's own picker is folded now too -- open it to
+    # capture its loading spinner.
+    mocked_page.click(".prefill-picker summary")
     mocked_page.wait_for_selector(".prefill-picker-body .panel-loading", timeout=10_000)
     shoot(mocked_page, "p4s-loading")
     prefill_route.release(payload=[P4S_EXAMPLE_ROW])
@@ -315,6 +328,7 @@ def test_p4s_prefill_loaded(mocked_page, mocked_context):
     sign_in_and_wait(mocked_page, mocked_context)
     mocked_page.click('a[data-route="super-customer"]')
     mocked_page.wait_for_selector("#p4s-field-ad_budget")
+    mocked_page.click(".prefill-picker summary")
     mocked_page.click("text=דוגמה 1")
     mocked_page.wait_for_function("() => document.getElementById('p4s-field-ad_budget').value === '4000'")
     assert "דוגמה היסטורית" in mocked_page.text_content(".input-summary")

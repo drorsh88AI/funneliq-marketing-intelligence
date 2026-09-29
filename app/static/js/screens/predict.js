@@ -59,6 +59,11 @@ const FIELD_META = {
   customer_acquisition_cost: { label: "עלות ממוצעת לרכישת לקוח", unit: "ש\"ח ללקוח" },
 };
 const NOT_CLOSED_META = { label: "לידים שלא הומרו", unit: "לידים" };
+// F5 (audit:21, PHASE12A.md §יג-4): the label + unit alone gave no hint
+// how this number is derived or how it relates to the other fields.
+// IA.md:151-176's own derivation (`not_closed := followup_5 - closed`),
+// restated in plain business language.
+const NOT_CLOSED_EXPLAIN = "מספר הלידים מקבוצת המעקב שלא הפכו ללקוח (מחושב אוטומטית: לידים שנותרו אחרי מעקב 5, פחות עסקאות שנסגרו)";
 const FIELD_ORDER_BEFORE_DERIVED = ["ad_budget", "num_leads", "leads_answered", "followup_1", "followup_2", "followup_3", "followup_4", "followup_5"];
 const FIELD_ORDER_AFTER_DERIVED = ["closed", "calls_to_closed", "calls_to_not_closed", "customer_acquisition_cost"];
 
@@ -159,14 +164,29 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
+// F3 (audit:19, PHASE12A.md §ח.3): business label on its own row, then
+// technical name + unit TOGETHER on one small row below it -- a fixed
+// two-row (or three, for the derived field's own extra explain row)
+// structure, so every field's input starts at the same vertical offset
+// within its grid row regardless of how long any one label happens to
+// be. (Labels used to be three loose flex-wrap spans that could land on
+// anywhere from 1 to 3 lines depending on content width -- that's what
+// F3 was actually reporting.)
+function buildFieldLabel(businessLabel, technicalName, unit, { for: forId, explain } = {}) {
+  const label = el("label", forId ? { for: forId } : {});
+  label.appendChild(el("span", { className: "field-label-business", text: businessLabel }));
+  label.appendChild(el("span", { className: "field-label-meta" }, [
+    el("span", { className: "field-label-technical", text: format.ltr(technicalName) }),
+    el("span", { className: "field-label-unit", text: unit }),
+  ]));
+  if (explain) label.appendChild(el("span", { className: "field-label-explain", text: explain }));
+  return label;
+}
+
 function buildFieldNode(name) {
   const meta = FIELD_META[name];
   const wrap = el("div", { className: "field" });
-  const label = el("label", { for: `field-${name}` });
-  label.appendChild(el("span", { className: "field-label-business", text: meta.label }));
-  label.appendChild(el("span", { className: "field-label-technical", text: format.ltr(name) }));
-  label.appendChild(el("span", { className: "field-label-unit", text: meta.unit }));
-  wrap.appendChild(label);
+  wrap.appendChild(buildFieldLabel(meta.label, name, meta.unit, { for: `field-${name}` }));
 
   const input = el("input", {
     id: `field-${name}`,
@@ -182,12 +202,13 @@ function buildFieldNode(name) {
 }
 
 function buildDerivedFieldNode() {
+  // Spans the full grid row (style.css) -- its own explain line makes
+  // it structurally taller than every other field's label, so it is
+  // deliberately taken OUT of the shared-row alignment requirement
+  // above rather than forcing every other field to reserve that same
+  // extra height just to match it.
   const wrap = el("div", { className: "field derived-field" });
-  const label = el("label");
-  label.appendChild(el("span", { className: "field-label-business", text: NOT_CLOSED_META.label }));
-  label.appendChild(el("span", { className: "field-label-technical", text: format.ltr("not_closed") }));
-  label.appendChild(el("span", { className: "field-label-unit", text: NOT_CLOSED_META.unit }));
-  wrap.appendChild(label);
+  wrap.appendChild(buildFieldLabel(NOT_CLOSED_META.label, "not_closed", NOT_CLOSED_META.unit, { explain: NOT_CLOSED_EXPLAIN }));
   const valueEl = el("div", { className: "derived-field-value" });
   wrap.appendChild(valueEl);
   return { wrap, valueEl };
@@ -226,20 +247,10 @@ function buildOnce() {
   contextWrap.appendChild(contextLabel);
   container.appendChild(contextWrap);
 
-  const prefillWrap = el("div", { className: "prefill-picker" });
-  // P11A-D9: promoted from h3 -- this section header comes before the
-  // three P2/P3/P4 result-panel h3s (buildP2Panel/buildP3Panel/
-  // buildP4Panel), so an h2 must precede them somewhere on this screen
-  // (no level skip -- an h1 alone next to bare h3s is itself a gap).
-  prefillWrap.appendChild(el("h2", { text: "טעינת דוגמה היסטורית" }));
-  const prefillBody = el("div", { className: "prefill-picker-body" });
-  prefillWrap.appendChild(prefillBody);
-  container.appendChild(prefillWrap);
-
   const summaryWrap = el("div", { className: "input-summary" });
   container.appendChild(summaryWrap);
 
-  const detailsEl = el("details", {});
+  const detailsEl = el("details", { className: "input-details" });
   detailsEl.open = true;
   detailsEl.addEventListener("toggle", () => { /* purely visual; no state to persist across a fresh show() */ });
   detailsEl.appendChild(el("summary", { text: "בדיקה ועריכת נתונים" }));
@@ -269,6 +280,29 @@ function buildOnce() {
 
   const clearWrap = el("div", { className: "clear-form-action" });
   container.appendChild(clearWrap);
+
+  // §ו.2 (12A, 28.09.2026): moved from above the form to here -- folded,
+  // below the submit/clear actions, before the result panels (SPEC.md's
+  // own updated flow arrow; IA.md §3.3 step 5). Reads 10 frozen examples
+  // now, not up to 1,000 (audit F2/S2). P11A-D9: this section's own h2
+  // is nested INSIDE <summary> on purpose -- it is still the one heading
+  // that must precede the three P2/P3/P4 result-panel h3s below (no
+  // level skip), while the <details>/<summary> pair gives it native
+  // fold/toggle behavior for free.
+  const prefillWrap = el("details", { className: "prefill-picker" });
+  const prefillSummary = el("summary", {}, [el("h2", { text: "דוגמאות מנתוני העבר — להמחשה בלבד" })]);
+  prefillWrap.appendChild(prefillSummary);
+  // Review finding (post-first-pass CP4, 28.09.2026): "ציון" (a single
+  // score) is P4S's own language, not this screen's -- Predict has
+  // THREE independent panels (P2/P3/P4), and out-of-range input can OOD
+  // one of them without touching the other two (e2e's own "OOD confined
+  // to P2 only" case). "לא יקבל ציון" both used the wrong noun and
+  // implied one monolithic outcome. §ו.2's own source text now carries
+  // two separate variants for this reason -- this is the shared-form one.
+  prefillWrap.appendChild(el("p", { className: "prefill-picker-explain", text: "אפשר למלא תרחיש חדש בלי לבחור דוגמה. קלט שאינו תקין חוסם שליחה; קלט מחוץ לתחום עלול למנוע תחזית מאחד הפאנלים, בלי לפגוע באחרים." }));
+  const prefillBody = el("div", { className: "prefill-picker-body" });
+  prefillWrap.appendChild(prefillBody);
+  container.appendChild(prefillWrap);
 
   const resultsWrap = el("div", { className: "results-wrap" });
   container.appendChild(resultsWrap);
@@ -300,6 +334,12 @@ function renderPrefillBody() {
     return;
   }
   if (prefillState === "loaded") {
+    // §ו.2: fewer than all 10 frozen ids came back (RLS still passed --
+    // this is a partial result, not the zero-rows case handled above).
+    // Manual entry stays fully available either way; this is informational.
+    if (prefillRows.length < 10) {
+      nodes.prefillBody.appendChild(el("p", { className: "prefill-picker-count", text: `נטענו ${prefillRows.length} מתוך 10 דוגמאות` }));
+    }
     const list = el("div", { className: "prefill-picker-list" });
     prefillRows.forEach((row, i) => {
       const button = el("button", { type: "button", text: `דוגמה ${i + 1}` });

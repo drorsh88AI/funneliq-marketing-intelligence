@@ -4,8 +4,10 @@ counters (generation.js's own docstring: one shared by P2/P3/P4, a
 fully separate one for P4S)."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fixtures as fx
@@ -65,14 +67,19 @@ def test_case_1_loading_example_then_editing_field_clears_result_and_relabels(mo
     mocked_page.click(".submit-button")
     mocked_page.wait_for_selector(".prediction-panel-p2 .prediction-primary", timeout=10_000)
 
+    # §ו.2 (12A): the shared form's prefill-picker is now a folded
+    # <details> below the form -- open it before its own example button
+    # is clickable/visible.
+    mocked_page.click(".prefill-picker summary")
     mocked_page.click("text=דוגמה 1")
     # Loading an example alone already clears the prior result.
     assert mocked_page.query_selector(".prediction-panel-p2 .prediction-primary") is None
     assert "דוגמה היסטורית" in mocked_page.text_content(".input-summary")
 
     # IA.md §3.3: input-details collapses by default once a valid
-    # example loads -- re-open it before filling a field.
-    mocked_page.click("summary")
+    # example loads -- re-open it before filling a field. (Two
+    # <details> exist on this screen now -- scope to this one.)
+    mocked_page.click(".input-details summary")
     mocked_page.fill("#field-ad_budget", "7777")
     assert mocked_page.query_selector(".prediction-panel-p2 .prediction-primary") is None
     assert "תרחיש שנערך" in mocked_page.text_content(".input-summary")
@@ -90,6 +97,9 @@ def test_case_16_prefill_selector_failure_leaves_manual_entry_and_submit_fully_p
     sign_in_and_wait(mocked_page, mocked_context)
     _open_predict(mocked_page)
 
+    # §ו.2 (12A): the picker is folded by default -- open it to see its
+    # own error state.
+    mocked_page.click(".prefill-picker summary")
     mocked_page.wait_for_selector(".prefill-picker-body .panel-error", timeout=10_000)
     # Manual entry and submission are unaffected by the prefill failure.
     _fill_predict(mocked_page)
@@ -195,6 +205,9 @@ def test_case_19_p4s_revert_field_decrements_counter_full_revert_shows_4_of_4(mo
     sign_in_and_wait(mocked_page, mocked_context)
     _open_p4s(mocked_page)
 
+    # §ו.2 (12A, CP5): P4S's own prefill-picker moved below the form and
+    # folded too (same fix as the shared form's in CP4) -- open it first.
+    mocked_page.click(".prefill-picker summary")
     mocked_page.click("text=דוגמה 1")
     # syncFieldValuesToDom() sets the live .value PROPERTY, not the
     # HTML attribute -- an attribute selector like input[value="4000"]
@@ -222,3 +235,37 @@ def test_case_19_p4s_revert_field_decrements_counter_full_revert_shows_4_of_4(mo
     summary = mocked_page.text_content(".input-summary")
     assert "דוגמה היסטורית" in summary and "4/4" in summary
     assert "שונ" not in summary
+
+
+def test_shared_form_prefill_requests_the_10_frozen_ids(mocked_page, mocked_context):
+    """PHASE12A.md §ו.2: the shared form's prefill no longer sends
+    `limit=1000` -- it filters on the 10 committed frozen ids
+    (docs/frozen_examples.json), via the same live query mechanism
+    (real client/JWT, RLS still applies -- only the id list changed).
+    Reads the manifest directly rather than a third, hand-typed id list
+    that could drift from it."""
+    manifest = json.loads((Path(__file__).resolve().parent.parent / "docs" / "frozen_examples.json").read_text(encoding="utf-8"))
+    frozen_ids = {e["source_row_id"] for e in manifest["examples"]}
+
+    route_json(mocked_context, "**/api/me", fx.api_me())
+    route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    prefill_route = route_deferred(mocked_context, "**/rest/v1/funnel_records*")
+    sign_in_and_wait(mocked_page, mocked_context)
+    _open_predict(mocked_page)
+    # Folded by default (§ו.2) -- opening it does not re-trigger the
+    # fetch (it already ran on screen load); this only makes the
+    # already-in-flight request's own effect (the picker body) visible
+    # later, once released below.
+    mocked_page.click(".prefill-picker summary")
+
+    prefill_route.wait_for_capture(mocked_page)
+    decoded_url = unquote(prefill_route.request_url())
+    assert "limit=" not in decoded_url, f"prefill still sends a row-count limit: {decoded_url}"
+    assert "source_row_id=in.(" in decoded_url, f"prefill does not filter by id list: {decoded_url}"
+
+    ids_in_url = {
+        int(x) for x in decoded_url.split("source_row_id=in.(")[1].split(")")[0].split(",")
+    }
+    assert ids_in_url == frozen_ids, f"prefill's id filter {ids_in_url} != manifest ids {frozen_ids}"
+
+    prefill_route.release(payload=[SHARED_FORM_EXAMPLE_ROW])

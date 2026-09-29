@@ -28,7 +28,20 @@
 
 import * as session from "./session.js";
 
-const PREFILL_LIMIT = 1000; // IA.md §11's cap on any single funnel_records query
+// Phase 12A, §ו.2: the prefill picker no longer reads "up to 1000 rows
+// ordered by source_row_id" (audit finding F2/S2 -- "very inconvenient").
+// It reads exactly these 10 frozen historical examples instead, via
+// `.in("source_row_id", ...)`. This does NOT bypass RLS (IA.md §3.3):
+// the query still runs through the caller's own client/JWT, so an
+// unauthorized organization's session still gets zero rows back, and
+// `anon` (no JWT at all) is still refused before RLS is even reached.
+// Single source of truth for WHICH 10 ids: docs/frozen_examples.json,
+// committed by scripts/select_examples.py (requires the frozen CSV,
+// local-only -- CI never runs that script). This list is a COPY of
+// that manifest's own `source_row_id` values, kept in sync structurally
+// by tests/test_frozen_examples.py (10 unique ids, 2/5/3 tier
+// composition) -- never edit one without the other.
+const FROZEN_EXAMPLE_IDS = [358, 552, 833, 1086, 1774, 1776, 2463, 2595, 2914, 3160];
 const SHARED_FORM_COLUMNS = [
   "source_row_id", "ad_budget", "num_leads", "leads_answered", "closed",
   "followup_1", "followup_2", "followup_3", "followup_4", "followup_5",
@@ -67,8 +80,8 @@ async function fetchPrefill(columns) {
     .from("funnel_records")
     .select(columns)
     .eq("purchased", 1)
-    .order("source_row_id", { ascending: true })
-    .limit(PREFILL_LIMIT);
+    .in("source_row_id", FROZEN_EXAMPLE_IDS)
+    .order("source_row_id", { ascending: true });
 
   if (!session.isCurrentEpoch(epochAtSend)) {
     return { ok: false, reason: "stale" };
@@ -78,8 +91,8 @@ async function fetchPrefill(columns) {
 }
 
 /** The shared P2/P3/P4 form's prefill selector -- 12 model-input
- * columns + source_row_id, purchased=1, ordered, capped at 1000
- * (IA.md §11). `not_closed` is NOT a stored column and is not returned
+ * columns + source_row_id, purchased=1, restricted to the 10 frozen
+ * example ids (§ו.2). `not_closed` is NOT a stored column and is not returned
  * here -- callers derive it themselves (`followup_5 - closed`, IA.md
  * §3.1) the same way manual entry does; that derivation belongs to the
  * form checkpoint (4), not this generic reader. */

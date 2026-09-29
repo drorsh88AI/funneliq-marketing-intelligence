@@ -224,22 +224,51 @@ button {
   font-size: var(--font-size-sm);
 }
 
+/* 12A, 27.09.2026 (G1): one-line "what this screen answers / what to
+   do here" intro, right under each screen's h1 -- and (O2) a short
+   run of two-three sentences elsewhere, each its own paragraph so a
+   period never glues the next sentence onto the same visual line.
+   Default margin is tight (space-2), for sentences that belong to the
+   same explanation and read as consecutive lines; the caller adds
+   .screen-intro-end on whichever paragraph is the group's last one,
+   to open up proper separation (space-6) from whatever follows. Not
+   :last-of-type -- several such groups can share one parent container
+   (e.g. Overview's own G1 line and its later tier-section caption),
+   and :last-of-type only ever matches ONE <p> among ALL of them. */
+.screen-intro {
+  color: var(--color-muted);
+  font-size: var(--font-size-base);
+  margin: 0 0 var(--space-2);
+}
+
+.screen-intro-end {
+  margin-bottom: var(--space-6);
+}
+
 /* ---- capability-index (checkpoint 3, DESIGN.md, IA.md §2 D8) ---- */
 .capability-index {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  /* P11A-D8: DESIGN.md:270 -- "2-3 טורים... לעולם לא שורה קשיחה אחת
-     של חמישה כרטיסים". auto-fit alone would let all 5 fit in one row
-     on any Desktop viewport wide enough (5*220px + 4*gap =~ 1164px,
-     well within common Desktop widths) -- this max-width caps the
-     grid to exactly 3 columns' worth of space, so a 4th/5th card is
-     structurally forced to wrap, regardless of viewport width. */
-  max-width: calc(3 * 220px + 2 * var(--space-4));
+  /* 12A, DESIGN.md:285 (overturns P11A-D8's "never 5 in one row"):
+     desktop-only product, always exactly 5 equal-width columns in a
+     single row. Grid's default align-items:stretch equalizes card
+     height across the row with no extra rule needed. */
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--space-4);
   margin-bottom: var(--space-6);
 }
 
 .capability-card {
+  /* 12A, 27.09.2026: native <button> elements center their content
+     vertically in Chromium's internal button box, regardless of the
+     `display: block` this rule used to report -- the global `button`
+     reset (near the top of this file) never overrides `display`.
+     flex-column here makes the card behave like a normal block
+     container: content packs to the top (main-axis start), and
+     stretches to the card's full width (cross-axis default). Needed
+     now that all 5 cards share one equal-height row (§ו.7) and the
+     two shorter ones would otherwise float their text to mid-height. */
+  display: flex;
+  flex-direction: column;
   text-align: start;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
@@ -268,36 +297,6 @@ button {
 .capability-limitation {
   color: var(--color-muted) !important;
   font-size: var(--font-size-xs) !important;
-}
-
-/* ---- tier-table (checkpoint 3, IA.md §2.1) ---- */
-.tier-table-wrap {
-  overflow-x: auto; /* DESIGN.md §4.1: its own scroll container, never the page body */
-  margin-bottom: var(--space-6);
-}
-
-.tier-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.tier-table th,
-.tier-table td {
-  padding: var(--space-2) var(--space-3);
-  text-align: start;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.tier-table tbody tr:nth-child(1) { background: var(--color-tier-1-bg); color: var(--color-tier-1-fg); }
-.tier-table tbody tr:nth-child(2) { background: var(--color-tier-2-bg); color: var(--color-tier-2-fg); }
-.tier-table tbody tr:nth-child(3) { background: var(--color-tier-3-bg); color: var(--color-tier-3-fg); }
-
-/* gap row (IA.md §2.1): visually distinct, never colored as a fourth
-   ramp step -- color-tier-* is a THREE-step ramp by definition. */
-.tier-row-gap {
-  background: transparent !important;
-  color: var(--color-text) !important;
-  font-style: italic;
 }
 
 /* ---- chart-live (checkpoint 3, DESIGN.md §4/§4.1) ---- */
@@ -346,7 +345,9 @@ button {
   font-family: var(--font-family);
 }
 
-/* P11A-D7: English chart title + axis names, inside the SVG. */
+/* 12A (overturns P11A-D7 for chart chrome, tester finding O3): Hebrew
+   main title, small English subtitle under it, Hebrew axis names --
+   all inside the SVG. */
 .chart-title {
   fill: var(--color-text);
   font-size: 11px;
@@ -354,9 +355,30 @@ button {
   font-family: var(--font-family);
 }
 
+.chart-title-subtitle {
+  fill: var(--color-muted);
+  font-size: 8px;
+  font-family: var(--font-family);
+}
+
 .chart-axis-name {
   fill: var(--color-muted);
   font-size: 10px;
+  font-family: var(--font-family);
+}
+
+/* 12A (IA.md:112, tester finding "null נראה כאפס בגרף"): a missing
+   value gets a dash + "N/A" at the baseline, never a real 0-height
+   bar -- visually distinct from an actual 0%. */
+.chart-bar-missing {
+  stroke: var(--color-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+}
+
+.chart-bar-missing-label {
+  fill: var(--color-muted);
+  font-size: 9px;
   font-family: var(--font-family);
 }
 
@@ -455,8 +477,25 @@ button {
   margin-bottom: var(--space-4);
 }
 
-.prefill-picker h3 {
-  margin: 0 0 var(--space-2);
+/* 12A §ו.2: `.prefill-picker` is now a <details>, folded by default --
+   its heading lives inside <summary> as an h2 (P11A-D9's own heading
+   outline requirement), so this targets that h2 directly. The old rule
+   here targeted h3, which no code has produced since the h3->h2 a11y
+   fix -- dead CSS, fixed while touching this exact area. */
+.prefill-picker summary {
+  cursor: pointer;
+}
+
+.prefill-picker summary h2 {
+  display: inline;
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}
+
+.prefill-picker-explain,
+.prefill-picker-count {
+  margin: var(--space-2) 0;
   font-size: var(--font-size-sm);
   color: var(--color-muted);
 }
@@ -500,6 +539,43 @@ button {
 .field-label-business { color: var(--color-text); }
 .field-label-technical { color: var(--color-muted); font-size: var(--font-size-xs); }
 .field-label-unit { color: var(--color-muted); font-size: var(--font-size-xs); }
+.field-label-explain { color: var(--color-muted); font-size: var(--font-size-xs); }
+
+/* F3 (audit:19, PHASE12A.md §ח.3, review round after CP4's first pass):
+   scoped to Predict and P4S (CP5 applied the same fix to
+   super-customer.js's own 4 fields -- measured live: "לידים שנותרו
+   אחרי מעקב הראשון" wraps to 2 lines at 1280px/1024px under the old
+   three-span flex-wrap layout, same defect class as F3). Business
+   label always its own row; technical name + unit always together on
+   one row below it (`.field-label-meta`); Predict's derived field's
+   extra explain line (F5) becomes a third row there only. A plain
+   flex-column with no forced min-height: every REGULAR field now has
+   the exact same two-row shape by construction, so they align without
+   needing to guess a height. */
+#screen-predict .field-grid label,
+#screen-super-customer .field-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+
+#screen-predict .field-label-meta,
+#screen-super-customer .field-label-meta {
+  display: flex;
+  gap: var(--space-1);
+}
+
+/* The derived field's label is structurally taller (3 rows, not 2) --
+   pulled out of the aligned-input-boxes requirement entirely by
+   spanning the whole grid row, rather than forcing every other field
+   to reserve that same extra height just to match it. Its own value
+   box is a read-only display, not an <input>, so "inputs on one line"
+   (§ח.3) never applied to it in the first place. */
+.derived-field {
+  grid-column: 1 / -1;
+}
 
 .field input {
   width: 100%;
@@ -582,18 +658,41 @@ button {
      AND super-customer.js, which reuses this same class for its own
      single P4S panel) stack vertically regardless. super-customer.js's
      one panel is unaffected either way (a single grid item fills the
-     row). */
+     row).
+     F6 (audit:22, PHASE12A.md §ח "תבנית אחת לכל הכרטיסים": "align-items:
+     stretch בכל שורה... כרטיסי תוצאה... בגובה שווה"): was `start` --
+     that literally means "each card only as tall as its OWN content",
+     the opposite of equal height. Measured empirically (three panels,
+     one success/one hard-error/one OOD): 468px / 205px / 540px under
+     `start`. `stretch` is CSS Grid's own default for a reason; this
+     had overridden it away. super-customer.js's single P4S panel is a
+     lone grid item either way, so this is a no-op there. */
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  align-items: start;
+  align-items: stretch;
   gap: var(--space-4);
 }
 
 /* ---- shared prediction form -- result panels (checkpoint 5) ---- */
 .prediction-panel {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--space-4);
+}
+
+/* §ח's own card template: "כותרת ← תוכן ← פעולה בתחתית" -- the model
+   details disclosure is that trailing action; margin-top: auto pins it
+   to the bottom of the now-stretched card instead of leaving it
+   wherever the (variable-length) content above it happens to end,
+   which is what actually produces the "equal height" look, not just
+   equal outer borders with mismatched inner whitespace. Deliberately
+   NOT applied to .panel-error (the failure case): that block IS the
+   content there (message + retry), and pinning it down would leave an
+   empty gap under the h3 instead. */
+.prediction-panel .model-details {
+  margin-top: auto;
 }
 
 .prediction-panel h3 {

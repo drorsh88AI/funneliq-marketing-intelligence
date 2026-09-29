@@ -8,13 +8,17 @@
 //   - capability-index: IA.md §2 "מיפוי חמש היכולות" table (D8) --
 //     five card titles/bodies/limitations verbatim, mapped to their
 //     four target routes.
-//   - tier-table: IA.md §2.1 (the gap row, "gap (1501–1999)" literal
-//     label, budget_tier=null vs zero-rows-for-a-tier distinction).
+//   - the chart's own accessible fallback table carries the gap row
+//     (IA.md §2.1: "gap (1501–1999)" literal label, budget_tier=null
+//     vs zero-rows-for-a-tier distinction) since 12A removed this
+//     screen's separate tier-table (tester finding O4: duplicated the
+//     same data, with less detail, right next to the chart).
 //   - summary-recommendation: DESIGN.md §6.1's Overview row (PHASE10.md
-//     D9) -- the answer template, the conditional meaning sentence
-//     (both branches quoted verbatim; see computeSummary()'s own
-//     comment for the one branch that is currently unreachable with
-//     this project's frozen dataset), and the fixed action/caveat text.
+//     D9, amended by 12A for O5) -- the answer template, three
+//     definite-statement meaning branches (never a conditional "if" --
+//     see computeSummary()'s own comment for the one branch that is
+//     currently unreachable with this project's frozen dataset), and
+//     the fixed action/caveat text.
 
 import * as api from "../api.js";
 import * as session from "../session.js";
@@ -66,9 +70,17 @@ const TIER_LABELS = {
   Mid: "בינונית",
   High: "גבוהה",
 };
+// 12A, 27.09.2026 (tester finding: "לא מבינים מה זה mid, high ו-low,
+// אין הסבר לא בעברית וגם לא באנגלית"). Used only where the tier is
+// shown as a standalone label (table row header, chart category axis)
+// -- prose sentences in computeSummary() keep the short TIER_LABELS,
+// so "רמת נמוכה — 4.5%..." doesn't turn into a run-on.
+const TIER_LABELS_WITH_RANGE = {
+  Low: "נמוכה (עד ₪1,500)",
+  Mid: "בינונית (₪2,000–5,000)",
+  High: "גבוהה (מעל ₪5,000)",
+};
 const TIER_LABELS_EN = { Low: "Low", Mid: "Mid", High: "High" };
-const GAP_LABEL_HE = "gap (1501–1999)";
-const GAP_LABEL_EN = "gap (1501-1999)";
 
 const gen = generation.createGenerationCounter();
 
@@ -179,50 +191,35 @@ function renderCapabilityIndex() {
   return fragment;
 }
 
-function tierLabelHe(row) {
-  return row.budget_tier ? TIER_LABELS[row.budget_tier] : GAP_LABEL_HE;
-}
-
-function renderTierTable(tiers) {
-  const wrap = document.createElement("div");
-  wrap.className = "tier-table-wrap";
-  const table = document.createElement("table");
-  table.className = "tier-table";
-
-  const thead = document.createElement("thead");
-  const headRow = document.createElement("tr");
-  for (const heading of ["רמת הוצאה חודשית", "מספר רשומות", "שיעור המרה"]) {
-    const th = document.createElement("th");
-    th.textContent = heading;
-    headRow.appendChild(th);
-  }
-  thead.appendChild(headRow);
-  table.appendChild(thead);
-
-  const tbody = document.createElement("tbody");
-  for (const row of tiers) {
-    const tr = document.createElement("tr");
-    if (row.budget_tier === null) tr.classList.add("tier-row-gap");
-
-    const tierCell = document.createElement("th");
-    tierCell.setAttribute("scope", "row");
-    tierCell.textContent = tierLabelHe(row);
-    tr.appendChild(tierCell);
-
-    const nCell = document.createElement("td");
-    nCell.textContent = format.formatNumber(row.n_records);
-    tr.appendChild(nCell);
-
-    const rateCell = document.createElement("td");
-    // IA.md §2.1: conversion_rate null -> "N/A", never a zero column.
-    rateCell.textContent = row.conversion_rate === null ? "N/A" : format.formatPercent(row.conversion_rate, { decimals: 1 });
-    tr.appendChild(rateCell);
-
-    tbody.appendChild(tr);
-  }
-  table.appendChild(tbody);
-  wrap.appendChild(table);
-  return wrap;
+// O2 (tester finding: "לא ברור מה הטבלה מנסה להציג ועל סמך מה, הרי לא
+// בוצע שום חישוב") + explanations for both column headers (tester:
+// "לא מבינים מה זה מספר רשומות ושיעור המרה") + O4 (tester: "עוד טבלה
+// אחרי הגרף שמראה בדיוק את אותם נתונים, כפילות מיותרת" -- fixed by
+// removing this screen's own separate tier-table entirely; the single
+// remaining table is the chart's own mandatory accessible fallback,
+// now carrying both columns via extraColumn, see renderChart() below).
+// 27.09.2026: four sentences (three explanation + the O4 accessibility
+// caption), each its own <p> -- one line per idea, not one long
+// run-on paragraph (user feedback on this exact caption). §יג-2
+// (28.09.2026 DOM-order fix): these render INSIDE the chart's own
+// .chart-live wrapper, between the SVG and the fallback table --
+// passed to charts.renderBarChart() as `midCaptions`, not appended
+// here directly, so the table stays glued to the SVG as one component
+// (charts.js's own invariant) while still landing below this text.
+function tierSectionCaptions() {
+  return [
+    "הטבלה שלהלן והגרף שלמעלה מציגים נתוני עבר של Northbound, לפי רמת הוצאת הפרסום החודשית — לא תוצאה של קלט שהזנתם.",
+    "מספר רשומות הוא כמה שורות בנתוני העבר (כל שורה היא מקרה, לא בהכרח לקוח נפרד) נכללות בכל רמת הוצאה.",
+    // §יב-2 R1 (final approved wording, 24.09.2026): "ליד"/"המרה"
+    // defined in plain language, and the metric spelled out as an
+    // average of a per-case ratio -- ⛔ not a global sum-over-sum.
+    "ליד הוא פנייה של לקוח פוטנציאלי. המרה היא ליד שהפך לעסקה סגורה. לכל מקרה בנתוני העבר בדקנו איזה אחוז מהלידים הפכו לעסקה, ואז חישבנו את הממוצע בכל רמת תקציב.",
+    // O4 (tester finding: "אותם נתונים פעמיים"; PHASE12A.md §ב3 O4's
+    // planned fix): the fallback table right after this line is the
+    // SAME data as the chart, on purpose -- an accessible equivalent
+    // (DESIGN.md §4.1), not a second, redundant data display.
+    "הטבלה מתחת לגרף מציגה את אותם נתונים כטבלה, לנגישות.",
+  ];
 }
 
 function joinHebrewList(items) {
@@ -265,47 +262,87 @@ function computeSummary(tiers) {
     withRate[1].conversion_rate >= withRate[0].conversion_rate &&
     withRate[2].conversion_rate >= withRate[1].conversion_rate;
 
-  // The monotonic branch's text is this module's own reasonable
-  // composition (not a verbatim doc quote -- none exists for it), for
-  // a code path the project's own frozen dataset cannot reach (IA.md
-  // §1 example: Low 4.5% / Mid 8.2% / High 5.4% -- verified NOT
-  // monotonic). The "insufficient data" branch is likewise this
+  // 12A, 27.09.2026 (fixes O5, tester finding: "'אם רצף...' -- אין
+  // רצף של כלום, רק הצגת נתונים שאף אחד לא מבין"). The non-monotonic
+  // branch used to phrase a fact the code had ALREADY determined as a
+  // hypothetical "if" sentence -- a real content bug, not a wording
+  // preference (DESIGN.md:452's own fix note). All three branches are
+  // now definite statements about the one state that actually holds;
+  // ⛔ none of them is ever an "if". The monotonic branch's text is
+  // this module's own reasonable composition (not a verbatim doc quote
+  // -- none exists for it), for a code path the project's own frozen
+  // dataset cannot reach (IA.md §1 example: Low 4.5% / Mid 8.2% / High
+  // 5.4% -- verified NOT monotonic, so this is the branch actually
+  // rendered today). The "insufficient data" branch is likewise this
   // module's own composition, deliberately factual and free of any
   // business conclusion (neither "surprising" nor "not surprising" --
-  // there simply isn't enough evidence to say either), per the same
+  // there simply isn't enough evidence to say either), per an earlier
   // review's explicit instruction not to invent a finding here.
   let meaning;
   if (!complete) {
-    meaning = "אין מספיק נתונים ברמות Low/Mid/High כדי לקבוע אם שיעור ההמרה עולה עם רמת ההוצאה.";
+    // §יג-2 follow-up (28.09.2026): same Low/Mid/High -> Hebrew-name
+    // fix, extended to this third branch (the first round only covered
+    // the two "רצף" branches below).
+    meaning = "אין מספיק נתונים ברמות נמוכה/בינונית/גבוהה כדי לקבוע אם שיעור ההמרה עולה עם רמת ההוצאה.";
   } else if (monotonic) {
-    meaning = "רצף Low→Mid→High עולה בהתאם לציפייה הפשוטה שהוצאה גבוהה יותר קשורה להמרה גבוהה יותר; אין לטעון להפתעה.";
+    // §יג-2 (approved 28.09.2026): מונחי הטייר בפרוזה בעברית, ⛔ לא
+    // שמות אנגליים גולמיים -- אותו תוכן עובדתי, ניסוח בלבד השתנה.
+    meaning = "הרצף נמוכה ← בינונית ← גבוהה עולה בהתאם לציפייה הפשוטה שהוצאה גבוהה יותר קשורה להמרה גבוהה יותר; אין לטעון להפתעה.";
   } else {
-    meaning = "אם רצף Low→Mid→High אינו עולה, הוצאה גבוהה יותר לא הניבה המרה גבוהה יותר — ממצא מפתיע ביחס לציפייה הפשוטה.";
+    meaning = "הרצף נמוכה ← בינונית ← גבוהה אינו עולה בנתונים האלה: הוצאה גבוהה יותר לא הניבה המרה גבוהה יותר — ממצא מפתיע ביחס לציפייה הפשוטה.";
   }
 
-  const action = "להשוות את רמת ההוצאה הנוכחית לטבלה לפני שמזיזים כסף, ולבחון את החלופות בסימולטור.";
+  // O6 (tester finding: "'מה כדאי לעשות' מיותר, עוד לא הוזנו נתונים"):
+  // made explicit that this is a historical-data comparison available
+  // BEFORE any input, not a response to something the user just did.
+  const action = "עוד לפני הזנת נתונים: להשוות את רמת ההוצאה הנוכחית של הארגון לטבלה שלמעלה, ולבחון את החלופות בסימולטור.";
   const caveat = "ההשוואה מתארת קבוצות בנתונים ההיסטוריים ואינה מוכיחה שהזזת תקציב תשנה את ההמרה.";
 
   return { answer, meaning, action, caveat };
 }
 
 function renderChart(tiers) {
-  const chartRows = ["Low", "Mid", "High"]
-    .map((name) => tiers.find((t) => t.budget_tier === name))
-    .filter(Boolean)
-    .map((t) => ({
-      xHebrew: TIER_LABELS[t.budget_tier],
-      xEnglish: TIER_LABELS_EN[t.budget_tier],
-      value: t.conversion_rate,
-    }));
+  // 12A, 27.09.2026 (tester finding: "לא מבינים מה זה mid, high ו-low
+  // -- אין הסבר"): every category label now carries its ₪ range
+  // (TIER_LABELS_WITH_RANGE), so the meaning is visible on the chart
+  // itself and in the table row headers, not left to a separate
+  // legend the reader has to connect back to the bars.
+  //
+  // Iterates ALL rows the API returned, in the tier_order-ascending
+  // order app/insights.py already guarantees (D15) -- not a hardcoded
+  // ["Low","Mid","High"] filter. That filter used to silently drop
+  // the null-tier "gap (1501-1999)" row from the chart entirely (it
+  // only ever appeared in the tier-table this screen removed, per O4)
+  // -- IA.md §2.1 requires that row be shown, never dropped, whenever
+  // the API actually returns it (today's frozen dataset never does:
+  // gap n=0, so this is dormant, not exercised, but real).
+  const chartRows = tiers.map((t) => ({
+    xHebrew: t.budget_tier ? TIER_LABELS_WITH_RANGE[t.budget_tier] : "gap (1501–1999)",
+    xEnglish: t.budget_tier ? TIER_LABELS_EN[t.budget_tier] : "gap (1501-1999)",
+    value: t.conversion_rate,
+    n_records: t.n_records,
+  }));
+  // §יג-2 (28.09.2026 DOM-order fix): SVG -> tierSectionCaptions() ->
+  // fallback table, all inside charts.js's own single .chart-live
+  // wrapper (via `midCaptions`) -- one node, table still glued to the
+  // SVG as one component, matching budget.js/followup.js's own shape.
   return charts.renderBarChart({
     data: chartRows,
-    xLabel: "רמת הוצאה חודשית",
-    yLabel: "שיעור המרה",
+    title: "שיעור ההמרה לפי רמת הוצאת הפרסום",
     titleEnglish: "Conversion Rate by Ad Budget Level",
-    xLabelEnglish: "Ad Budget Level",
-    yLabelEnglish: "Conversion Rate",
+    xLabel: "רמת הוצאה חודשית על פרסום",
+    // §יב-2 R1 (Codex round, approved by the user 24.09.2026): the
+    // axis name itself carries the plain-language definition, not
+    // just the statistical term -- the tester's own complaint about
+    // this exact chart was "לא מובן בכלל, אין הסבר".
+    yLabel: "שיעור המרה — כמה מהלידים הפכו לעסקה (%)",
     formatValue: (v) => (v === null ? "N/A" : format.formatPercent(v, { decimals: 1 })),
+    // O2 (tester finding: "לא מבינים מה זה מספר רשומות"): the
+    // record-count column that used to live only in the removed
+    // tier-table, now folded into the chart's own mandatory fallback
+    // table -- one table, not two.
+    extraColumn: { label: "מספר רשומות", formatValue: (d) => format.formatNumber(d.n_records) },
+    midCaptions: tierSectionCaptions(),
   });
 }
 
@@ -315,6 +352,15 @@ function renderChart(tiers) {
 // shared helper so all three render states get it identically, instead
 // of tripling the same two lines.
 function appendScreenHeading() {
+  // G1 (PHASE12A.md §יג-1, approved 28.09.2026): "מה המסך עונה" ואחריו
+  // "מה עושים כאן", לפני כל תוכן אחר -- כולל לפני ה-h1 עצמו, ⛔ לא
+  // אחריו. גם מזכיר במפורש את שאלת ההמרה לפי תקציב, לא רק את אינדקס
+  // היכולות (§יג-1 דורש זאת עבור Overview ספציפית).
+  const intro = document.createElement("p");
+  intro.className = "screen-intro screen-intro-end";
+  intro.textContent = "המסך עונה מה FunnelIQ יכול לעשות עבורכם, ואיך ההמרה משתנה לפי תקציב הפרסום. לחצו על כרטיס לתשובה המתאימה.";
+  container.appendChild(intro);
+
   const heading = document.createElement("h1");
   heading.textContent = "סקירה כללית";
   container.appendChild(heading);
@@ -324,7 +370,10 @@ function renderSuccess(tiers) {
   container.replaceChildren();
   appendScreenHeading();
   container.appendChild(renderCapabilityIndex());
-  container.appendChild(renderTierTable(tiers));
+  // §יג-2 (28.09.2026, DOM-order fix): renderChart() returns ONE
+  // .chart-live node -- SVG, tierSectionCaptions() paragraphs (incl.
+  // the O4 caption), and the fallback table, all inside it, in that
+  // order (see charts.js's `midCaptions`).
   container.appendChild(renderChart(tiers));
   container.appendChild(renderSummaryRecommendation(computeSummary(tiers)));
 }

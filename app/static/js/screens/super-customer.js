@@ -68,10 +68,14 @@ const SOURCE_LABELS = {
   edited: "תרחיש שנערך",
 };
 
+// §יג-5 (PHASE12A.md, review round): "שיעור בסיס"/"ממוצע" can read as an
+// average of SCORES; this is a historical FREQUENCY among past
+// purchasers ("שיעור היסטורי"), not an average -- renamed to avoid that
+// misreading.
 const PROPENSITY_BAND_LABELS = {
-  below_base: "מתחת לשיעור הבסיס",
-  near_base: "סביב שיעור הבסיס",
-  above_base: "מעל שיעור הבסיס",
+  below_base: "מתחת לשיעור ההיסטורי",
+  near_base: "סביב השיעור ההיסטורי",
+  above_base: "מעל השיעור ההיסטורי",
 };
 const PROPENSITY_BAND_ICONS = { below_base: "▼", near_base: "●", above_base: "▲" };
 
@@ -161,13 +165,26 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
+// F3-parallel (PHASE12A.md §יג-5, §ח.3 -- same fix as predict.js's own
+// buildFieldLabel, applied here after measuring the SAME kind of
+// misalignment live: "לידים שנותרו אחרי מעקב הראשון" wraps to 2 lines
+// at 1280px/1024px while its row-mates stay at 1, pushing its own input
+// box out of line with theirs). Business label its own row; technical
+// name + unit together on one small row below it.
+function buildFieldLabel(businessLabel, technicalName, unit, forId) {
+  const label = el("label", { for: forId });
+  label.appendChild(el("span", { className: "field-label-business", text: businessLabel }));
+  label.appendChild(el("span", { className: "field-label-meta" }, [
+    el("span", { className: "field-label-technical", text: format.ltr(technicalName) }),
+    el("span", { className: "field-label-unit", text: unit }),
+  ]));
+  return label;
+}
+
 function buildFieldNode(name) {
   const meta = FIELD_META[name];
   const wrap = el("div", { className: "field" });
-  const label = el("label", { for: `p4s-field-${name}` });
-  label.appendChild(el("span", { className: "field-label-business", text: meta.label }));
-  label.appendChild(el("span", { className: "field-label-technical", text: format.ltr(name) }));
-  label.appendChild(el("span", { className: "field-label-unit", text: meta.unit }));
+  const label = buildFieldLabel(meta.label, name, meta.unit, `p4s-field-${name}`);
   wrap.appendChild(label);
 
   const inputRow = el("div", { className: "field-input-row" });
@@ -200,22 +217,16 @@ function buildOnce() {
 
   // DESIGN.md §3.4's own P4S row, exact order (⚠ explicitly flagged
   // there as DIFFERENT from the shared form's own top-of-screen
-  // placement): prefill-picker → input-summary → 4 fields (each with
-  // its own revert-field-action) → context-confirmation, "בתחתית, ממש
-  // לפני כפתור השליחה" → submit + clear-form-action SIDE BY SIDE →
-  // results. Confirmation sits at the bottom here because it is a
-  // right-before-submit attestation, not an opening condition the way
-  // it is on the shared form (review-round finding: this module
-  // originally reused the shared form's own top-of-screen placement
-  // verbatim, which is correct THERE but explicitly wrong here).
-  const prefillWrap = el("div", { className: "prefill-picker" });
-  // P11A-D9: promoted from h3 -- precedes the P4S result-panel h3
-  // (buildP4SPanel) below, so an h2 must exist somewhere before it.
-  prefillWrap.appendChild(el("h2", { text: "טעינת דוגמה היסטורית" }));
-  const prefillBody = el("div", { className: "prefill-picker-body" });
-  prefillWrap.appendChild(prefillBody);
-  container.appendChild(prefillWrap);
-
+  // placement, and 🆕 12A §ו.2 moved the prefill-picker again --
+  // §ה2's own document map, 28.09.2026): input-summary → 4 fields (each
+  // with its own revert-field-action) → context-confirmation, "בתחתית,
+  // ממש לפני כפתור השליחה" → submit + clear-form-action SIDE BY SIDE →
+  // prefill-picker (10 frozen examples, folded) → results. Confirmation
+  // sits right before submit here because it is a right-before-submit
+  // attestation, not an opening condition the way it is on the shared
+  // form (review-round finding: this module originally reused the
+  // shared form's own top-of-screen placement verbatim, which is
+  // correct THERE but explicitly wrong here).
   const summaryWrap = el("div", { className: "input-summary" });
   container.appendChild(summaryWrap);
 
@@ -263,6 +274,23 @@ function buildOnce() {
   actionsRow.appendChild(clearWrap);
   container.appendChild(actionsRow);
 
+  // §ו.2 (12A, 28.09.2026): moved here from the top of the screen --
+  // folded, below the submit/clear actions, before the result panel.
+  // Reads 10 frozen examples now, not up to 1,000 (audit S2). Same
+  // fold mechanism as predict.js's own (h2 nested inside <summary> so
+  // it still precedes the P4S result-panel h3 below -- P11A-D9).
+  const prefillWrap = el("details", { className: "prefill-picker" });
+  const prefillSummary = el("summary", {}, [el("h2", { text: "דוגמאות מנתוני העבר — להמחשה בלבד" })]);
+  prefillWrap.appendChild(prefillSummary);
+  // "ציון" is accurate here (unlike predict.js's own explain text,
+  // fixed in CP4 review round 2 for the exact opposite reason) -- P4S
+  // is a single model producing one 0-100 score, not three independent
+  // panels that can succeed/fail separately.
+  prefillWrap.appendChild(el("p", { className: "prefill-picker-explain", text: "אפשר למלא תרחיש חדש בלי לבחור דוגמה; קלט שאינו תקין או מחוץ לתחום לא יקבל ציון." }));
+  const prefillBody = el("div", { className: "prefill-picker-body" });
+  prefillWrap.appendChild(prefillBody);
+  container.appendChild(prefillWrap);
+
   const resultsWrap = el("div", { className: "results-wrap" });
   container.appendChild(resultsWrap);
 
@@ -290,6 +318,11 @@ function renderPrefillBody() {
     return;
   }
   if (prefillState === "loaded") {
+    // §ו.2: fewer than all 10 frozen ids came back (RLS still passed --
+    // a partial result, not the zero-rows case handled above).
+    if (prefillRows.length < 10) {
+      nodes.prefillBody.appendChild(el("p", { className: "prefill-picker-count", text: `נטענו ${prefillRows.length} מתוך 10 דוגמאות` }));
+    }
     const list = el("div", { className: "prefill-picker-list" });
     prefillRows.forEach((row, i) => {
       const button = el("button", { type: "button", text: `דוגמה ${i + 1}` });
@@ -406,14 +439,34 @@ function buildBandBadge(band) {
   ]);
 }
 
+// §יג-5: was "שיעור הבסיס: {X%} ({Y} נקודות {מעל/מתחת})" -- rewritten
+// to spell out what the number IS (a historical rate among past
+// purchasers, not the current record's own base rate) rather than
+// naming a field ("שיעור הבסיס") the screen never otherwise defines.
 function buildBaseRateLine(eventProbability, baseRate) {
   const diffPoints = (eventProbability - baseRate) * 100;
-  const direction = diffPoints > 0 ? "מעל" : diffPoints < 0 ? "מתחת ל" : "בדיוק על";
+  const pct = format.formatPercent(baseRate);
+  if (diffPoints === 0) {
+    // Not in the table's own {מעל/מתחת} template (a same-value case it
+    // does not spell out) -- worded to still read as a complete
+    // sentence rather than an empty "0 נקודות" fragment.
+    return el("div", { className: "base-rate-line", text: `לשם השוואה: מתוך כלל הרוכשים בנתוני העבר, ${pct} ענו להגדרת לקוח-על (שיעור היסטורי). הציון הזה זהה לשיעור ההיסטורי.` });
+  }
+  const direction = diffPoints > 0 ? "מעל" : "מתחת";
   const magnitude = format.formatNumber(Math.abs(diffPoints), { decimals: 2 });
-  return el("div", { className: "base-rate-line", text: `שיעור הבסיס: ${format.formatPercent(baseRate)} (${magnitude} נקודות ${direction})` });
+  return el("div", { className: "base-rate-line", text: `לשם השוואה: מתוך כלל הרוכשים בנתוני העבר, ${pct} ענו להגדרת לקוח-על (שיעור היסטורי). הציון הזה ${magnitude} נקודות ${direction}.` });
 }
 
-function buildModelDetails(d) {
+// §יג-5 (PHASE12A.md §ג, A1-A2 diagnosis, 27.09.2026): the model's
+// overall Holdout AUC (in buildModelDetails' own dl below) describes
+// its whole-population discrimination -- it does NOT describe how well
+// it discriminates WITHIN the ₪2,000-5,000/month band where most
+// super-customers actually cluster. That narrower number is a fixed,
+// already-computed historical fact from the diagnosis script, not a
+// live API field -- same pattern as predict.js's own extraNote rows.
+const MID_BAND_AUC_NOTE = "מדד ההבחנה בתוך טווח ₪2,000–5,000 (AUC) הוא כ-0.53 מתוך 1, כש-0.5 שקול לניחוש אקראי.";
+
+function buildModelDetails(d, extraNote) {
   const rows = [
     ["גרסת מודל", format.ltr(d.model_version)],
     ["אלגוריתם", format.ltr(d.model_algorithm)],
@@ -435,6 +488,7 @@ function buildModelDetails(d) {
     dl.appendChild(el("dd", { text: value }));
   }
   details.appendChild(dl);
+  if (extraNote) details.appendChild(el("p", { className: "model-details-note", text: extraNote }));
   return details;
 }
 
@@ -459,9 +513,13 @@ function buildBusinessContextCard() {
   const pct1 = format.formatPercent(profile.pct_of_purchased, { decimals: 1 });
   const pct2 = format.formatPercent(profile.pct_of_total_profit, { decimals: 1 });
   const pct3 = format.formatPercent(profile.cac_savings_pct, { decimals: 1 });
+  // §יג-5 (סבב הכרעה, 28.09.2026): המשפט השלישי הוחלף -- "מסייע לזהות
+  // דפוס דומה" ניסח את הציון כמזהה תבנית; הנוסח הסופי של המשתמש מדגיש
+  // הערכת סיכוי בלבד, בלי הוכחה חד-משמעית. שני המשפטים הראשונים (שלושת
+  // האחוזים) נשארו ללא שינוי -- זהה ל-`IA.md:494-497` (הנוסח הנעול).
   return el("div", { className: "business-context-card" }, [
     el("p", {
-      text: `באוכלוסיית הרוכשים שנבדקה, לקוחות שענו להגדרת לקוח-על היו ${pct1} מהאוכלוסייה ויצרו ${pct2} מהרווח המצטבר. עלות הרכישה הממוצעת שלהם הייתה נמוכה ב-${pct3}. הציון במסך מסייע לזהות דפוס דומה כבר לאחר המעקב הראשון, אך אינו מבטיח שהלקוח יהפוך ללקוח-על.`,
+      text: `באוכלוסיית הרוכשים שנבדקה, לקוחות שענו להגדרת לקוח-על היו ${pct1} מהאוכלוסייה ויצרו ${pct2} מהרווח המצטבר. עלות הרכישה הממוצעת שלהם הייתה נמוכה ב-${pct3}. הציון מבוסס על הנתונים שהוזנו ועל דפוסים שנלמדו מנתוני העבר. הוא מספק הערכת סיכוי בלבד, אך לא מוכיח באופן חד משמעי מי יהפוך ללקוח-על.`,
     }),
   ]);
 }
@@ -491,19 +549,23 @@ function buildD9Meaning() {
   return `היסטורית, לקוחות-על היו ${pct1} מהרוכשים, יצרו ${pct2} מהרווח המצטבר; עלות הרכישה הממוצעת שלהם הייתה ${cacSuper}, לעומת ${cacPopulation}, כלומר נמוכה ב-${pct3}. זהו פרופיל תיאורי`;
 }
 
-/** D9's "caveat" layer for P4S (DESIGN.md §6.1/§6.1ג -- identical text
- * in both states, "זהה למצב תקין"): model_algorithm and the Holdout
- * ROC-AUC/PR-AUC come from THIS response, never hand-typed -- the
- * PREVIOUS text hardcoded "CatBoost"/0.8014/0.3420 (stale even for the
- * live model) and asserted a Recall figure that isn't in this schema
- * at all (`_HoldoutClassification` carries only roc_auc/pr_auc/brier/
- * log_loss; CP1's own review round on the DESIGN.md table caught this
- * same pair of mistakes there first). */
-function buildCaveatText(d) {
-  const algorithm = format.ltr(d.model_algorithm);
-  const rocAuc = format.formatNumber(d.metrics.holdout.roc_auc, { decimals: 3 });
-  const prAuc = format.formatNumber(d.metrics.holdout.pr_auc, { decimals: 3 });
-  return `תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. ${algorithm} נמדד ב-Holdout עם ROC-AUC ${rocAuc} ו-PR-AUC ${prAuc}; הציון הוא אות מסייע בלבד, לא תעדוף אוטומטי`;
+/** D9's "caveat" layer -- DESIGN.md §6.1's own P4S row, verbatim,
+ * IDENTICAL in both states (§6.1c: "זהה למצב תקין"). §יג-5/§ג merged
+ * the ORIGINAL validity-precondition + "signal only" caveat with the
+ * NEW Mid-band disclaimer (A1-A2 diagnosis: the model's near-total lack
+ * of discrimination in the ₪2,000-5,000/month band where most
+ * super-customers cluster -- "(אין הסתייגות על Mid כלל)" in the review
+ * table) into ONE paragraph. The Holdout ROC-AUC/PR-AUC figures that
+ * USED to be spelled out here moved to buildModelDetails' own note
+ * instead (§ט-1: "מונחים סטטיסטיים רק בפירוט טכני") -- this text now
+ * only POINTS there in plain Hebrew ("מדד ההבחנה המספרי מופיע ב'פרטי
+ * המודל'"), NOT the raw `model-details` class/id (review finding, CP5
+ * round 2: a code identifier inside a visible Hebrew sentence breaks
+ * the same plain-language rule §ט-1 exists for). It never interpolates
+ * model_algorithm/holdout values itself, so it is the same static
+ * string regardless of which model produced the request. */
+function buildCaveatText() {
+  return "תקף רק אחרי רכישה ידועה, מעקב 1 וחלון חודשי סגור. לקוחות עם אותם נתוני רשומה מקבלים תמיד את אותו ציון. בבדיקת עבר, בתוך תקציב של ₪2,000–5,000 לחודש — שם רוב לקוחות-העל מרוכזים — הציון כמעט לא הבחין בין לקוחות (מדד ההבחנה המספרי מופיע ב'פרטי המודל'). התוקף של הציון ללקוח חדש שטרם נצפה לא הוכח; הציון הוא אות מסייע בלבד, לא תעדוף אוטומטי";
 }
 
 function buildP4SPanel(result) {
@@ -536,9 +598,9 @@ function buildP4SPanel(result) {
       answer: "אין ציון — הקלט הנוכחי מחוץ לתחום שעליו אומן המודל",
       meaning: "המודל יודע להעריך פוטנציאל לקוח-על רק עבור קלט בטווחים שראה באימון; קלט חריג אינו ניתן להערכה אמינה",
       action: "יש לבדוק את השדות המסומנים למטה מול הטווח המאומן, לתקן במידת הצורך ולשלוח שוב",
-      caveat: buildCaveatText(d),
+      caveat: buildCaveatText(),
     }));
-    panel.appendChild(buildModelDetails(d));
+    panel.appendChild(buildModelDetails(d, MID_BAND_AUC_NOTE));
     return panel;
   }
 
@@ -568,13 +630,16 @@ function buildP4SPanel(result) {
 
   const pct = format.formatPercent(d.base_rate);
   panel.appendChild(renderSummaryRecommendation({
-    answer: `ציון לקוח-על: ${format.ltr(String(score))} מתוך 100, מול שיעור הבסיס שחזר: ${pct}`,
+    // DESIGN.md §6.1's own P4S row, verbatim (was "ציון לקוח-על: {N}
+    // מתוך 100, מול שיעור הבסיס שחזר: {X%}" -- §יג-5 renamed "שיעור
+    // הבסיס" to "שיעור היסטורי" the same way PROPENSITY_BAND_LABELS did).
+    answer: `ציון לקוח-על: ${format.ltr(String(score))} מתוך 100, לעומת שיעור היסטורי של ${pct} בקרב כלל הרוכשים`,
     meaning: buildD9Meaning(),
-    action: "רק כשהקלט בתחום, אין סימון תמיכה חלקית והנטייה מעל הבסיס, אפשר להשתמש בציון כאות מסייע לבדיקה ידנית של רוכש ידוע. בכל מצב אחר אין תעדוף לפי המודל",
-    caveat: buildCaveatText(d),
+    action: "רק כשהקלט בתחום, אין סימון תמיכה חלקית והנטייה מעל השיעור ההיסטורי, אפשר להשתמש בציון כאות מסייע לבדיקה ידנית של רוכש ידוע. בכל מצב אחר אין תעדוף לפי המודל",
+    caveat: buildCaveatText(),
   }));
 
-  panel.appendChild(buildModelDetails(d));
+  panel.appendChild(buildModelDetails(d, MID_BAND_AUC_NOTE));
   return panel;
 }
 

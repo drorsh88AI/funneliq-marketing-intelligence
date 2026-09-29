@@ -163,7 +163,10 @@ _P4S_LEAKED_STRINGS = ("רווח גבוה", "עלות רכישה נמוכה", "�
 # --- Budget Simulator (budget.js) degraded bridge -- no placeholders at
 # all in these 4 cells. ---
 _BUDGET_DEGRADED_LAYERS = _degraded_layers_for("Budget Simulator")
-_BUDGET_LEAKED_STRINGS = ("100×500", "25×2,000", "פיילוט")
+# §יג-6 (CP6, 29.09.2026): "פיילוט" -> "ניסוי" -- the approved §ט-4
+# wording says "להתחיל בניסוי בהיקף מוגבל", not "פיילוט מבוקר" (the
+# pre-approval draft this checkpoint replaced).
+_BUDGET_LEAKED_STRINGS = ("100×500", "25×2,000", "ניסוי")
 
 
 # ---------------------------------------------------------------------------

@@ -49,7 +49,15 @@ const STAGE_LABELS_EN = { followup_1: "Stage 1", followup_2: "Stage 2", followup
 // SPEC.md's own "הכרעת CP4-D — תשובת P5 המחייבת" section, verbatim,
 // word for word -- IA.md §7.1 explicitly forbids rewording or
 // shortening it, "בשלושת המקומות" (facts/package-5/business
-// recommendation) alike.
+// recommendation) alike -- docs/findings.json, SPEC.md, docs/FINDINGS.md,
+// ⛔ never this screen. §יג-7 (CP7, 29.09.2026): the on-screen
+// "המלצה" block below is now the §ט-2 four-layer template instead of
+// this single paragraph rendered verbatim -- IA.md §7.1 explicitly
+// permits that split ("נוסח התצוגה... רשאי להיות מפוצל לשכבות... ⛔
+// בתנאי שאינו סותר עובדתית"). This constant is no longer rendered
+// anywhere; kept as the one in-code anchor the four layers below were
+// checked against, so a future edit to either one surfaces a diff here
+// instead of only in the docs.
 const CP4D_RECOMMENDATION =
   "לא. אין לאמץ עצירה אוטומטית אחרי המעקב השלישי. שיעור הנשירה לאחר המעקב " +
   "הרביעי הוא הנמוך בשרשרת (10.4%). מבין 3,318 הרשומות שבהן נסגרה עסקה " +
@@ -128,15 +136,40 @@ function buildStagesGroup(stagesPart) {
   group.appendChild(el("h2", { text: "נשירה" }));
   group.appendChild(charts.renderBarChart({
     data: chartRows,
-    xLabel: "שלב מעקב",
-    yLabel: "שיעור נשירה",
+    title: "כמה לידים נושרים בכל שלב מעקב",
     titleEnglish: "Drop-off Rate by Follow-up Stage",
-    xLabelEnglish: "Follow-up Stage",
-    yLabelEnglish: "Drop-off Rate",
+    xLabel: "שלב המעקב",
+    yLabel: "שיעור נשירה",
     formatValue: (v) => (v === null ? "N/A" : format.formatPercent(v, { decimals: 1 })),
   }));
   group.appendChild(renderSummaryRecommendation(computeStagesD9(rows)));
   return group;
+}
+
+/** K1 (PHASE12A.md §יג-7, `DESIGN.md`'s own "נשירה" row, four review
+ * rounds): the "meaning" layer used to be an "if the rates don't
+ * increase..." conditional sentence, even though the code already has
+ * all five live rates and can just state which branch actually holds --
+ * exactly the same class of bug as Overview's own O5. `drop_rate` is an
+ * INDEPENDENT rate per stage (`IA.md:691`), never cumulative, so
+ * "increasing" here means strictly increasing at every single
+ * consecutive pair, not just first-vs-last. Priority order matters:
+ * ANY missing rate takes over the whole sentence -- a partial sequence
+ * can't support a trend claim about the full one, so no combination of
+ * missing + increasing/not-increasing is possible. */
+function computeStagesMeaning(rows) {
+  const missing = rows.filter((r) => r.drop_rate === null);
+  if (missing.length > 0) {
+    const missingSentences = missing
+      .map((r) => `שיעור הנשירה אינו זמין לשלב ${r.stage.replace("followup_", "")} (אין מספיק נתונים לשלב זה)`)
+      .join(" ");
+    return `${missingSentences} לכן אי אפשר לקבוע האם רצף חמשת השלבים עולה או לא.`;
+  }
+  const strictlyIncreasing = rows.every((r, i) => i === 0 || rows[i - 1].drop_rate < r.drop_rate);
+  if (strictlyIncreasing) {
+    return "שיעורי הנשירה עולים ברצף מהשלב הראשון עד האחרון — כל שלב גבוה ממש מקודמו. גם רצף עולה אינו קובע כשלעצמו שיש לעצור מעקב אוטומטית — נדרשת בחינה נפרדת של העלות מול הסיכוי להמשך; אין לטעון להפתעה על עצם קיום הרצף.";
+  }
+  return "שיעורי הנשירה בין שלבי המעקב אינם עולים ברצף מהראשון לאחרון: לפחות במעבר אחד בין שלבים עוקבים השיעור לא עלה (ירד או נשאר זהה). הנתונים אינם תומכים בעצירת מעקב אוטומטית רק לפי מספר השלב.";
 }
 
 /** DESIGN.md §6.1's own "נשירה" row -- answer/meaning filled from the
@@ -157,7 +190,7 @@ function computeStagesD9(rows) {
   }
   return {
     answer,
-    meaning: "אם השיעורים אינם עולים ברצף, הנתונים אינם תומכים בעצירה אוטומטית רק מפני שהתקדם מספר השלב",
+    meaning: computeStagesMeaning(rows),
     action: "ההמלצה היא להמשיך מעקבים אחרי השלישי באופן מבוקר ולמדוד בכל שלב את שיעור הסגירה השולי, זמן העבודה והעלות לפני שינוי קבוע במדיניות",
     caveat: "הנתונים מתארים מה קרה בפועל בכל שלב, ⛔ ואינם מסבירים מדוע",
   };
@@ -213,27 +246,71 @@ function buildCallsGroup(callsPart) {
   group.appendChild(el("h2", { text: "מספר שיחות עד סגירה" }));
   group.appendChild(charts.renderBarChart({
     data: chartRows,
-    xLabel: "מספר שיחות",
-    yLabel: "מספר רשומות",
+    // §יב-2 R2 (Codex round, approved by the user 24.09.2026): "בממוצע"
+    // in the title itself, so it can't be misread as a per-deal count.
+    title: "בממוצע, כמה שיחות נדרשו עד סגירת עסקה",
     titleEnglish: "Record Count by Number of Calls to Close",
-    xLabelEnglish: "Number of Calls",
-    yLabelEnglish: "Number of Records",
+    xLabel: "ממוצע שיחות עד סגירה (לשורה)",
+    yLabel: "מספר שורות בנתונים",
     formatValue: (v) => format.formatNumber(v),
+    // §יב-2 R2 (final, simplified wording): only rows with at least
+    // one closed deal are counted -- the same population the mean/
+    // median/mode figures below already use (computeCallsStats).
+    legend: `כל עמודה מראה בכמה מקרים בנתוני העבר זה היה ממוצע השיחות עד סגירה. נכללו רק מקרים שבהם נסגרה לפחות עסקה אחת (${format.formatNumber(stats.populationN)} מקרים).`,
   }));
   group.appendChild(renderSummaryRecommendation(computeCallsD9(stats)));
+  group.appendChild(buildCallsDetails(stats));
   return group;
 }
 
+/** U3 (PHASE12A.md §יג-7): the "answer" used to open with the raw field
+ * name (`calls_to_closed`) and three statistics terms (חציון/שכיח/ממוצע)
+ * with no explanation -- exactly the audit finding (G2, "מונחי סטטיסטיקה
+ * ... בלי הסבר"). §ט-3's own dictionary rule for jargon terms ("רק
+ * בפירוט הטכני") extended here to the statistics terms too: the plain
+ * lead-in sentence stays here, the field name and the three statistics
+ * move to buildCallsDetails()'s own collapsed section below. "רשומה" ->
+ * "שורה בנתונים" (§ט-3) applies to EVERY visible layer here, not only
+ * the answer -- round-2 review (CP7) found the raw field name and
+ * untranslated "רשומות" still leaking into the meaning/caveat layers,
+ * missed in the first pass. The locked CP4D_RECOMMENDATION verbatim
+ * text is never touched anywhere. */
 function computeCallsD9(stats) {
+  return {
+    answer: `בדקנו כמה שיחות בממוצע נדרשו, בקרב השורות בנתונים שבהן נסגרה עסקה (${format.ltr(format.formatNumber(stats.populationN))} שורות). הקובץ אינו מאפשר למנות מעקבים לעסקה בודדת.`,
+    meaning: `ב־${format.ltr(format.formatNumber(stats.countGe4))} שורות בנתונים (${format.ltr(format.formatPercent(stats.rateGe4, { decimals: 2 }))}) ממוצע השיחות עד סגירה הוא 4 ומעלה. יחד עם דפוס הנשירה, אין בסיס לעצירה אוטומטית אחרי המעקב השלישי`,
+    action: "ההמלצה היא להמשיך מעקבים אחרי השלישי באופן מבוקר ולמדוד בכל שלב את שיעור הסגירה השולי, זמן העבודה והעלות לפני שינוי קבוע במדיניות",
+    caveat: "מדד ממוצע השיחות עד סגירה הוא ממוצע ברמת שורה בנתונים ולא היסטוריה לעסקה; חמשת שלבי המעקב אינם מספר השיחות, שמגיע עד 9; אין הוכחה סיבתית או כלכלית",
+  };
+}
+
+/** New collapsed technical section (§יג-7/§ט-3): the raw field name and
+ * the three statistics terms (median/mode/mean) that used to sit
+ * unexplained in the visible "answer" now live here instead, alongside
+ * predict.js's/super-customer.js's/budget.js's own `model-details`
+ * pattern (same CSS class, reused for visual consistency) -- but
+ * labeled "פירוט טכני", not "פרטי המודל": this is a plain descriptive
+ * statistic over the CSV, not a trained model's own metrics. */
+function buildCallsDetails(stats) {
   const modeText = stats.modes.length === 1
     ? format.ltr(format.formatNumber(stats.modes[0]))
     : format.ltr(stats.modes.map((m) => format.formatNumber(m)).join(" / "));
-  return {
-    answer: `אין בקובץ מניין מעקבים לעסקה בודדת. במדד הקרוב, ${format.ltr("calls_to_closed")}, ב־${format.ltr(format.formatNumber(stats.populationN))} רשומות שנסגרו: חציון ${format.ltr(format.formatNumber(stats.median))}, שכיח ${modeText} וממוצע ${format.ltr(format.formatNumber(stats.mean, { decimals: 3 }))}`,
-    meaning: `ב־${format.ltr(format.formatNumber(stats.countGe4))} רשומות (${format.ltr(format.formatPercent(stats.rateGe4, { decimals: 2 }))}) ממוצע השיחות עד סגירה הוא 4 ומעלה. יחד עם דפוס הנשירה, אין בסיס לעצירה אוטומטית אחרי המעקב השלישי`,
-    action: "ההמלצה היא להמשיך מעקבים אחרי השלישי באופן מבוקר ולמדוד בכל שלב את שיעור הסגירה השולי, זמן העבודה והעלות לפני שינוי קבוע במדיניות",
-    caveat: "calls_to_closed הוא ממוצע ברמת רשומה ולא היסטוריה לעסקה; חמשת שלבי המעקב אינם מספר השיחות, שמגיע עד 9; אין הוכחה סיבתית או כלכלית",
-  };
+  const rows = [
+    ["מדד", format.ltr("calls_to_closed")],
+    ["שורות בנתונים", format.ltr(format.formatNumber(stats.populationN))],
+    ["חציון", format.ltr(format.formatNumber(stats.median))],
+    ["שכיח", modeText],
+    ["ממוצע", format.ltr(format.formatNumber(stats.mean, { decimals: 3 }))],
+  ];
+  const details = el("details", { className: "model-details" });
+  details.appendChild(el("summary", { text: "פירוט טכני" }));
+  const dl = el("dl", {});
+  for (const [label, value] of rows) {
+    dl.appendChild(el("dt", { text: label }));
+    dl.appendChild(el("dd", { text: value }));
+  }
+  details.appendChild(dl);
+  return details;
 }
 
 // ---------------------------------------------------------------------
@@ -244,6 +321,28 @@ function computeCallsD9(stats) {
 // previously had no h1/h2 above them at all.
 function appendScreenHeading() {
   container.appendChild(el("h1", { text: "מעקב שיחות" }));
+}
+
+/** U4 (§יג-7): the combined "המלצה" block used to be one 113-word
+ * paragraph with no internal structure. Round-2 review (CP7) found that
+ * the first four-layer draft here invented its own paraphrase -- in
+ * particular a "stage 4 has the lowest dropout" claim -- instead of
+ * using `PHASE12A.md` §ט-4's own pre-approved "Follow-up" template
+ * (the same document that already has Budget's own locked §ט-4
+ * wording). That invented claim directly contradicted K1's own three
+ * branches above whenever the live dropout sequence increases or has a
+ * missing stage. Fixed by rendering §ט-4's exact template instead of a
+ * fresh paraphrase: it never names a specific stage at all, so there is
+ * nothing left to contradict. Only the "{48%}" placeholder is filled
+ * live, from the exact same `rateGe4` computeCallsD9 already shows
+ * above it -- never hardcoded, never re-derived a second way. */
+function computeCombinedRecommendation(stats) {
+  return {
+    answer: "אין בנתונים בסיס להפסיק לעקוב אחרי המעקב השלישי.",
+    meaning: `בכמעט מחצית (${format.ltr(format.formatPercent(stats.rateGe4, { decimals: 0 }))}) מהשורות שבהן נסגרה עסקה, ממוצע השיחות עד סגירה היה 4 או יותר.`,
+    action: "להמשיך במעקבים 4 ו-5 באופן מבוקר. לבדוק בכל שלב כמה עסקאות נוספות נסגרות, כמה זמן זה לוקח ומה העלות, לפני שמשנים מדיניות.",
+    caveat: "זה ממוצע לשורה בנתונים, לא היסטוריה של עסקה בודדת. הנתונים מראים מה קרה, לא למה.",
+  };
 }
 
 function renderSuccess(resp) {
@@ -259,7 +358,13 @@ function renderSuccess(resp) {
   const recWrap = el("div", { className: "followup-recommendation" });
   if (bothAvailable) {
     recWrap.appendChild(el("h3", { text: "המלצה" }));
-    recWrap.appendChild(el("p", { text: CP4D_RECOMMENDATION }));
+    // Recomputed rather than threaded through from buildCallsGroup --
+    // pure function of the same response data, and keeping this block's
+    // own local computation matches every other screen's independent-
+    // controller-state convention (P11-D3) rather than passing state
+    // between the two group builders.
+    const combinedStats = computeCallsStats(resp.calls_to_closed.data);
+    recWrap.appendChild(renderSummaryRecommendation(computeCombinedRecommendation(combinedStats)));
   } else {
     // IA.md §7.2: a partial failure marks "התשובה המשולבת" (the
     // combined answer) unavailable too -- ⛔ never a stored fallback

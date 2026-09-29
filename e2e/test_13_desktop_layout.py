@@ -1,12 +1,15 @@
 """P11A checkpoint 7 (docs/planning/PHASE11A.md P11A-D8): Desktop-width
 layout. Falsification case 14: "ברוחב Desktop: שלושת פאנלי החיזוי
 באותה שורה; Overview לא 5 בשורה; Budget בשתי עמודות". Verified via
-actual computed bounding boxes at Playwright's default 1280x720
-Desktop viewport (this project's e2e harness never overrides it --
-grepped e2e/conftest.py, confirmed no viewport fixture exists), not
-just DOM presence -- a CSS-only regression (e.g. `.results-wrap`
-reverting to `flex-direction: column`) would NOT be caught by any
-selector-presence assertion, only by actually measuring position."""
+actual computed bounding boxes, not just DOM presence -- a CSS-only
+regression (e.g. `.results-wrap` reverting to `flex-direction:
+column`) would NOT be caught by any selector-presence assertion, only
+by actually measuring position. Most tests here rely on Playwright's
+default 1280x720 Desktop viewport (this project's e2e harness itself
+never overrides it -- grepped e2e/conftest.py, confirmed no viewport
+fixture exists); one test (12A, `..._at_1024px`) explicitly calls
+`page.set_viewport_size` to cover the narrower end of the approved
+desktop range (§ו.7: 768-1279px still requires 5-in-one-row)."""
 from __future__ import annotations
 
 import sys
@@ -52,8 +55,10 @@ def test_predict_three_panels_share_one_row_on_desktop(mocked_page, mocked_conte
     assert max(tops) - min(tops) < 2, f"expected the three panels on one row (equal top), got {tops}"
 
 
-def test_overview_capability_index_never_five_in_one_row(mocked_page, mocked_context):
-    """DESIGN.md:270 -- "לא שורה קשיחה אחת של חמישה כרטיסים"."""
+def test_overview_capability_index_always_five_in_one_row(mocked_page, mocked_context):
+    """DESIGN.md:270 (12A, 27.09.2026 -- overturns the prior P11A-D8
+    "never 5 in one row" rule; desktop-only product, always exactly
+    5 equal-width columns, one row, equal height)."""
     route_json(mocked_context, "**/api/me", fx.api_me())
     route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
     sign_in_and_wait(mocked_page, mocked_context)
@@ -61,8 +66,48 @@ def test_overview_capability_index_never_five_in_one_row(mocked_page, mocked_con
     mocked_page.wait_for_selector("#screen-overview .capability-index", timeout=10_000)
     tops = _tops(mocked_page, "#screen-overview .capability-card")
     assert len(tops) == 5
-    distinct_rows = len(set(round(t) for t in tops))
-    assert distinct_rows > 1, f"all 5 capability cards landed on one row (tops={tops}) -- forbidden"
+    assert max(tops) - min(tops) < 2, f"expected all 5 capability cards on one row (equal top), got {tops}"
+
+    heights = mocked_page.eval_on_selector_all(
+        "#screen-overview .capability-card",
+        "(elements) => elements.map((el) => el.getBoundingClientRect().height)",
+    )
+    assert max(heights) - min(heights) < 2, f"expected all 5 capability cards at equal height, got {heights}"
+
+
+def test_overview_capability_index_five_in_one_row_at_1024px(mocked_page, mocked_context):
+    """12A, 27.09.2026 (Codex finding on CP3: the desktop-only 5-in-
+    one-row decision, §ו.7, was only ever verified at Playwright's
+    DEFAULT 1280px viewport -- never at the narrower end of the
+    approved desktop range, 768-1279px, where §ו.7 explicitly allows
+    smaller text but still requires 5 columns / one row / equal
+    height). 1024px is a common laptop width inside that range."""
+    mocked_page.set_viewport_size({"width": 1024, "height": 768})
+    route_json(mocked_context, "**/api/me", fx.api_me())
+    route_json(mocked_context, "**/api/insights/budget-tiers", fx.budget_tiers_response())
+    sign_in_and_wait(mocked_page, mocked_context)
+
+    mocked_page.wait_for_selector("#screen-overview .capability-index", timeout=10_000)
+    tops = _tops(mocked_page, "#screen-overview .capability-card")
+    assert len(tops) == 5
+    assert max(tops) - min(tops) < 2, f"expected all 5 capability cards on one row at 1024px (equal top), got {tops}"
+
+    heights = mocked_page.eval_on_selector_all(
+        "#screen-overview .capability-card",
+        "(elements) => elements.map((el) => el.getBoundingClientRect().height)",
+    )
+    assert max(heights) - min(heights) < 2, f"expected all 5 capability cards at equal height at 1024px, got {heights}"
+
+    widths = mocked_page.eval_on_selector_all(
+        "#screen-overview .capability-card",
+        "(elements) => elements.map((el) => el.getBoundingClientRect().width)",
+    )
+    assert min(widths) > 0, "expected no zero-width (collapsed/wrapped) card at 1024px"
+
+    # ⛔ no horizontal scroll of the page body at this narrower width
+    # (§ו.7's own acceptance criterion, "⛔ בלי גלילה אופקית של הגוף").
+    overflow = mocked_page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth + 1")
+    assert not overflow, "expected no horizontal page scroll at 1024px"
 
 
 def test_budget_table_and_chart_are_two_columns_same_row(mocked_page, mocked_context):
