@@ -84,3 +84,37 @@ def test_filter_all_button_count_is_derived_not_hardcoded():
         "no line derives filter-all-btn's text from PHASES.length -- the "
         "count must never be reintroduced as a literal number in the script"
     )
+
+
+def test_gate_13_to_14_has_its_own_in_progress_branch_before_the_generic_one():
+    """While phase 13 is executing, the generic gate box would read
+    "⏳ השער פתוח" for 13→14, as if phase 14's planning were due now. A
+    dedicated branch (same pattern as the 10A/11A ones) must say the gate
+    is not yet relevant, and must come BEFORE the generic fall-through --
+    otherwise it is dead code. Source check, like the rest of this file."""
+    src = _source()
+    gate = src[src.index("function gateHtml"):src.index("// תקציר תוכן בלבד")]
+    branch_at = gate.index("p.num === 13 && p.execution_status !== 'done'")
+    generic_at = gate.index("const closed = next.planning_status")
+    assert branch_at < generic_at
+    branch = gate[branch_at:generic_at]
+    assert "טרם רלוונטי" in branch and "outline_only" in branch
+    assert "השער פתוח" not in branch
+    # The wording must hold for ANY non-done state (not_started included):
+    # the status is derived from STATUS_META, never hard-coded as "בביצוע".
+    assert "STATUS_META[p.execution_status]" in gate[branch_at - 400:branch_at + 400]
+    heading = branch[branch.index("<h4>"):branch.index("</h4>")]
+    assert "בביצוע" not in heading
+
+
+def test_planning_summary_does_not_call_gate_13_to_14_open_while_13_executes():
+    """Same bug class as the gate box above, in the planning tab's one-line
+    summary: without its own branch, roadmapStateSummary() fell through to
+    `שער 13→14 פתוח` while phase 13 was in_progress. The branch must exist
+    and sit before the generic fall-through."""
+    src = _source()
+    fn = src[src.index("function roadmapStateSummary"):src.index("function updateProgress")]
+    branch_at = fn.index("current.num === 13 && current.execution_status !== 'done'")
+    generic_at = fn.index("שער ${current.num}→${next.num}")
+    assert branch_at < generic_at
+    assert "מוקפאת עד סגירת 13" in fn[branch_at:generic_at]
