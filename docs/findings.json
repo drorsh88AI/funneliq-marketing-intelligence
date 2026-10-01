@@ -65,6 +65,101 @@
       "n": 71
     }
   },
+  "budget_leads_per_1000": {
+    "levels": {
+      "500": {
+        "median_leads_per_1000": 26.0,
+        "median_num_leads": 13.0,
+        "n": 109
+      },
+      "800": {
+        "median_leads_per_1000": 21.25,
+        "median_num_leads": 17.0,
+        "n": 154
+      },
+      "1000": {
+        "median_leads_per_1000": 20.0,
+        "median_num_leads": 20.0,
+        "n": 219
+      },
+      "1500": {
+        "median_leads_per_1000": 16.666666666666668,
+        "median_num_leads": 25.0,
+        "n": 298
+      },
+      "2000": {
+        "median_leads_per_1000": 15.0,
+        "median_num_leads": 30.0,
+        "n": 410
+      },
+      "2500": {
+        "median_leads_per_1000": 14.0,
+        "median_num_leads": 35.0,
+        "n": 346
+      },
+      "3000": {
+        "median_leads_per_1000": 12.666666666666666,
+        "median_num_leads": 38.0,
+        "n": 331
+      },
+      "4000": {
+        "median_leads_per_1000": 11.375,
+        "median_num_leads": 45.5,
+        "n": 316
+      },
+      "5000": {
+        "median_leads_per_1000": 10.6,
+        "median_num_leads": 53.0,
+        "n": 314
+      },
+      "6000": {
+        "median_leads_per_1000": 9.833333333333334,
+        "median_num_leads": 59.0,
+        "n": 199
+      },
+      "7000": {
+        "median_leads_per_1000": 9.142857142857142,
+        "median_num_leads": 64.0,
+        "n": 185
+      },
+      "8000": {
+        "median_leads_per_1000": 8.75,
+        "median_num_leads": 70.0,
+        "n": 124
+      },
+      "10000": {
+        "median_leads_per_1000": 8.0,
+        "median_num_leads": 80.0,
+        "n": 195
+      },
+      "12000": {
+        "median_leads_per_1000": 7.333333333333333,
+        "median_num_leads": 88.0,
+        "n": 116
+      },
+      "15000": {
+        "median_leads_per_1000": 6.8,
+        "median_num_leads": 102.0,
+        "n": 113
+      },
+      "20000": {
+        "median_leads_per_1000": 6.1,
+        "median_num_leads": 122.0,
+        "n": 71
+      }
+    },
+    "summary": {
+      "budget_multiple": 40.0,
+      "direction": "decreasing",
+      "highest_budget": 20000,
+      "leads_per_1000_highest": 6.1,
+      "leads_per_1000_lowest": 26.0,
+      "lowest_budget": 500,
+      "median_leads_multiple": 9.384615384615385,
+      "n_levels": 16,
+      "strictly_decreasing": true
+    }
+  },
   "budget_tiers": {
     "High": {
       "conversion_rate": 0.05433458164376223,
@@ -566,5 +661,72 @@
   },
   "source_metadata": {
     "source_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa"
+  },
+  "task_exclusions": {
+    "by_task": {
+      "P2": {
+        "n_candidates": 3163,
+        "n_lost_to_missing_target": 0,
+        "n_missing_feature_values": 0,
+        "n_missing_label_inputs": null,
+        "n_missing_target": 4,
+        "n_missing_target_outside_population": 4,
+        "n_population": 3163,
+        "n_source_rows": 3500
+      },
+      "P3": {
+        "n_candidates": 3163,
+        "n_lost_to_missing_target": 0,
+        "n_missing_feature_values": 0,
+        "n_missing_label_inputs": null,
+        "n_missing_target": 0,
+        "n_missing_target_outside_population": 0,
+        "n_population": 3163,
+        "n_source_rows": 3500
+      },
+      "P4": {
+        "n_candidates": 3163,
+        "n_lost_to_missing_target": 0,
+        "n_missing_feature_values": 0,
+        "n_missing_label_inputs": null,
+        "n_missing_target": 0,
+        "n_missing_target_outside_population": 0,
+        "n_population": 3163,
+        "n_source_rows": 3500
+      },
+      "P4S": {
+        "n_candidates": 3163,
+        "n_lost_to_missing_target": 0,
+        "n_missing_feature_values": 0,
+        "n_missing_label_inputs": 0,
+        "n_missing_target": 0,
+        "n_missing_target_outside_population": 0,
+        "n_population": 3163,
+        "n_source_rows": 3500
+      },
+      "P6": {
+        "n_candidates": 3500,
+        "n_lost_to_missing_target": 29,
+        "n_missing_feature_values": 0,
+        "n_missing_label_inputs": null,
+        "n_missing_target": 29,
+        "n_missing_target_outside_population": 0,
+        "n_population": 3471,
+        "n_source_rows": 3500
+      }
+    },
+    "totals": {
+      "n_missing_feature_values": 0
+    }
+  },
+  "tier_conversion_shape": {
+    "best_minus_runner_up_pp": 2.786172901078257,
+    "best_tier": "Mid",
+    "ranking": [
+      "Mid",
+      "High",
+      "Low"
+    ],
+    "rates_increase_with_budget": false
   }
 }
