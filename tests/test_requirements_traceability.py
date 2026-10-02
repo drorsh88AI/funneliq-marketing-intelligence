@@ -55,9 +55,9 @@ _EXPECTED_IDS = frozenset({
 # a test that never needs updating as work actually happens isn't testing
 # anything.
 _EXPECTED_STATUS_COUNTS = {
-    "done": 50,
-    "planned": 7,
-    "gap": 15,
+    "done": 70,
+    "planned": 2,
+    "gap": 0,
     "N/A": 1,
     "parent": 1,
 }
@@ -214,7 +214,10 @@ def test_status_counts_match_expected_snapshot(requirements):
     silently flipping from 'done' to 'gap' (or vice versa) doesn't break
     any structural check above, but it does mean someone's claim about
     what's actually finished just changed underneath the registry."""
-    actual = dict(Counter(r["status"] for r in requirements))
+    # Count over the five known statuses so that a status with no rows (e.g. "gap" once
+    # every gap is closed) reads as 0, not as a missing key; an unknown status is
+    # caught by test_every_status_value_is_one_of_the_five_known_ones.
+    actual = {s: sum(1 for r in requirements if r["status"] == s) for s in _STATUSES}
     assert actual == _EXPECTED_STATUS_COUNTS, (
         f"status counts drifted from the expected snapshot -- "
         f"expected {_EXPECTED_STATUS_COUNTS}, got {actual}. If this is a "
@@ -249,7 +252,10 @@ def test_roadmap_b_registry_summary_matches_the_real_counts(requirements):
     either file is edited alone. This closes that gap: the counts shown
     to a human in ROADMAP.html must match what's actually in the
     registry, every time either one changes."""
-    actual = dict(Counter(r["status"] for r in requirements))
+    # Count over the five known statuses so that a status with no rows (e.g. "gap" once
+    # every gap is closed) reads as 0, not as a missing key; an unknown status is
+    # caught by test_every_status_value_is_one_of_the_five_known_ones.
+    actual = {s: sum(1 for r in requirements if r["status"] == s) for s in _STATUSES}
     shown = _roadmap_b_registry_status_counts()
     assert shown == actual, (
         f"ROADMAP.html's B-registry summary card ({shown}) has drifted "
