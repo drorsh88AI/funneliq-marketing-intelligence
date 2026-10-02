@@ -560,12 +560,11 @@ button {
    super-customer.js's own 4 fields -- measured live: "לידים שנותרו
    אחרי מעקב הראשון" wraps to 2 lines at 1280px/1024px under the old
    three-span flex-wrap layout, same defect class as F3). Business
-   label always its own row; technical name + unit always together on
-   one row below it (`.field-label-meta`); Predict's derived field's
-   extra explain line (F5) becomes a third row there only. A plain
-   flex-column with no forced min-height: every REGULAR field now has
-   the exact same two-row shape by construction, so they align without
-   needing to guess a height. */
+   label always its own row; technical name + unit share a metadata
+   group below it (`.field-label-meta`); Predict's derived field's
+   extra explain line (F5) becomes a third row there only. Long metadata
+   can still wrap at narrower grid widths, so the input boxes align at
+   the bottom of their shared grid row without a fixed label height. */
 #screen-predict .field-grid label,
 #screen-super-customer .field-grid label {
   display: flex;
@@ -589,6 +588,15 @@ button {
    (§ח.3) never applied to it in the first place. */
 .derived-field {
   grid-column: 1 / -1;
+}
+
+#screen-predict .field-grid > .field:not(.derived-field) {
+  display: flex;
+  flex-direction: column;
+}
+
+#screen-predict .field-grid > .field:not(.derived-field) input {
+  margin-top: auto;
 }
 
 .field input {

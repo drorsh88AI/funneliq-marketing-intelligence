@@ -165,13 +165,11 @@ function el(tag, props = {}, children = []) {
 }
 
 // F3 (audit:19, PHASE12A.md §ח.3): business label on its own row, then
-// technical name + unit TOGETHER on one small row below it -- a fixed
-// two-row (or three, for the derived field's own extra explain row)
-// structure, so every field's input starts at the same vertical offset
-// within its grid row regardless of how long any one label happens to
-// be. (Labels used to be three loose flex-wrap spans that could land on
-// anywhere from 1 to 3 lines depending on content width -- that's what
-// F3 was actually reporting.)
+// technical name + unit grouped below it. Long metadata may wrap, so
+// style.css aligns the input boxes at the bottom of each shared grid row.
+// The derived field has its own extra explain row. (Labels used to be
+// three loose flex-wrap spans that could land on anywhere from 1 to 3
+// lines depending on content width -- that's what F3 was reporting.)
 function buildFieldLabel(businessLabel, technicalName, unit, { for: forId, explain } = {}) {
   const label = el("label", forId ? { for: forId } : {});
   label.appendChild(el("span", { className: "field-label-business", text: businessLabel }));
