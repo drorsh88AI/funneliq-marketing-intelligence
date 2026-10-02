@@ -861,3 +861,42 @@ def test_a_chart_heading_with_a_bracket_is_refused(heading):
 def test_the_bracket_rule_applies_only_to_headings_above_a_chart():
     assert br.chart_heading_violations("### [x](a b) כותרת רגילה\n\nטקסט ללא גרף\n") == []
     assert br.chart_heading_violations("### עקומת כיול (P4S)\n\n![x](a.svg)\n") == []
+
+
+# ---------------------------------------------------------------------------
+# CP4: the real report. The committed REPORT.md must be exactly what the
+# template and the committed sources render to (D2), and obey the chart rule.
+# ---------------------------------------------------------------------------
+def _lf_text(text: str) -> str:
+    return text.replace("\r\n", "\n")
+
+
+def test_the_committed_report_is_what_the_template_renders():
+    template = br.DEFAULT_TEMPLATE.read_text(encoding="utf-8")
+    assert _lf_text(br.DEFAULT_OUT.read_text(encoding="utf-8")) == _lf_text(br.render_report(template))
+
+
+def test_the_real_template_satisfies_the_chart_rule():
+    rendered = br.render_report(br.DEFAULT_TEMPLATE.read_text(encoding="utf-8"))
+    assert br.chart_heading_violations(rendered) == []
+    assert "![" in rendered      # the report does contain charts
+
+
+def test_every_chart_in_the_report_exists_on_disk():
+    rendered = br.render_report(br.DEFAULT_TEMPLATE.read_text(encoding="utf-8"))
+    targets = re.findall(r"!\[[^\]]*\]\(([^)\s]+\.svg)\)", rendered)
+    assert targets
+    for target in targets:
+        assert (br.REPO / target).is_file(), target
+
+
+def test_no_unfilled_placeholder_or_nan_survives_in_the_report():
+    text = br.DEFAULT_OUT.read_text(encoding="utf-8")
+    assert "${" not in text and "nan" not in text.lower().replace("finance", "")
+
+
+def test_the_report_opens_with_the_five_founder_answers():
+    text = _lf_text(br.DEFAULT_OUT.read_text(encoding="utf-8"))
+    head = text.split("## 1. ", 1)[0]
+    answers = [line for line in head.splitlines() if re.match(r"^[1-5]\. \*\*", line)]
+    assert len(answers) == 5
