@@ -277,6 +277,12 @@ README באנגלית, REPORT בעברית.
    - **B60 נשארת פתוחה** בסטטוס הנוכחי. ה-`evidence` שלה: "הקמה נקייה לא
      בוצעה; הוראות ה-README נבדקו בקריאה בלבד". ⛔ לא `done` ו-⛔ לא `verifier`
      של פאזה 13.
+   - **B65 נסגרת ב-CP10 על ראיה מוגבלת בלבד:** (א) טבלת Credits ב-README, עם גרסה
+     ורישיון לכל שורה כפי שנבדקו (ר' נספח ו3: Python מתוך מטא-דאטה, `supabase-js`
+     מנוסח `LICENSE` ב-`e2e/vendor/supabase-js.LICENSE`, Rubik ממאגרו; Playwright
+     ו-Stitch "not checked"), ו-(ב) גבול סריקת CP0 (א4, ר' נספח ו4): היא חיפשה רק קטעים
+     שהוצהר עליהם כמועתקים בנתיבים שנמנו. ה-`evidence` שלה **אינו טוען "לא הועתק קוד"**
+     ואינו כולל אותו; הוא מציין את שני הגבולות במפורש.
    - B18 מקבלת 13 בעמודת `contributors`.
    - פסקת עדכון "שער 13" בראש המרשם, עם הספירה בפועל.
    - תיקון שורת הסיכום המיושנת (`REQUIREMENTS.md:255`, כתוב 41/16; בפועל
@@ -1233,4 +1239,53 @@ uvicorn, pytest) · פריסה ב-`render.yaml` · גילויים · Credits · 
   כמועתקים (ניסוחים כמו "adapted from", StackOverflow, gist), ולא מצאה כאלה. **היא אינה
   מוכיחה שלא הועתק קוד**, ולכן ה-README אינו קובע זאת.
 - **הקישור למסמך הבריף** (`FunnelIQ_Assignment.html`) נכון רק כל עוד הקובץ ב-repo.
+
+## נספח ז — CP6: ביקורת קריאה של הוראות ה-README (בביצוע; 02.10.2026)
+
+> **סטטוס:** בוצעה קריאה בלבד, ללא commit; ממתינה לביקורת Codex ולאישור המשתמש.
+> ⛔ לא הורץ דבר: לא `clone`, `pytest`, `build_report`, אימות CSV, שרת, ולא נוצר פרויקט
+> Supabase. **הקמה נקייה לא בוצעה ולא תבוצע (D10).** כל שורה למטה היא "נמצא בקריאה",
+> ⛔ לא "הורץ" ולא "אומת".
+
+### ז1. מה נקרא מול מה
+| הוראה או טענה ב-README | נקרא מול | נמצא בקריאה |
+|---|---|---|
+| `conda env create -f environment.yml` + `conda activate pro1_FunnelIQ` | `environment.yml` (`name: pro1_FunnelIQ`, build strings של Windows) | תואם |
+| venv + `pip install -r requirements.txt` | `requirements.txt` (גרסאות מוצמדות, Python 3.12 בכותרת) | תואם |
+| `schema.sql` על פרויקט חדש וריק, פעם אחת | כותרת `schema.sql` ("run ONCE on an EMPTY project", "Not idempotent") | תואם |
+| `schema.sql` יוצר טבלה, RLS, grants ו-views | `schema.sql`: `create table`, `enable row level security`, policy, `grant`/`revoke`, שני `create view` | תואם |
+| `.env` משלוש משתנים, מוחרג מ-git | `.env.example` (שלוש שמות), `.gitignore` | תואם |
+| `python scripts/load_data.py` | docstring ו-`--csv` ב-`load_data.py`; `DEFAULT_CSV` = שורש ה-repo; יציאה (3) על SHA שונה; upsert על `source_row_id` | תואם |
+| `python scripts/create_users.py`, סיסמה בקשה אינטראקטיבית, משתמש `noorg` נדחה ב-403 | `create_users.py` (`getpass`, שני משתמשי דמו); `auth.py:143-144` (403 כשאין `organization`) | תואם |
+| `uvicorn app.main:app --reload` בכתובת `localhost:8000` | `main.py` (`app.mount("/", StaticFiles)`); `auth.py` קורא `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` מהסביבה, ו-`main.py` מפעיל `load_dotenv()` | תואם |
+| שבעה נתיבי API | `predict.py` (4×POST + `GET` סימולטור), `insights.py` (2×GET), מול `docs/api/openapi.json` | תואם (שבעה) |
+| דפדפן מחזיק רק מפתח publishable; secret רק בסקריפטים | `auth.py:10` (לא נוגע ב-secret), `render.yaml` (בלי `SUPABASE_SECRET_KEY`), `app.js:205` (`signInWithPassword`) | תואם |
+| JWT של המשתמש לכל קריאה כך ש-RLS נאכף | `supabase_client.py` (`get_user_client`, `_build_client(token)`) | תואם |
+| `render.yaml`: free, Frankfurt, build/start, משתני סביבה בדשבורד | `render.yaml` | תואם |
+| CI מריץ `python -m pytest -q` על 3.12 | `.github/workflows/ci.yml` | תואם |
+| Credits: גרסאות | `requirements.txt`, `index.html` (`supabase-js@2.58.0`) | תואם |
+| cold start 42.77 שניות, 15 דקות, זיכרון לא נמדד | `PHASE12.md` P12-D8/D13 | תואם למקור התיעודי (⛔ לא נמדד מחדש) |
+
+### ז2. ממצאים
+1. **סתירה בקוד (תוקנה בהוראת המשתמש, 02.10.2026).** כותרת `schema.sql` (שורות 29–30) ו-
+   הערת `tests/test_schema_sql.py` (שורה 21) טענו שההרצה על פרויקט נקי "מאומתת ב-CP6".
+   אחרי D10 זה היה שקר. שתיהן אומרות עכשיו שההרצה על פרויקט נקי לא בוצעה ולא תבוצע
+   בפאזה 13 (D4 ו-D10). שינוי בהערות בלבד, ⛔ בלי שינוי בקוד או בהצהרות; ⛔ לא הורצה
+   בדיקה.
+2. **חסר ב-README: "מתוך שורש ה-repo".** הפקודות משתמשות בנתיבים יחסיים
+   (`environment.yml`, `requirements.txt`, `scripts/...`, `app.main:app`), ולכן הן נכונות
+   רק כשמריצים אותן משורש ה-repo. נוספה הנחיה בראש צעדי ההקמה ב-README.
+3. **B65 נשענת על ראיה צרה.** ה-README כבר אינו קובע שלא הועתק קוד (נמחק אחרי ממצא
+   קודם), והסריקה של CP0 (א4) מוגבלת. מה שנשאר: טבלת Credits עם גרסה ורישיון, והודעת
+   MIT של `supabase-js`. ⚠ הדרישה ב-B65 היא "note snippets from docs or tutorials";
+   ה-README לא מציין כלום על קטעים מועתקים, לא לחיוב ולא לשלילה. ראיית CP10 מוגבלת
+   בהתאם (ר' למטה, תכנון CP10).
+4. **B1 מכוסה ב-README:** סקירה, ארכיטקטורה (Mermaid), הקמה מקומית, URL חי. התיאור של
+   `/health`, `/api/config` ו-`/api/me` אינו ב-README (אינו נדרש).
+
+### ז3. מה זה אומר לדרישות (⛔ בלי שינוי סטטוס ב-CP6)
+- **B1:** ה-README מכיל את ארבעת הרכיבים שהדרישה מונה. נבדק בקריאה.
+- **B6:** `schema.sql` קיים; ראיות לפי D4/D10 (סטטית + פאזה 3). הערות ה-`schema.sql` ובדיקתו, שטענו לאימות ב-CP6, תוקנו (ממצא 1).
+- **B60:** פתוחה, ⛔ לא נבדקה בניסוי. הצמדת התלויות נקראה ב-`requirements.txt`; ההקמה לא בוצעה.
+- **B65:** ר' ממצא 3.
 

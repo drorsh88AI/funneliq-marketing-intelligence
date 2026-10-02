@@ -17,8 +17,8 @@ changing the catalog filter, the target, or adding a statement inside the block
 fails the test.
 
 It does NOT prove the file RUNS or that the catalog query is semantically
-right. That is verified by running it on a clean Supabase project
-(PHASE13.md CP6). A new migration file, a change to a migration's statements,
+right. Running it on a clean Supabase project has not been done and will not
+be done in phase 13 (PHASE13.md, D4 and D10). A new migration file, a change to a migration's statements,
 or a change to the revoke signature fails this test until schema.sql is
 reviewed -- that is the point. A change to a comment or to formatting does not
 necessarily fail it: statements are compared after comments and whitespace are

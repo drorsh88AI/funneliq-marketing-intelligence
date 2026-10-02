@@ -26,8 +26,8 @@
 -- this file stays derivable from the migrations (so an added migration file,
 -- or a change to a migration's statements, fails the test until this file is
 -- reviewed; a change to a comment or to formatting does not necessarily fail
--- it). It does NOT execute SQL. Running this file on a clean project is verified separately
--- (docs/planning/PHASE13.md, CP6).
+-- it). It does NOT execute SQL. Running this file on a clean project has not been done
+-- and will not be done in phase 13 (docs/planning/PHASE13.md, D4 and D10).
 
 -- ---------------------------------------------------------------------------
 -- The table. Every numeric column is `integer` (measured against the CSV, not

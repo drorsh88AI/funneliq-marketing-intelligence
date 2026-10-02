@@ -65,6 +65,9 @@ this repository. Put your copy in the repository root. `scripts/load_data.py` re
 load a file whose SHA-256 differs from
 `8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa`.
 
+**Run every command below from the repository root**, because the paths in them
+(`environment.yml`, `requirements.txt`, `scripts/...`, `app.main:app`) are relative.
+
 1. **Environment.**
    - **Windows:** `conda env create -f environment.yml`, then `conda activate pro1_FunnelIQ`.
      This file is meant for Windows (it pins Windows build strings).
