@@ -16,6 +16,8 @@ silently serve something else.
   attribute byte-for-byte before this file was committed (`openssl
   dgst -sha384` on the downloaded file).
 - **License:** MIT (`@supabase/supabase-js`, https://github.com/supabase/supabase-js/blob/master/LICENSE).
+  The license text and copyright line of this exact version are in `supabase-js.LICENSE` next to
+  this file (copied from upstream's `LICENSE` at tag `v2.58.0`).
   Per CLAUDE.md's own locked "Credit what you borrow" decision (`B65`):
   this notice, the upstream repository link, the exact version, and the
   verified hash together constitute that credit for this borrowed file.

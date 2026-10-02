@@ -1,0 +1,28 @@
+{
+  "label_definition": "referred=Yes AND upsell=1 AND ltv_months>=34 (app.features.super_customer_label)",
+  "n_train": 2024,
+  "population_definition": "purchased=1 (scripts.train.task_population('P4S')), train part only",
+  "source_sha256": "8ac67d50a6f96a8ece8abd770a5a1901b34036a5c98656455eb04cee07d707aa",
+  "split": {
+    "function": "scripts.train.split_task",
+    "part": "train"
+  },
+  "task": "P4S",
+  "tiers": {
+    "High": {
+      "n": 621,
+      "n_super": 0,
+      "rate": 0.0
+    },
+    "Low": {
+      "n": 362,
+      "n_super": 0,
+      "rate": 0.0
+    },
+    "Mid": {
+      "n": 1041,
+      "n_super": 338,
+      "rate": 0.32468780019212296
+    }
+  }
+}

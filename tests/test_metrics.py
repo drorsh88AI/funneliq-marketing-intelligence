@@ -1380,3 +1380,334 @@ def test_super_customer_profile_matches_spec_locked_numbers():
     assert result["cac_super_mean"] == pytest.approx(990.71, abs=0.01)
     assert result["cac_population_mean"] == pytest.approx(1437.46, abs=0.01)
     assert result["cac_savings_pct"] == pytest.approx(0.311, abs=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# PHASE13.md CP1 -- B22/B23/B24 builders (budget_leads_per_1000,
+# tier_conversion_shape, task_exclusions). Expected values are computed BY
+# HAND in the comments, from the operational fixture above.
+# ---------------------------------------------------------------------------
+def test_budget_leads_per_1000_operational_fixture(operational_df):
+    """Fixture budgets -> median num_leads (A,B,F = 10,10,14; C,G = 20,5;
+    H = 6; D = 40; E = 100), then median * 1000 / budget:
+      500   n=3 median 10   -> 10*1000/500    = 20.0
+      800   n=2 median 12.5 -> 12.5*1000/800  = 15.625
+      1750  n=1 median 6    -> 6*1000/1750    = 3.428571...
+      3000  n=1 median 40   -> 40*1000/3000   = 13.333...
+      10000 n=1 median 100  -> 100*1000/10000 = 10.0
+    The sequence 20, 15.6, 3.4, 13.3, 10 is NOT strictly decreasing (3.4 ->
+    13.3 rises) but ends below where it starts."""
+    result = an.budget_leads_per_1000(operational_df)
+    levels = result["levels"]
+    assert sorted(levels) == [500, 800, 1750, 3000, 10000]
+    assert levels[500] == {"n": 3, "median_num_leads": 10.0, "median_leads_per_1000": 20.0}
+    assert levels[800]["median_leads_per_1000"] == pytest.approx(15.625)
+    assert levels[1750]["median_leads_per_1000"] == pytest.approx(6 * 1000 / 1750)
+    assert levels[3000]["median_leads_per_1000"] == pytest.approx(40 * 1000 / 3000)
+    assert levels[10000]["median_leads_per_1000"] == 10.0
+
+    summary = result["summary"]
+    assert summary["n_levels"] == 5
+    assert (summary["lowest_budget"], summary["highest_budget"]) == (500, 10000)
+    assert summary["leads_per_1000_lowest"] == 20.0
+    assert summary["leads_per_1000_highest"] == 10.0
+    assert summary["budget_multiple"] == 20.0             # 10000 / 500
+    assert summary["median_leads_multiple"] == 10.0       # 100 / 10
+    assert summary["strictly_decreasing"] is False
+    assert summary["direction"] == "decreasing"
+
+
+def _leads_df(rows):
+    """Only the two columns budget_leads_per_1000 reads."""
+    import pandas as pd
+
+    return pd.DataFrame(rows, columns=["ad_budget", "num_leads"])
+
+
+def test_budget_leads_per_1000_strictly_decreasing_case():
+    # 500 -> 13*1000/500 = 26.0 ; 1000 -> 20.0 ; 2000 -> 30*1000/2000 = 15.0
+    result = an.budget_leads_per_1000(_leads_df([(500, 13), (1000, 20), (2000, 30)]))
+    per_1000 = [result["levels"][b]["median_leads_per_1000"] for b in (500, 1000, 2000)]
+    assert per_1000 == [26.0, 20.0, 15.0]
+    assert result["summary"]["strictly_decreasing"] is True
+    assert result["summary"]["direction"] == "decreasing"
+    assert result["summary"]["budget_multiple"] == 4.0                 # 2000 / 500
+    assert result["summary"]["median_leads_multiple"] == pytest.approx(30 / 13)
+
+
+def test_budget_leads_per_1000_equal_levels_are_not_strictly_decreasing():
+    # 500 -> 24.0 (median of 10,14,12 = 12 -> 12*1000/500) ; 1000 -> 20.0 ;
+    # 2000 -> median of 30,50 = 40 -> 20.0 : the last two are EQUAL.
+    df = _leads_df([(500, 10), (500, 14), (500, 12), (1000, 20), (2000, 30), (2000, 50)])
+    result = an.budget_leads_per_1000(df)
+    assert [result["levels"][b]["median_leads_per_1000"] for b in (500, 1000, 2000)] == [24.0, 20.0, 20.0]
+    assert result["summary"]["strictly_decreasing"] is False
+    assert result["summary"]["direction"] == "decreasing"
+
+
+def test_budget_leads_per_1000_increasing_case_is_not_called_decreasing():
+    # 500 -> 5*1000/500 = 10.0 ; 1000 -> 20.0 : more leads per shekel at the top.
+    result = an.budget_leads_per_1000(_leads_df([(500, 5), (1000, 20)]))
+    assert result["summary"]["strictly_decreasing"] is False
+    assert result["summary"]["direction"] == "not_decreasing"
+
+
+def test_budget_leads_per_1000_single_level_and_empty_have_no_trend():
+    single = an.budget_leads_per_1000(_leads_df([(500, 13)]))["summary"]
+    assert single["n_levels"] == 1
+    assert single["strictly_decreasing"] is None and single["direction"] is None
+    assert single["leads_per_1000_lowest"] == 26.0
+
+    empty = an.budget_leads_per_1000(_leads_df([]))
+    assert empty["levels"] == {}
+    assert empty["summary"]["n_levels"] == 0
+    assert empty["summary"]["lowest_budget"] is None
+    assert empty["summary"]["strictly_decreasing"] is None
+
+
+def test_tier_conversion_shape_operational_fixture(operational_df):
+    """Tier rates on the fixture (mean of closed/num_leads per row):
+    Low = A,B,C,F,G = (0.1+0.1+0.1+1/14+0)/5 ~= 0.0742857 ; Mid = D = 0.1 ;
+    High = E = 0.08. Ranking Mid, High, Low; 0.0743 < 0.1 but 0.1 > 0.08, so
+    the rate does NOT rise with the tier. Gap first-to-second =
+    (0.1 - 0.08) * 100 = 2.0 points."""
+    shape = an.tier_conversion_shape(operational_df)
+    assert shape["ranking"] == ["Mid", "High", "Low"]
+    assert shape["best_tier"] == "Mid"
+    assert shape["rates_increase_with_budget"] is False
+    assert shape["best_minus_runner_up_pp"] == pytest.approx(2.0)
+
+
+def _tier_df(low, mid, high):
+    """One row per tier; closed/num_leads is the given rate (num_leads 10)."""
+    import pandas as pd
+
+    rows = []
+    for budget, rate in ((1000, low), (3000, mid), (8000, high)):
+        if rate is not None:
+            rows.append((budget, int(round(rate * 10)), 10))
+    return pd.DataFrame(rows, columns=["ad_budget", "closed", "num_leads"])
+
+
+def test_tier_conversion_shape_rising_case():
+    shape = an.tier_conversion_shape(_tier_df(0.1, 0.2, 0.3))
+    assert shape["ranking"] == ["High", "Mid", "Low"]
+    assert shape["rates_increase_with_budget"] is True
+    assert shape["best_minus_runner_up_pp"] == pytest.approx(10.0)
+
+
+def test_tier_conversion_shape_tie_ranks_lower_budget_tier_first():
+    shape = an.tier_conversion_shape(_tier_df(0.2, 0.2, 0.1))
+    assert shape["ranking"] == ["Low", "Mid", "High"]
+    assert shape["best_minus_runner_up_pp"] == pytest.approx(0.0)
+    assert shape["rates_increase_with_budget"] is False
+
+
+def test_tier_conversion_shape_missing_tier_ranks_nothing():
+    shape = an.tier_conversion_shape(_tier_df(0.1, 0.2, None))
+    assert shape == {
+        "ranking": None,
+        "best_tier": None,
+        "rates_increase_with_budget": None,
+        "best_minus_runner_up_pp": None,
+    }
+
+
+def _exclusions_df(operational_df):
+    """The fixture with two purchased=0 customers:
+      row A -- ltv_months MISSING: a missing target outside every purchased=1
+               population.
+      row B -- every target PRESENT (ltv 12.0, upsell 0, referred No, profit
+               1000.0): the row that makes the purchased filter observable.
+               Without it, dropping the filter from a population rule would
+               change nothing for P2, because A is excluded by its missing
+               target anyway and the COUNT would stay the same.
+    Row G already has ltv_months and cumulative_profit missing."""
+    import pandas as pd
+
+    df = operational_df.copy()
+    df["ltv_months"] = df["ltv_months"].astype("float64")
+    df.loc[df.index[0], "purchased"] = 0
+    df.loc[df.index[0], "ltv_months"] = pd.NA
+    df.loc[df.index[1], "purchased"] = 0
+    return df
+
+
+def test_task_exclusions_known_answers(operational_df):
+    """Fixture rows A..H, with A and B purchased=0 (A also ltv missing), G
+    missing ltv_months and cumulative_profit (rows C..H purchased=1):
+      P2  target ltv missing in A,G = 2 ; candidates (purchased=1) = C..H = 6;
+          population = 6 - G = 5 ; lost 1 ; outside-population = 2 - 1 = 1 (A)
+      P3  upsell never missing ; candidates 6 ; population 6 ; lost 0
+      P4  referred never missing ; same as P3
+      P4S label is comparison-built (never NaN) -> 0 missing targets ;
+          population 6 ; rows with a missing label input in it: G -> 1
+      P6  cumulative_profit missing in G only = 1 ; no purchased filter ->
+          candidates 8 ; population 7 ; lost 1 ; outside 0"""
+    result = an.task_exclusions(_exclusions_df(operational_df))
+    assert set(result) == {"by_task", "totals"}
+    out = result["by_task"]
+    p2, p3, p4, p4s, p6 = (out[k] for k in ("P2", "P3", "P4", "P4S", "P6"))
+
+    assert (p2["n_missing_target"], p2["n_candidates"], p2["n_population"]) == (2, 6, 5)
+    assert (p2["n_lost_to_missing_target"], p2["n_missing_target_outside_population"]) == (1, 1)
+    assert (p3["n_candidates"], p3["n_population"], p3["n_lost_to_missing_target"]) == (6, 6, 0)
+    assert (p4["n_candidates"], p4["n_population"], p4["n_lost_to_missing_target"]) == (6, 6, 0)
+    assert (p4s["n_missing_target"], p4s["n_population"]) == (0, 6)
+    assert p4s["n_missing_label_inputs"] == 1
+    assert (p6["n_missing_target"], p6["n_candidates"], p6["n_population"]) == (1, 8, 7)
+    assert (p6["n_lost_to_missing_target"], p6["n_missing_target_outside_population"]) == (1, 0)
+
+    assert all(v["n_source_rows"] == 8 for v in out.values())
+    assert all(v["n_missing_feature_values"] == 0 for v in out.values())
+    assert result["totals"] == {"n_missing_feature_values": 0}
+    # only P4S reports the label-input count
+    assert all(out[k]["n_missing_label_inputs"] is None for k in ("P2", "P3", "P4", "P6"))
+
+
+def test_task_exclusions_feature_total_is_computed_by_the_builder(operational_df):
+    """The total of missing feature values is the builder's output, not a
+    sum taken while rendering. leads_answered is a model feature of every
+    task and row C (purchased=1, target values present) is in every task's
+    population, so blanking it costs 1 in each of the 5 tasks = 5."""
+    df = operational_df.copy()
+    df["leads_answered"] = df["leads_answered"].astype("float64")
+    df.loc[df.index[2], "leads_answered"] = float("nan")   # row C
+    result = an.task_exclusions(df)
+    assert [result["by_task"][k]["n_missing_feature_values"] for k in ("P2", "P3", "P4", "P4S", "P6")] == [1] * 5
+    assert result["totals"] == {"n_missing_feature_values": 5}
+
+
+def _population_ids(population_by_task):
+    return {task: sorted(map(int, pop.index)) for task, pop in population_by_task.items()}
+
+
+def test_task_population_matches_train_task_population_by_row_identity(operational_df):
+    """analysis.py cannot import scripts.train (train imports analysis), so
+    _task_population() MIRRORS train.task_population()'s rule. This pins the
+    two together BY ROW IDENTITY, not by count: a change to train's rule
+    fails here instead of silently drifting the numbers FINDINGS.md prints.
+    task_exclusions() is built on the same helpers, so its counts follow."""
+    from scripts import train as tr
+
+    df = _exclusions_df(operational_df)
+    tasks = ("P2", "P3", "P4", "P4S", "P6")
+    mine = _population_ids({t: an._task_population(df, t) for t in tasks})
+    theirs = _population_ids({t: tr.task_population(df, t) for t in tasks})
+    assert mine == theirs
+    assert all(len(ids) > 0 for ids in mine.values())
+
+    out = an.task_exclusions(df)["by_task"]
+    for task in tasks:
+        assert out[task]["n_population"] == len(theirs[task]), task
+
+
+def test_the_parity_fixture_detects_a_dropped_purchased_filter(operational_df):
+    """Guards the parity test above against going soft again. Two halves:
+
+    1. With ONLY row A as a non-purchaser (purchased=0, ltv missing), a P2
+       rule that forgets the purchased filter returns the very same rows --
+       A is dropped by its missing target instead -- so neither a count nor
+       an identity comparison could notice. That was the weak fixture.
+    2. Adding row B (purchased=0, every target present) makes the missing
+       filter observable for every task that has it, and a filter wrongly
+       ADDED to P6 observable too."""
+    import pandas as pd
+
+    from app.features import target_values
+
+    def without_purchased_filter(frame, task):
+        return frame[target_values(frame, task).notna()]
+
+    only_a = operational_df.copy()
+    only_a["ltv_months"] = only_a["ltv_months"].astype("float64")
+    only_a.loc[only_a.index[0], "purchased"] = 0
+    only_a.loc[only_a.index[0], "ltv_months"] = pd.NA
+    assert sorted(without_purchased_filter(only_a, "P2").index) == sorted(an._task_population(only_a, "P2").index)
+
+    df = _exclusions_df(operational_df)
+    for task in ("P2", "P3", "P4", "P4S"):
+        assert sorted(without_purchased_filter(df, task).index) != sorted(an._task_population(df, task).index), task
+    wrongly_filtered_p6 = df[(df["purchased"] == 1) & target_values(df, "P6").notna()]
+    assert sorted(wrongly_filtered_p6.index) != sorted(an._task_population(df, "P6").index)
+
+
+def test_findings_md_answers_follow_the_results_branches(tmp_path, monkeypatch):
+    """The three B22/B23/B24 answers choose their sentences from booleans
+    computed in the builders. Flip each and the rendered text must follow --
+    the context layer only formats, it never decides."""
+    import copy
+
+    results, svg_dir = _build_results_and_svgs(tmp_path, monkeypatch)
+    base = an.render_findings_md(results, svg_dir)
+    assert "### כמה שורות לא שלמות, ואיך טיפלנו בהן?" in base
+    assert "### האם יותר תקציב קונה באופן פרופורציונלי יותר לידים?" in base
+    assert "### איזה טייר תקציב מתמיר הכי טוב, והאם זה מפתיע?" in base
+
+    flipped = copy.deepcopy(results)
+    flipped["budget_leads_per_1000"]["summary"]["direction"] = "not_decreasing"
+    flipped["budget_leads_per_1000"]["summary"]["strictly_decreasing"] = None
+    flipped["tier_conversion_shape"]["rates_increase_with_budget"] = True
+    text = an.render_findings_md(flipped, svg_dir)
+    assert "לא נמצאה ירידה במספר הלידים" in text
+    assert "לא באופן פרופורציונלי" not in text
+    assert "לא, זה אינו מפתיע" in text
+
+    inconsistent = copy.deepcopy(results)
+    inconsistent["budget_leads_per_1000"]["summary"]["direction"] = "decreasing"
+    inconsistent["budget_leads_per_1000"]["summary"]["strictly_decreasing"] = False
+    assert "הירידה אינה עקבית בכל הרמות" in an.render_findings_md(inconsistent, svg_dir)
+
+
+def test_findings_md_answers_survive_a_json_round_trip(tmp_path, monkeypatch):
+    """findings.json stores the budget keys as strings. Rendering from a
+    JSON-loaded copy must produce the same text as from the fresh dict."""
+    results, svg_dir = _build_results_and_svgs(tmp_path, monkeypatch)
+    round_tripped = json.loads(json.dumps(results))
+    assert an.render_findings_md(round_tripped, svg_dir) == an.render_findings_md(results, svg_dir)
+
+
+def test_package1_answers_match_locked_real_numbers_and_working_tree_docs(tmp_path):
+    """Real CSV only (skipped in CI): the B22/B23/B24 numbers PHASE13.md CP0
+    measured, plus a full re-run that must reproduce the docs/findings.json
+    and docs/FINDINGS.md files in the WORKING TREE byte for byte. It reads
+    those files from disk; it does not compare against any git commit."""
+    csv_path = ld.DEFAULT_CSV
+    if not csv_path.exists():
+        pytest.skip("real CSV not present (expected in CI)")
+    df = ld.load_and_verify_csv(csv_path)
+
+    lp = an.budget_leads_per_1000(df)
+    assert lp["levels"][500] == {"n": 109, "median_num_leads": 13.0, "median_leads_per_1000": 26.0}
+    assert lp["levels"][20000]["median_leads_per_1000"] == 6.1
+    assert lp["summary"]["n_levels"] == 16
+    assert lp["summary"]["strictly_decreasing"] is True
+    assert lp["summary"]["budget_multiple"] == 40.0
+    assert lp["summary"]["median_leads_multiple"] == pytest.approx(122 / 13)
+
+    shape = an.tier_conversion_shape(df)
+    assert shape["ranking"] == ["Mid", "High", "Low"]
+    assert shape["rates_increase_with_budget"] is False
+
+    ex_result = an.task_exclusions(df)
+    assert ex_result["totals"] == {"n_missing_feature_values": 0}
+    ex = ex_result["by_task"]
+    assert (ex["P2"]["n_missing_target"], ex["P2"]["n_missing_target_outside_population"]) == (4, 4)
+    assert (ex["P2"]["n_lost_to_missing_target"], ex["P2"]["n_population"]) == (0, 3163)
+    assert (ex["P6"]["n_lost_to_missing_target"], ex["P6"]["n_population"]) == (29, 3471)
+    assert all(ex[k]["n_lost_to_missing_target"] == 0 for k in ("P3", "P4", "P4S"))
+    assert all(v["n_missing_feature_values"] == 0 for v in ex.values())
+    assert ex["P4S"]["n_missing_label_inputs"] == 0
+
+    results = an.build_results(df, csv_path)
+    docs = Path(__file__).resolve().parents[1] / "docs"
+    out_json = tmp_path / "findings.json"
+    an.write_findings_json(results, out_json)
+    assert out_json.read_bytes() == (docs / "findings.json").read_bytes()
+
+    svg_dir = tmp_path / "svg"
+    svg_dir.mkdir()
+    an.write_svgs(results, svg_dir)
+    out_md = tmp_path / "FINDINGS.md"
+    an.write_findings_md(results, svg_dir, out_md)
+    assert out_md.read_bytes() == (docs / "FINDINGS.md").read_bytes()

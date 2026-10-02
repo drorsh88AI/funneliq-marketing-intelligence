@@ -30,13 +30,14 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from app.features import budget_tier, target_values  # noqa: E402
 from app.inference import predict_if_in_domain  # noqa: E402
-from scripts.load_data import load_and_verify_csv  # noqa: E402
+from scripts.load_data import load_and_verify_csv, sha256_of  # noqa: E402
 # scripts.train pulls in catboost/lightgbm/xgboost -- imported lazily,
 # inside run_a2() only, so a plain `from scripts.p4s_diagnosis import
 # js_math_round` (e.g. a rounding-only test) never pays for it.
 
 CSV_PATH = REPO_ROOT / "funnel_marketing_data.csv"
 FROZEN_EXAMPLES_PATH = REPO_ROOT / "docs" / "frozen_examples.json"
+A2_JSON_PATH = REPO_ROOT / "docs" / "p4s_a2_train_tiers.json"
 P4S_FIELDS = ["ad_budget", "num_leads", "leads_answered", "followup_1"]
 
 # מ2 -- locked in PHASE12A.md §ג (27.09.2026): manual, valid, NOT a CSV row.
@@ -121,10 +122,14 @@ def run_a1(meta: dict, df) -> None:
               f"n_score<=1={n_at_1}")
 
 
-def run_a2(df) -> None:
+def compute_a2(df) -> dict:
+    """A2 as data: super-customer count and rate per budget tier, TRAIN
+    part of scripts.train.split_task(df, "P4S") only -- never calibration,
+    never Holdout. Pure given df. The population counts are returned for
+    run_a2's printout; build_a2_json deliberately leaves the calibration
+    and Holdout counts out of the committed file."""
     from scripts.train import split_task, task_population
 
-    print("\n=== A2: super-customer rate by budget_tier, TRAIN ONLY (not Holdout) ===")
     parts = split_task(df, "P4S")
     train_ids = set(parts["train"])
     calib_ids = set(parts["calibration"])
@@ -136,20 +141,70 @@ def run_a2(df) -> None:
     train_pop = pop[pop["source_row_id"].isin(train_ids)]
     labels = target_values(train_pop, "P4S")
 
-    print(f"population={len(pop)} train={len(train_pop)} calibration={len(calib_ids)} holdout={len(holdout_ids)}")
+    tiers: dict = {}
     for tier in ("Low", "Mid", "High"):
         tier_mask = train_pop["ad_budget"].apply(budget_tier) == tier
         n = int(tier_mask.sum())
         n_super = int(labels[tier_mask].sum())
-        rate = n_super / n if n else None
-        print(f"  tier={tier:<4} n={n:<5} n_super_customer={n_super:<4} "
+        tiers[tier] = {"n": n, "n_super": n_super, "rate": (n_super / n) if n else None}
+    return {
+        "n_population": int(len(pop)),
+        "n_train": int(len(train_pop)),
+        "n_calibration": len(calib_ids),
+        "n_holdout": len(holdout_ids),
+        "tiers": tiers,
+    }
+
+
+def run_a2(df) -> None:
+    print("\n=== A2: super-customer rate by budget_tier, TRAIN ONLY (not Holdout) ===")
+    a2 = compute_a2(df)
+    print(f"population={a2['n_population']} train={a2['n_train']} "
+          f"calibration={a2['n_calibration']} holdout={a2['n_holdout']}")
+    for tier, row in a2["tiers"].items():
+        rate = row["rate"]
+        print(f"  tier={tier:<4} n={row['n']:<5} n_super_customer={row['n_super']:<4} "
               f"rate={rate if rate is None else round(rate, 4)}")
 
 
+def build_a2_json(df, csv_path: Path) -> dict:
+    """The committed A2 evidence file (PHASE13.md D9). Provenance is part of
+    the file: the CSV's SHA-256, the task, which split part was used, and
+    how the population and the label are defined. No timestamp, library
+    version or local path -- a re-run on the same CSV must give the same
+    bytes. Calibration and Holdout counts are not written: the file is a
+    TRAIN-only description and says nothing about those parts."""
+    a2 = compute_a2(df)
+    return {
+        "task": "P4S",
+        "split": {"function": "scripts.train.split_task", "part": "train"},
+        "population_definition": "purchased=1 (scripts.train.task_population('P4S')), train part only",
+        "label_definition": "referred=Yes AND upsell=1 AND ltv_months>=34 (app.features.super_customer_label)",
+        "source_sha256": sha256_of(Path(csv_path)),
+        "n_train": a2["n_train"],
+        "tiers": a2["tiers"],
+    }
+
+
+def write_a2_json(df, csv_path: Path, out_path: Path) -> None:
+    """Same serialization convention as scripts.analysis.write_findings_json:
+    sorted keys, indent 2, LF newlines, allow_nan=False."""
+    out_path = Path(out_path)
+    with out_path.open("w", encoding="utf-8", newline="\n") as f:
+        json.dump(build_a2_json(df, csv_path), f, sort_keys=True, indent=2, allow_nan=False, ensure_ascii=False)
+        f.write("\n")
+
+
 def main() -> None:
-    meta = json.loads((REPO_ROOT / "models" / "P4S.meta.json").read_text(encoding="utf-8"))
     df = load_and_verify_csv(CSV_PATH)  # already adds a 1-based "source_row_id" column
 
+    if "--write-a2-json" in sys.argv:
+        # Evidence file only (PHASE13.md D9): no A1, no printout.
+        write_a2_json(df, CSV_PATH, A2_JSON_PATH)
+        print(f"wrote {A2_JSON_PATH}")
+        return
+
+    meta = json.loads((REPO_ROOT / "models" / "P4S.meta.json").read_text(encoding="utf-8"))
     run_a1(meta, df)
     run_a2(df)
 

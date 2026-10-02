@@ -51,7 +51,12 @@ import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.features import budget_tier, super_customer_label  # noqa: E402
+from app.features import (  # noqa: E402
+    budget_tier,
+    model_feature_columns,
+    super_customer_label,
+    target_values,
+)
 from scripts.data_contract import (  # noqa: E402
     EXPECTED_COLUMNS,
     NOT_NULL_INT_COLUMNS,
@@ -254,6 +259,173 @@ def ad_budget_leads_curve(df: pd.DataFrame) -> dict:
             "median_num_leads": float(group["num_leads"].median()),
         }
     return out
+
+
+def budget_leads_per_1000(df: pd.DataFrame) -> dict:
+    """Median leads per 1,000 shekels of ad_budget, per distinct ad_budget
+    value -- PHASE13.md D3 / B23 ("does more budget buy proportionally
+    more leads, or do you see diminishing returns?"). If budget bought
+    leads proportionally this number would be constant across levels.
+
+    Built on ad_budget_leads_curve() (same n and same median_num_leads,
+    so the two results can never disagree). Within one level ad_budget is
+    constant, so median(num_leads / budget) == median(num_leads) / budget
+    exactly; the division is written as median * 1000 / budget to keep
+    round values exact (13 * 1000 / 500 == 26.0).
+
+    DESCRIPTIVE ONLY: a statement about leads, not about profit and not
+    about why. The profit side of the question belongs to P6 (B53a)."""
+    curve = ad_budget_leads_curve(df)
+    levels = {
+        budget: {
+            "n": point["n"],
+            "median_num_leads": point["median_num_leads"],
+            "median_leads_per_1000": point["median_num_leads"] * 1000 / budget,
+        }
+        for budget, point in curve.items()
+    }
+    budgets = sorted(levels)
+    summary: dict = {
+        "n_levels": len(budgets),
+        "lowest_budget": None,
+        "highest_budget": None,
+        "leads_per_1000_lowest": None,
+        "leads_per_1000_highest": None,
+        "budget_multiple": None,
+        "median_leads_multiple": None,
+        "strictly_decreasing": None,
+        "direction": None,
+    }
+    if budgets:
+        low, high = budgets[0], budgets[-1]
+        summary["lowest_budget"] = low
+        summary["highest_budget"] = high
+        summary["leads_per_1000_lowest"] = levels[low]["median_leads_per_1000"]
+        summary["leads_per_1000_highest"] = levels[high]["median_leads_per_1000"]
+        summary["budget_multiple"] = high / low
+        if levels[low]["median_num_leads"]:
+            summary["median_leads_multiple"] = (
+                levels[high]["median_num_leads"] / levels[low]["median_num_leads"]
+            )
+    if len(budgets) >= 2:
+        per_1000 = [levels[b]["median_leads_per_1000"] for b in budgets]
+        summary["strictly_decreasing"] = all(
+            later < earlier for earlier, later in zip(per_1000, per_1000[1:])
+        )
+        summary["direction"] = (
+            "decreasing" if per_1000[-1] < per_1000[0] else "not_decreasing"
+        )
+    return {"levels": levels, "summary": summary}
+
+
+_TIER_ORDER = ("Low", "Mid", "High")
+
+
+def tier_conversion_shape(df: pd.DataFrame) -> dict:
+    """Which budget tier converts best, and whether conversion rises with
+    the tier -- PHASE13.md D3 / B24 ("which budget tier converts best --
+    and does that surprise you?"). Built on budget_tiers() so the rates
+    are the very same numbers FINDINGS.md's table shows.
+
+    The selections live here, not in the FINDINGS.md context layer, which
+    only formats (PHASE5.md D6): ranking, best tier, the gap between the
+    first two, and whether the rate strictly rises Low -> Mid -> High.
+    Ties rank the lower-budget tier first. Any undefined tier rate makes
+    every field None -- nothing is ranked on a missing number.
+
+    DESCRIPTIVE ONLY: says nothing about why a tier converts better."""
+    bt = budget_tiers(df)
+    rates = {tier: bt[tier]["conversion_rate"] for tier in _TIER_ORDER}
+    if any(rate is None for rate in rates.values()):
+        return {
+            "ranking": None,
+            "best_tier": None,
+            "rates_increase_with_budget": None,
+            "best_minus_runner_up_pp": None,
+        }
+    ranking = sorted(_TIER_ORDER, key=lambda tier: (-rates[tier], _TIER_ORDER.index(tier)))
+    return {
+        "ranking": ranking,
+        "best_tier": ranking[0],
+        "rates_increase_with_budget": rates["Low"] < rates["Mid"] < rates["High"],
+        "best_minus_runner_up_pp": (rates[ranking[0]] - rates[ranking[1]]) * 100,
+    }
+
+
+_EXCLUSION_TASKS = ("P2", "P3", "P4", "P4S", "P6")
+
+
+def _task_candidates(df: pd.DataFrame, task: str) -> pd.DataFrame:
+    """Rows a task may train on BEFORE the missing-target rule: P2/P3/P4/P4S
+    keep purchased == 1, P6 keeps every row. Mirrors scripts/train.py's
+    task_population() (see task_exclusions)."""
+    return df if task == "P6" else df[df["purchased"] == 1]
+
+
+def _task_population(df: pd.DataFrame, task: str) -> pd.DataFrame:
+    """The rows the task actually trains on: the candidates minus those whose
+    target is missing. The same rule as scripts/train.py's task_population(),
+    which tests/test_metrics.py compares against BY ROW IDENTITY."""
+    candidates = _task_candidates(df, task)
+    return candidates[target_values(df, task).loc[candidates.index].notna()]
+
+
+def task_exclusions(df: pd.DataFrame) -> dict:
+    """Per modelling task, how many rows the training population loses to
+    a missing target -- PHASE13.md D3 / B22 ("how many rows are
+    incomplete, and how did you handle them?"), part (b): what is
+    excluded per task, measured from the code's own rule rather than
+    quoted from SPEC.
+
+    MIRRORS scripts/train.py's task_population() (P2/P3/P4/P4S keep
+    purchased == 1, P6 keeps every row, and every task drops rows whose
+    target is missing). It cannot import it: train.py imports this
+    module. tests/test_metrics.py pins the two together with a parity
+    test, so a change to train's rule fails a test instead of silently
+    drifting this one.
+
+    n_missing_target_outside_population counts missing targets that fall
+    outside the population anyway (e.g. ltv_months missing on a
+    purchased=0 row, which P2 never trains on), so they cost nothing.
+
+    Shape: {"by_task": {task: {...}}, "totals": {...}}. The totals are
+    computed HERE, not in FINDINGS.md's context layer, which only formats
+    (PHASE5.md D6)."""
+    by_task: dict = {}
+    for task in _EXCLUSION_TASKS:
+        n_missing_target = int(target_values(df, task).isna().sum())
+        candidates = _task_candidates(df, task)
+        population = _task_population(df, task)
+        n_lost = len(candidates) - len(population)
+        by_task[task] = {
+            "n_source_rows": int(len(df)),
+            "n_missing_target": n_missing_target,
+            "n_candidates": int(len(candidates)),
+            "n_population": int(len(population)),
+            "n_lost_to_missing_target": int(n_lost),
+            "n_missing_target_outside_population": n_missing_target - int(n_lost),
+            "n_missing_feature_values": int(
+                population[model_feature_columns(task)].isna().sum().sum()
+            ),
+            # P4S only: its target is a comparison-built label
+            # (super_customer_label), which is never NaN -- a row missing
+            # referred / upsell / ltv_months silently becomes "not a
+            # super-customer". So n_missing_target is 0 by construction and
+            # says nothing about these inputs; this counts them directly.
+            "n_missing_label_inputs": (
+                int(population[["referred", "upsell", "ltv_months"]].isna().any(axis=1).sum())
+                if task == "P4S"
+                else None
+            ),
+        }
+    return {
+        "by_task": by_task,
+        "totals": {
+            "n_missing_feature_values": sum(
+                v["n_missing_feature_values"] for v in by_task.values()
+            ),
+        },
+    }
 
 
 # The funnel stage chain, cumulative-sum dropout rate at each step
@@ -603,6 +775,10 @@ RESULT_BUILDERS = {
     "m4_profit_by_tier": m4_profit_by_tier,
     "m5_outliers": m5_outliers,
     "m6_duplicate_profile": m6_duplicate_profile,
+    # PHASE13.md D3 (B22/B23/B24) -- additive: the keys above are untouched.
+    "budget_leads_per_1000": budget_leads_per_1000,
+    "tier_conversion_shape": tier_conversion_shape,
+    "task_exclusions": task_exclusions,
 }
 
 
@@ -923,6 +1099,25 @@ def _num_or_na(value: float | None, decimals: int) -> str:
     return "לא זמין" if value is None else f"{value:,.{decimals}f}"
 
 
+def _trim_num(value: float | None, decimals: int) -> str:
+    """Display of an already-computed float without a trailing ".0"
+    (40.0 -> "40", 9.3846 -> "9.4"), or "לא זמין" for None. Formatting
+    only, same principle as _num_or_na."""
+    if value is None:
+        return "לא זמין"
+    text = f"{value:,.{decimals}f}"
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+_TASK_EXCLUSION_LABELS = {
+    "P2": "`ltv_months`",
+    "P3": "`upsell`",
+    "P4": "`referred`",
+    "P4S": "תווית סופר-לקוח (נגזרת)",
+    "P6": "`cumulative_profit`",
+}
+
+
 def _read_svg_description(svg_path: Path) -> str:
     """Reads the accessible Hebrew <desc> back out of an already-rendered
     SVG file (written by write_svgs) -- reused as FINDINGS.md's own
@@ -945,6 +1140,72 @@ def _findings_context(results: dict, svg_dir: Path) -> dict[str, str]:
     m3, m4, m5 = results["m3_top_decile"], results["m4_profit_by_tier"], results["m5_outliers"]
     sm = results["source_metadata"]
     zrs = m2["zero_rate_by_slice"]
+    lpk, tcs = results["budget_leads_per_1000"], results["tier_conversion_shape"]
+    tex, tex_totals = results["task_exclusions"]["by_task"], results["task_exclusions"]["totals"]
+    lps = lpk["summary"]
+
+    # B22 -- one markdown row per modelling task, straight from task_exclusions.
+    task_rows = "\n".join(
+        f"| {task} | {_TASK_EXCLUSION_LABELS[task]} | {tex[task]['n_missing_target']} | "
+        f"{tex[task]['n_lost_to_missing_target']} | {_comma(tex[task]['n_population'])} | "
+        f"{tex[task]['n_missing_feature_values']} |"
+        for task in _EXCLUSION_TASKS
+    )
+
+    # B23 -- the table, one row per observed ad_budget level (keys are int
+    # in a fresh results dict and str after a JSON round trip, hence key=int).
+    lp_rows = "\n".join(
+        f"| ₪{_comma(int(budget))} | {_comma(point['n'])} | "
+        f"{_num_or_na(point['median_num_leads'], 1)} | "
+        f"{_num_or_na(point['median_leads_per_1000'], 2)} |"
+        for budget, point in sorted(lpk["levels"].items(), key=lambda kv: int(kv[0]))
+    )
+    lp_low = _num_or_na(lps["leads_per_1000_lowest"], 1)
+    lp_high = _num_or_na(lps["leads_per_1000_highest"], 1)
+    lp_low_budget = "לא זמין" if lps["lowest_budget"] is None else _comma(int(lps["lowest_budget"]))
+    lp_high_budget = "לא זמין" if lps["highest_budget"] is None else _comma(int(lps["highest_budget"]))
+    if lps["direction"] == "decreasing":
+        lp_answer = "לא באופן פרופורציונלי. ככל שהתקציב גדל, מספר הלידים לכל ₪1,000 יורד."
+        lp_comparison = (
+            "אילו התקציב קנה לידים באופן פרופורציונלי, מספר הלידים לכל ₪1,000 היה קבוע בכל הרמות. "
+            f"בפועל הוא יורד מ-{lp_low} ברמה של ₪{lp_low_budget} ל-{lp_high} ברמה של ₪{lp_high_budget}: "
+            f"תקציב גדול פי {_trim_num(lps['budget_multiple'], 1)} מניב חציון לידים גדול פי "
+            f"{_trim_num(lps['median_leads_multiple'], 1)} בלבד."
+        )
+    elif lps["direction"] == "not_decreasing":
+        lp_answer = "לא נמצאה ירידה במספר הלידים לכל ₪1,000 בין הרמה הנמוכה ביותר לגבוהה ביותר."
+        lp_comparison = (
+            f"מספר הלידים לכל ₪1,000 הוא {lp_low} ברמה של ₪{lp_low_budget} "
+            f"ו-{lp_high} ברמה של ₪{lp_high_budget}."
+        )
+    else:
+        lp_answer = lp_comparison = "לא זמין"
+    if lps["strictly_decreasing"] is True:
+        lp_consistency = (
+            f"הירידה עקבית: בכל אחת מ-{lps['n_levels']} רמות התקציב, מספר הלידים לכל ₪1,000 "
+            "נמוך מזה שברמה שלפניה."
+        )
+    elif lps["strictly_decreasing"] is False:
+        lp_consistency = "הירידה אינה עקבית בכל הרמות: ר' הטבלה."
+    else:
+        lp_consistency = ""
+
+    # B24 -- ranking and the "does it surprise" sentence, from tier_conversion_shape.
+    if tcs["ranking"] is None:
+        tier_names = ["לא זמין"] * 3
+        tier_pcts = ["לא זמין"] * 3
+    else:
+        tier_names = list(tcs["ranking"])
+        tier_pcts = [_pct_from_fraction(bt[name]["conversion_rate"], 1) for name in tier_names]
+    if tcs["rates_increase_with_budget"] is False:
+        tier_surprise = (
+            "כן, זה מפתיע ביחס לציפייה הפשוטה שתקציב גדול יותר ימיר טוב יותר: "
+            "שיעור ההמרה אינו עולה עם הטייר, מ-Low ל-Mid ול-High."
+        )
+    elif tcs["rates_increase_with_budget"] is True:
+        tier_surprise = "לא, זה אינו מפתיע: שיעור ההמרה עולה מטייר לטייר, מ-Low ל-Mid ול-High."
+    else:
+        tier_surprise = "לא זמין"
 
     return {
         "pop_full": _comma(mv["n_rows"]),
@@ -967,6 +1228,30 @@ def _findings_context(results: dict, svg_dir: Path) -> dict[str, str]:
         "dup_rows": str(dup["n_duplicate_rows"]),
         "dup_groups": str(dup["n_groups"]),
         "budget_distinct_n": str(len(results["ad_budget_leads_curve"])),
+
+        "task_exclusion_rows": task_rows,
+        "p2_missing": str(tex["P2"]["n_missing_target"]),
+        "p2_outside": str(tex["P2"]["n_missing_target_outside_population"]),
+        "p2_lost": str(tex["P2"]["n_lost_to_missing_target"]),
+        "p6_missing": str(tex["P6"]["n_missing_target"]),
+        "p6_lost": str(tex["P6"]["n_lost_to_missing_target"]),
+        "p6_population": _comma(tex["P6"]["n_population"]),
+        "p4s_label_missing": str(tex["P4S"]["n_missing_label_inputs"]),
+        "feature_missing_total": str(tex_totals["n_missing_feature_values"]),
+
+        "lp_answer": lp_answer,
+        "lp_comparison": lp_comparison,
+        "lp_consistency": lp_consistency,
+        "lp_rows": lp_rows,
+
+        "tier_best_name": tier_names[0],
+        "tier_best_pct": tier_pcts[0],
+        "tier_second_name": tier_names[1],
+        "tier_second_pct": tier_pcts[1],
+        "tier_third_name": tier_names[2],
+        "tier_third_pct": tier_pcts[2],
+        "tier_gap_pp": _num_or_na(tcs["best_minus_runner_up_pp"], 1),
+        "tier_surprise": tier_surprise,
 
         "corr_ltv": f"{corr['ltv_months']:.2f}",
         "corr_upsell": f"{corr['upsell']:.2f}",
@@ -1110,6 +1395,61 @@ $desc_ad_budget
 ![Correlations with cumulative_profit](correlations_cumulative_profit.svg)
 
 $desc_corr
+
+## חבילה 1 — תשובות לשלוש שאלות הבריף (אוכלוסייה: $pop_full, dataset description)
+
+### כמה שורות לא שלמות, ואיך טיפלנו בהן?
+
+**כמה.** $missing_any מתוך $pop_full השורות אינן שלמות: ב-$missing_ltv חסר
+`ltv_months`, וב-$missing_profit חסר `cumulative_profit`.
+
+**מה נשמר במקור.** אף שורה לא נמחקה. `scripts/load_data.py` ממיר חסר ל-NULL
+ואינו מסיר שורות, וכל ממצא במסמך זה מציין את האוכלוסייה שעליה חושב.
+
+**מה קורה באימון.** בכל משימת מידול מוסרות רק שורות שהיעד שלהן חסר, ולכל
+משימה בנפרד. המשימות P2, P3, P4 ו-P4S מתאמנות על רוכשים בלבד (`purchased=1`),
+ו-P6 על כל הקובץ. הטבלה נמדדת מהנתונים בעזרת כלל האוכלוסייה של
+`scripts/train.py`, ולא מצוטטת מהתכנון:
+
+| משימה | יעד | חסרים ביעד בקובץ | שורות שהוסרו בגלל חסר ביעד | אוכלוסייה | חסרים בפיצ'רים |
+|---|---|---|---|---|---|
+$task_exclusion_rows
+
+- **P2:** `ltv_months` חסר ב-$p2_missing שורות; מתוכן $p2_outside נמצאות מחוץ
+  לאוכלוסיית P2 (שורות עם `purchased=0`), ו-$p2_lost הוסרו.
+- **P4S:** התווית נבנית מהשוואות (`referred`, `upsell`, `ltv_months`), ולכן היא
+  אינה חסרה לעולם, והאפס בשורת P4S נובע מההגדרה ולא ממדידה. שורה שחסר בה אחד
+  משדות התווית מסווגת בשקט כ"לא סופר-לקוח"; באוכלוסיית P4S יש
+  $p4s_label_missing שורות כאלה.
+- **P6:** `cumulative_profit` חסר ב-$p6_missing שורות, ו-$p6_lost מהן הוסרו;
+  $p6_population שורות נשארות באוכלוסיית P6.
+- **פיצ'רים:** סך החסרים בפיצ'רים בכל אוכלוסיות האימון הוא
+  $feature_missing_total. לפיכך אין imputation בצינורות האימון: `PHASE6.md`
+  סגר את הסעיף כ"לא נדרש, נמדד".
+
+### האם יותר תקציב קונה באופן פרופורציונלי יותר לידים?
+
+**התשובה: $lp_answer** זהו תיאור של הקובץ, ולא טענה על רווח או על סיבתיות.
+
+$lp_comparison $lp_consistency
+
+| `ad_budget` | n | חציון `num_leads` | חציון לידים לכל ₪1,000 |
+|---|---|---|---|
+$lp_rows
+
+⚠ הטבלה אינה אומרת אם תקציב גדול משתלם כלכלית. זו שאלת הרווח, והיא נענית
+בחבילה 6. היא גם אינה מסבירה *מדוע* הלידים גדלים לאט מהתקציב.
+
+### איזה טייר תקציב מתמיר הכי טוב, והאם זה מפתיע?
+
+**התשובה: $tier_best_name**, עם שיעור המרה של $tier_best_pct%, לפני
+$tier_second_name ($tier_second_pct%) ו-$tier_third_name ($tier_third_pct%).
+ההפרש בין הראשון לשני הוא $tier_gap_pp נקודות אחוז.
+
+**האם זה מפתיע?** $tier_surprise
+
+⚠ תיאור בלבד. הקובץ אינו מראה אם ההפרש נובע מגודל התקציב עצמו או מהרכב
+הקמפיינים בכל טייר, ולכן אין כאן הסבר סיבתי.
 
 ## חבילה 5 — נשירה במשפך, calls_to_closed (אוכלוסייה: $pop_full / $pop_closed, dataset description)
 
