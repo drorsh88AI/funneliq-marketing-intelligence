@@ -52,7 +52,7 @@ ${leads_per_1000_lowest} ל-${leads_per_1000_highest}: תקציב גדול פי 
 ### שיעור המרה לפי טייר
 ![Conversion rate by budget tier](docs/budget_tier_conversion.svg)
 
-**Mid ממיר הכי טוב** (${conv_mid_pct}%), לפני High (${conv_high_pct}%) ו-Low
+**הטייר Mid ממיר הכי טוב** (${conv_mid_pct}%), לפני High (${conv_high_pct}%) ו-Low
 (${conv_low_pct}%), הפרש של ${conv_gap_pp} נקודות אחוז. **זה מפתיע** ביחס לציפייה שתקציב
 גדול ימיר טוב יותר. הרווח הממוצע לרשומה מתיישר עם זה: ₪${profit_mean_mid} ב-Mid לעומת
 ₪${profit_mean_high} ב-High ו-₪${profit_mean_low} ב-Low.
@@ -117,12 +117,12 @@ ${leads_per_1000_lowest} ל-${leads_per_1000_highest}: תקציב גדול פי 
 
 ## 4. ציון לקוח-על (P4 ו-P4S)
 
-- **P4 (נטייה להפניה):** נבחר מודל **לוגיסטי** על פני CatBoost לפי כלל One-SE ופשטות:
+- **המודל P4 (נטייה להפניה):** נבחר מודל **לוגיסטי** על פני CatBoost לפי כלל One-SE ופשטות:
   ROC-AUC ב-CV ${p4_logistic_cv_auc} מול ${p4_cat_cv_auc}, הפרש בתוך שגיאת התקן. על
   ה-Holdout: ROC-AUC ${p4_hold_auc}, Accuracy ${p4_hold_acc_pct}% (רוב: ${p4_majority_cv_pct}%).
   ניתוח רגישות על אוכלוסייה רחבה יותר (${p4_all_n} שורות) נותן ${p4_all_auc}; הוא
   למחקר בלבד, ו-${p4s_hold_n} שורות ה-Holdout לא היו חלק מהאימון.
-- **P4S (הציון 0–100):** לקוח-על = הופנה **וגם** עשה upsell **וגם** LTV ≥ 34. מודל
+- **המודל P4S (הציון 0–100):** לקוח-על = הופנה **וגם** עשה upsell **וגם** LTV ≥ 34. מודל
   CatBoost ייעודי, כפי שהבריף דורש; לפי ה-CV הלוגיסטי היה מעט עדיף (${p4s_logistic_cv_auc}
   מול ${p4s_cat_cv_auc}), והבחירה ב-CatBoost היא עמידה מכוונת בדרישת הבריף.
 
