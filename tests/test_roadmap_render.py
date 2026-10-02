@@ -118,3 +118,18 @@ def test_planning_summary_does_not_call_gate_13_to_14_open_while_13_executes():
     generic_at = fn.index("שער ${current.num}→${next.num}")
     assert branch_at < generic_at
     assert "מוקפאת עד סגירת 13" in fn[branch_at:generic_at]
+
+
+def test_doc_link_rewrite_is_scoped_to_the_project_pages_site():
+    """פאזה 14 (D7): הפונקציה פועלת רק בכתובת ה-Pages של הפרויקט, ממירה רק
+    .md/.py/.json, ורצה גם על קישורים שנוצרו אחרי הרינדור (MutationObserver)."""
+    src = _source()
+    assert "host !== 'drorsh88ai.github.io'" in src
+    assert "pathname.startsWith('/funneliq-marketing-intelligence/')" in src
+    assert r"\.(?:md|py|json)" in src
+    assert "new MutationObserver(rewriteDocLinks)" in src
+
+
+def test_nojekyll_exists_and_is_empty():
+    nojekyll = ROADMAP.parent / ".nojekyll"
+    assert nojekyll.is_file() and nojekyll.stat().st_size == 0
