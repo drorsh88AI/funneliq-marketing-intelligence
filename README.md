@@ -24,6 +24,13 @@ reported there only, not here. The brief this project follows is
 
 ## Architecture
 
+In words: the browser signs the user in with Supabase Auth and receives a token. It sends that
+token to the FastAPI app, which reads the data from the Supabase database using the same token
+(so row-level security applies) and loads the committed model files to compute predictions. Two
+local scripts load the dataset and create the demo users, using a secret key. That key is used
+only by those two scripts, run locally: it is never sent to the browser and never set on the
+deployed service. The diagram below shows the same flow.
+
 ```mermaid
 flowchart LR
   B[Browser<br/>static HTML/JS, Hebrew RTL] -- "email + password" --> A[Supabase Auth]
