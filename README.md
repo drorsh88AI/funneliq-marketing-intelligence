@@ -149,8 +149,6 @@ records the source URL, version and hash.
 | Playwright (+ pytest-playwright) | 1.63.0 (0.9.0) | not checked | Local browser tests (`requirements-e2e.txt`) |
 | Stitch | — | not checked | Reference screen designs in `docs/design/` |
 
-No code in this repository was copied from a tutorial or forum answer.
-
 ## How it was built
 
 This project was built with AI assistance: **Claude Code** wrote and edited code, tests and
