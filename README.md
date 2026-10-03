@@ -1,7 +1,7 @@
 # FunnelIQ
 
-**Presentation:** [`docs/presentation/FunnelIQ.pptx`](docs/presentation/FunnelIQ.pptx) — a short
-Hebrew slide deck for the course instructor (PowerPoint; GitHub does not preview it, so download it to open).
+**Presentation:** [`FunnelIQ.ppsx`](FunnelIQ.ppsx) — a short
+Hebrew slide deck for the course instructor (PowerPoint slideshow; GitHub does not preview it, so download it to open).
 
 A login-gated marketing-intelligence tool for a fictional agency, Northbound Media. It
 answers the founder's five questions from one dataset of 3,500 campaign records:
