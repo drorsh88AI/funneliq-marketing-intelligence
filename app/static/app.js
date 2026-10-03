@@ -104,18 +104,28 @@ function showRoute(route) {
 
 // A link such as /?email=demo-northbound@... pre-fills the login email so a
 // visitor types only the password. Email only -- never a password.
-// The link wins over a browser-autofilled saved email, which can land after
-// this runs, so it is re-applied briefly unless the visitor edits the field.
+// A browser-saved credential would otherwise autofill a different account's
+// email AND password over it, so autofill is switched off for this form when
+// the link is used, and anything it already filled is replaced/cleared until
+// the visitor types.
 function prefillEmailFromUrl() {
   const email = new URLSearchParams(location.search).get("email");
-  const field = els.loginForm.elements.email;
+  const emailField = els.loginForm.elements.email;
+  const passwordField = els.loginForm.elements.password;
   if (!email || !/^[^\s@]+@[^\s@]+$/.test(email)) return;
-  let edited = false;
-  field.addEventListener("keydown", () => { edited = true; }, { once: true });
-  const apply = () => { if (!edited && field.value !== email) field.value = email; };
+  emailField.setAttribute("autocomplete", "off");
+  passwordField.setAttribute("autocomplete", "new-password");
+  let typedEmail = false;
+  let typedPassword = false;
+  emailField.addEventListener("keydown", () => { typedEmail = true; }, { once: true });
+  passwordField.addEventListener("keydown", () => { typedPassword = true; }, { once: true });
+  const apply = () => {
+    if (!typedEmail && emailField.value !== email) emailField.value = email;
+    if (!typedPassword && passwordField.value) passwordField.value = "";
+  };
   apply();
-  [100, 400, 1000].forEach((ms) => setTimeout(apply, ms));
-  els.loginForm.elements.password.focus();
+  [100, 400, 1000, 2000].forEach((ms) => setTimeout(apply, ms));
+  passwordField.focus();
 }
 
 function onAuthState(state) {
