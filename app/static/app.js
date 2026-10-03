@@ -102,6 +102,16 @@ function showRoute(route) {
   }
 }
 
+// A link such as /?email=demo-northbound@... pre-fills the login email so a
+// visitor types only the password. Email only -- never a password.
+function prefillEmailFromUrl() {
+  const email = new URLSearchParams(location.search).get("email");
+  const field = els.loginForm.elements.email;
+  if (!email || field.value || !/^[^\s@]+@[^\s@]+$/.test(email)) return;
+  field.value = email;
+  els.loginForm.elements.password.focus();
+}
+
 function onAuthState(state) {
   switch (state.kind) {
     case "config-error":
@@ -115,6 +125,7 @@ function onAuthState(state) {
       els.loginSection.hidden = false;
       els.sessionExpiredNotice.hidden = true;
       hadSessionBefore = false;
+      prefillEmailFromUrl();
       break;
 
     case "200":
