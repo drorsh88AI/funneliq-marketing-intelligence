@@ -108,11 +108,16 @@ function showRoute(route) {
 // email AND password over it, so autofill is switched off for this form when
 // the link is used, and anything it already filled is replaced/cleared until
 // the visitor types.
-function prefillEmailFromUrl() {
+function emailFromUrl() {
   const email = new URLSearchParams(location.search).get("email");
+  return email && /^[^\s@]+@[^\s@]+$/.test(email) ? email : null;
+}
+
+function prefillEmailFromUrl() {
+  const email = emailFromUrl();
   const emailField = els.loginForm.elements.email;
   const passwordField = els.loginForm.elements.password;
-  if (!email || !/^[^\s@]+@[^\s@]+$/.test(email)) return;
+  if (!email) return;
   emailField.setAttribute("autocomplete", "off");
   passwordField.setAttribute("autocomplete", "new-password");
   let typedEmail = false;
@@ -223,6 +228,18 @@ async function main() {
   // registering it here only stores the reference; no request fires
   // until a screen checkpoint (4/6) actually calls a fetch* function.
   supabasePrefill.init(client);
+
+  // A demo link means "log in as this account": if someone is already signed
+  // in as a different one (e.g. the visitor tried northbound first), sign
+  // them out so the login screen appears with the link's email.
+  const linkEmail = emailFromUrl();
+  if (linkEmail) {
+    const { data } = await client.auth.getSession();
+    const current = data.session && data.session.user && data.session.user.email;
+    if (current && current.toLowerCase() !== linkEmail.toLowerCase()) {
+      await client.auth.signOut();
+    }
+  }
 
   els.loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();

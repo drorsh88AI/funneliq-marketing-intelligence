@@ -104,4 +104,18 @@ app.include_router(insights_router)
 # Mounted last on purpose: StaticFiles on "/" swallows every path that isn't
 # matched by a route registered before it -- see PHASE4.md decision D13.
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+
+
+class RevalidatingStaticFiles(StaticFiles):
+    """Without a Cache-Control header browsers cache app.js/js/*.js heuristically,
+    so a visitor who opened the app before a deploy keeps running the old
+    frontend. no-cache makes them revalidate every time (a cheap 304 when the
+    file is unchanged), so a new deploy reaches returning visitors at once."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/", RevalidatingStaticFiles(directory=STATIC_DIR, html=True), name="static")
