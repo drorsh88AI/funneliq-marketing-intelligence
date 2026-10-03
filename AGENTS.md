@@ -86,8 +86,8 @@ drop-in substitutes for this pillar") · `app/features.py` הוא מקור
 משם, לא משכפלים · anon/publishable key בדפדפן בלבד, service/secret key
 רק ב-`scripts/*.py` מקומי · קריאות נתונים למשתמש נושאות את ה-JWT שלו
 כדי ש-RLS תיאכף בפועל · `README.md` באנגלית, `REPORT.md` בעברית · סטיות מאושרות שנרשמו בפאזה 14
-(03.10.2026): בלי הקמה נקייה ובלי פרויקט Supabase נוסף (B60 מתועדת
-כלא מאומתת) · בלי רישיון לפרויקט.
+(03.10.2026): בלי הקמה נקייה ובלי פרויקט Supabase נוסף (B60 סווגה
+N/A בהחלטת המשתמש) · בלי רישיון לפרויקט.
 
 לפרטים המלאים על כל אחת מהן — `CLAUDE.md` ו-`docs/planning/codex-review.md`
 (יומן ההכרעות).

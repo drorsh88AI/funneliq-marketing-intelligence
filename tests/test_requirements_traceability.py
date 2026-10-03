@@ -57,8 +57,8 @@ _EXPECTED_IDS = frozenset({
 _EXPECTED_STATUS_COUNTS = {
     "done": 71,
     "planned": 0,
-    "gap": 1,
-    "N/A": 1,
+    "gap": 0,
+    "N/A": 2,
     "parent": 1,
 }
 

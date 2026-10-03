@@ -133,6 +133,8 @@ B33, B37a–d, B43, B53a, B53b, B57, B65, B66. `verifier` של השורות הא
 
 **עדכון שער `14` (CP8), ‏03.10.2026:** שתי שורות הוכרעו אחרי merge של PR #51 (`6405768`) ו-PR #52 (`099af7d`) ו-CI ירוק. **B59 ⇒ `done`**, מנומקת מול ה-README (`verifier`: 14); **B60 ⇒ `gap`** — הצמדה בוצעה, שחזור לא אומת, אין מסלול ביצוע מתוכנן. הספירה הפעילה: 71 `done`, ‏0 `planned`, ‏1 `gap` (B60), אחת `N/A` ואחת `parent` — **74** בסך הכול. `14` נשאר תורם רק ב-B59 ו-B60, השורות ש-CP8 משנה.
 
+**עדכון (אחרי CP8), ‏03.10.2026:** **B60 ⇒ `N/A`** בהוראת המשתמש (סטייה מאושרת, ר' ה-`evidence`). הספירה הפעילה: 71 `done`, ‏0 `planned`, ‏0 `gap`, ‏2 `N/A` (B58, B60) ואחת `parent` — **74** בסך הכול. השורה לא נמחקה, כי היא כתובה בבריף ושתיקה אינה כיסוי.
+
 ## §04 GitHub
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
@@ -259,7 +261,7 @@ B33, B37a–d, B43, B53a, B53b, B57, B65, B66. `verifier` של השורות הא
 
 | # | מקור | ציטוט מהבריף | חובה | בעלים | תורמים | מאמת | סטטוס | ראיה |
 |---|---|---|---|---|---|---|---|---|
-| **B60** | §07 | "Reproducibility. Anyone (including future-you) should be able to clone the repo, follow the README, and stand it up. Pin your dependencies." | שחזוריות + הצמדה | 13 | 1, 14 | 14 | gap | `requirements.txt` מוצמד; [נכון לפני CP8: README חסר] ⟦CP8, 02.10.2026 (ראיה בלבד; הסטטוס אינו משתנה עד CP10): requirements.txt מוצמד; הוראות ה-README נבדקו בקריאה בלבד מול הקבצים (CP6, PHASE13.md ז). ⛔ הקמה נקייה לא בוצעה ולא תבוצע בפאזה 13 (D10); אין ראיה בניסוי⟧ **סגירה, פאזה 14 (CP8, 03.10.2026): `gap` (דרישה שלא אומתה).** `requirements.txt` מוצמד — בוצע (*"Pin your dependencies"*). ⛔ *"clone the repo, follow the README, and stand it up"* **לא אומת**: הקמה נקייה לא בוצעה, בהחלטת המשתמש (02.10.2026), וההוראות נבדקו בקריאה בלבד (PHASE13.md ז); **אין מסלול ביצוע מתוכנן.** ⛔ לא `N/A` ולא `done`. |
+| **B60** | §07 | "Reproducibility. Anyone (including future-you) should be able to clone the repo, follow the README, and stand it up. Pin your dependencies." | שחזוריות + הצמדה | 13 | 1, 14 | 14 | N/A | `requirements.txt` מוצמד; [נכון לפני CP8: README חסר] ⟦CP8, 02.10.2026 (ראיה בלבד; הסטטוס אינו משתנה עד CP10): requirements.txt מוצמד; הוראות ה-README נבדקו בקריאה בלבד מול הקבצים (CP6, PHASE13.md ז). ⛔ הקמה נקייה לא בוצעה ולא תבוצע בפאזה 13 (D10); אין ראיה בניסוי⟧ **סגירה, פאזה 14 (CP8, 03.10.2026): `gap` (דרישה שלא אומתה).** `requirements.txt` מוצמד — בוצע (*"Pin your dependencies"*). ⛔ *"clone the repo, follow the README, and stand it up"* **לא אומת**: הקמה נקייה לא בוצעה, בהחלטת המשתמש (02.10.2026), וההוראות נבדקו בקריאה בלבד (PHASE13.md ז); **אין מסלול ביצוע מתוכנן.** (הסיווג `gap` הוחלף ב-`N/A` להלן.) **עדכון 03.10.2026, אחרי CP8 — הוכרעה `N/A` בהוראת המשתמש:** השחזור מקצה לקצה (clone, README, הקמה) נדחה ביודעין ואינו רלוונטי לפרויקט זה. ⚠ הדרישה כתובה בבריף (§07) ואינה אופציונלית שם; הסיווג `N/A` הוא החלטת משתמש מתועדת ולא קביעה של הבריף. ההצמדה בוצעה; הקמה נקייה לא בוצעה ולא אומתה. |
 | **B61** | §07 | "Secrets stay secret. Everything sensitive goes in environment variables and is excluded by .gitignore — never commit an API key or .env." | secrets ב-env ומוחרגים | 1 | 2, 4 | 12 | done | `.gitignore` · `.env.example` שמות בלבד · **`PHASE4.md:371`** — `.env` מוחרג ואינו tracked · **`PHASE4.md:372`** — סריקת `sb_secret_`/`eyJhbGciOi` על עץ העבודה, כל היסטוריית הגיט בכל הענפים, וגוף+תגובות PR #14; אפס ערכים אמיתיים |
 | **B62** | §07 | "Anon key in the browser, service key on the server. The login screen uses Supabase's public anon key; the service-role key never leaves your backend." | הפרדת המפתחות | 4 | 9 | 12 | done | `app/static/app.js:46-50` — `config.supabase_publishable_key` → `createClient`; `app/auth.py:31` — `SUPABASE_PUBLISHABLE_KEY` בלבד; `tests/test_config.py`. ⚠ ה-publishable key מחליף את ה-anon key בנוסח החדש; ה-secret key אינו נדרש ב-runtime ונשאר ב-`scripts/*.py` |
 | **B63** | §07 | "No leakage without justification. If you include a feature that looks like an outcome, write down why it's legitimately available at prediction time." | הצדקה כתובה לכל פיצ'ר תוצאה-לכאורה | 8A | 5, 6, 10A | 12 | done | `SPEC.md` § נקודות חיזוי + `docs/feature_matrix.md` §§ נקודות חיזוי/חוזה משמעות וזמן — P4S מוגבל לרוכש ידוע לאחר סגירת חלון גיוס חודשי והשלמת מעקב 1; ארבעת הערכים זמינים לפי תנאי ההפעלה. נכתב במפורש שאין תאריכים שמוכיחים סדר זמן, ולכן ההצדקה היא חוזה שימוש גלוי ולא טענת תיקוף אמפירי |
@@ -278,4 +280,4 @@ B33, B37a–d, B43, B53a, B53b, B57, B65, B66. `verifier` של השורות הא
 
 ## סיכום כמותי
 
-**74 דרישות אטומיות** (B1–B66 עם פיצולים, בניכוי B47 שהוסר): `done` 71 · `planned` 0 · `gap` 1 · `N/A` 1 · `parent` 1.
+**74 דרישות אטומיות** (B1–B66 עם פיצולים, בניכוי B47 שהוסר): `done` 71 · `planned` 0 · `gap` 0 · `N/A` 2 · `parent` 1.

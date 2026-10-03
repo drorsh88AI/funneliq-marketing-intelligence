@@ -6,7 +6,7 @@ Claude חדשה, בלי להעביר אליה את היסטוריית השיחה
 ## מצב סופי — הפרויקט הושלם (03.10.2026)
 
 - **כל הפאזות סגורות (0–14, כולל 8A, 10A, 11A ו-12A; `done`, `approved_for_execution`)**, כולל פאזה 14 (מצגת סיכום). אין פאזה הבאה.
-- **המרשם (74 שורות):** 71 `done` · 0 `planned` · 1 `gap` (**B60**: הצמדה בוצעה, שחזור/הקמה נקייה לא אומתו, אין מסלול ביצוע) · 1 `N/A` (B58, סרטון) · 1 `parent` (B54). **B59 ⇒ `done`**, מנומקת מול ה-README.
+- **המרשם (74 שורות):** 71 `done` · 0 `planned` · 0 `gap` · 2 `N/A` (B58 סרטון; **B60** שחזור מקצה לקצה — הצמדה בוצעה, הקמה נקייה לא אומתה, סווגה `N/A` בהחלטת המשתמש 03.10.2026) · 1 `parent` (B54). **B59 ⇒ `done`**, מנומקת מול ה-README.
 - **מוצר:** האפליקציה `https://funneliq.onrender.com` (Render, Supabase). **מצגת:** `docs/presentation/FunnelIQ.pptx` (13 שקפים, עברית RTL). **ROADMAP חי:** GitHub Pages, `https://drorsh88ai.github.io/funneliq-marketing-intelligence/ROADMAP.html`.
 - **סטיות מאושרות, לא נפתחות:** Render במקום Railway · בלי notebook · בלי סרטון · בלי הקמה נקייה ובלי פרויקט Supabase נוסף · בלי רישיון · ה-CSV מחוץ ל-repo.
 - ⛔ אין עבודה פעילה. כל שינוי נוסף דורש הוראה מפורשת, ו-commit/push/PR/merge באישור נפרד לכל צעד (נוהל שני אישורים).
