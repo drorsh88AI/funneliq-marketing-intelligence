@@ -104,11 +104,17 @@ function showRoute(route) {
 
 // A link such as /?email=demo-northbound@... pre-fills the login email so a
 // visitor types only the password. Email only -- never a password.
+// The link wins over a browser-autofilled saved email, which can land after
+// this runs, so it is re-applied briefly unless the visitor edits the field.
 function prefillEmailFromUrl() {
   const email = new URLSearchParams(location.search).get("email");
   const field = els.loginForm.elements.email;
-  if (!email || field.value || !/^[^\s@]+@[^\s@]+$/.test(email)) return;
-  field.value = email;
+  if (!email || !/^[^\s@]+@[^\s@]+$/.test(email)) return;
+  let edited = false;
+  field.addEventListener("keydown", () => { edited = true; }, { once: true });
+  const apply = () => { if (!edited && field.value !== email) field.value = email; };
+  apply();
+  [100, 400, 1000].forEach((ms) => setTimeout(apply, ms));
   els.loginForm.elements.password.focus();
 }
 
