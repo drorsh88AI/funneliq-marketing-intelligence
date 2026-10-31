@@ -82,7 +82,8 @@ C:\Users\dror_\programs\anaconda\envs\pro1_FunnelIQ\python.exe
 Render ולא Railway (היתר מפורש בבריף עצמו, §07: "Render or Fly.io are
 drop-in substitutes for this pillar") · `app/features.py` הוא מקור
 האמת היחיד לרשימות פיצ'רים לכל משימה — סקריפט האימון וה-API מייבאים
-משם, לא משכפלים · anon/publishable key בדפדפן בלבד, service/secret key
+משם, לא משכפלים · anon/publishable key בדפדפן בלבד (חריג יחיד: Secret ב-GitHub
+ל-`supabase-keepalive.yml`, הכרעה 31.10.2026), service/secret key
 רק ב-`scripts/*.py` מקומי · קריאות נתונים למשתמש נושאות את ה-JWT שלו
 כדי ש-RLS תיאכף בפועל · `README.md` באנגלית, `REPORT.md` בעברית · סטיות מאושרות שנרשמו בפאזה 14
 (03.10.2026): בלי הקמה נקייה ובלי פרויקט Supabase נוסף (B60 סווגה

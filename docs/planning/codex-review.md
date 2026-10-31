@@ -1662,3 +1662,24 @@ num_leads=45, leads_answered=30, followup_1=22`. אומת בתוך
 
 **פתוח (הכרעות משתמש, לפני CP6/CP7):** פרויקט Supabase זמני לרמה 2
 (B6/B60); קריאה חיצונית של README (B59).
+
+# ✅ תפעול — keep-alive ל-Supabase דרך GitHub Actions, 31.10.2026
+
+**רקע:** פרויקט ה-Supabase (`zbxqwcwiirnrfnkzpwri`, Free) הושהה אוטומטית
+אחרי ~7 ימים ללא פעילות ושוחזר ידנית.
+
+**הכרעת משתמש:** `.github/workflows/supabase-keepalive.yml` (commit `9a94d90`)
+— `GET` אחד ל-`/rest/v1/funnel_records?limit=1` כל 3 ימים (06:17 UTC).
+- קריאה בלבד; אין שינוי הרשאות. ל-anon אין grants (`schema.sql`), ולכן
+  Postgres מחזיר `42501` — ההוכחה שהבקשה הגיעה למסד. כל תשובה אחרת מכשילה
+  את ההרצה (מייל מ-GitHub).
+- **חריג להחלטה נעולה:** publishable key נשמר גם כ-Secret ב-GitHub
+  (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`), לא רק בדפדפן. אין סיכון
+  חדש — המפתח ציבורי ממילא (`GET /api/config`, PHASE4 D16). secret key
+  לא יוצא מ-`scripts/*.py` מקומי, ללא שינוי.
+
+**ראיה:** הרצה ידנית 41183248898 הצליחה, `42501` בלוג. CI על `9a94d90` ירוק.
+
+**מגבלות ידועות:** repo ציבורי — GitHub משבית תזמון אחרי 60 יום ללא
+commits (מייל + הפעלה מחדש בלחיצה). Supabase לא מפרסם הגדרה מדויקת
+ל"פעילות"; לוודא בדשבורד אחרי השבוע הראשון שהפרויקט לא מתקרב להשהיה.
