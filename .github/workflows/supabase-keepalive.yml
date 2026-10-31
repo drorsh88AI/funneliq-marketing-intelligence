@@ -1,0 +1,30 @@
+# Keeps the free-tier Supabase project from auto-pausing (~7 days idle).
+# Read-only: one GET with the publishable key. anon has no grants (schema.sql),
+# so Postgres answers 42501 "permission denied" -- that round trip IS the
+# database activity; no permissions are opened and no data is read or changed.
+name: supabase-keepalive
+
+on:
+  schedule:
+    - cron: "17 6 */3 * *"   # every 3 days, 06:17 UTC (off the hour: less GitHub queue delay)
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Query Postgres via PostgREST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          body=$(curl -sS --max-time 30 \
+            "$SUPABASE_URL/rest/v1/funnel_records?select=id&limit=1" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY")
+          echo "$body"
+          # 42501 = Postgres itself refused -> request reached the DB. Anything
+          # else (paused project, 5xx, bad key) fails the run -> GitHub emails.
+          echo "$body" | grep -q '"code":"42501"'
