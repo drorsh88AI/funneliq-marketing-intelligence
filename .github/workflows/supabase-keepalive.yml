@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Sign in and query Postgres via PostgREST
+        shell: bash   # explicit -> -eo pipefail: a failed sign-in stops the step
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
