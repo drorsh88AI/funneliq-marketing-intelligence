@@ -1,12 +1,12 @@
 # Keeps the free-tier Supabase project from auto-pausing (~7 days idle).
-# Read-only: one GET with the publishable key. anon has no grants (schema.sql),
-# so Postgres answers 42501 "permission denied" -- that round trip IS the
-# database activity; no permissions are opened and no data is read or changed.
+# A 42501 "permission denied" ping (anon, no grants) did NOT count as activity
+# -- the project paused anyway (Nov 2026). So: sign in as the demo user and run
+# a real, successful read-only SELECT under RLS. No grants opened, nothing written.
 name: supabase-keepalive
 
 on:
   schedule:
-    - cron: "17 6 */3 * *"   # every 3 days, 06:17 UTC (off the hour: less GitHub queue delay)
+    - cron: "17 6 * * *"   # daily, 06:17 UTC: one missed/delayed run is harmless
   workflow_dispatch:
 
 permissions: {}
@@ -16,15 +16,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Query Postgres via PostgREST
+      - name: Sign in and query Postgres via PostgREST
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          DEMO_EMAIL: demo-northbound@funneliq.example.com
+          DEMO_PASSWORD: ${{ secrets.SUPABASE_DEMO_PASSWORD }}
         run: |
-          body=$(curl -sS --max-time 30 \
+          token=$(jq -n --arg e "$DEMO_EMAIL" --arg p "$DEMO_PASSWORD" '{email:$e,password:$p}' \
+            | curl -sSf --max-time 30 "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+                -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Content-Type: application/json" -d @- \
+            | jq -r .access_token)
+          echo "::add-mask::$token"
+          # -f: any non-2xx (paused project, bad password, 5xx) fails the run -> GitHub emails.
+          curl -sSf --max-time 30 -o /dev/null -w "HTTP %{http_code}\n" \
             "$SUPABASE_URL/rest/v1/funnel_records?select=id&limit=1" \
-            -H "apikey: $SUPABASE_PUBLISHABLE_KEY")
-          echo "$body"
-          # 42501 = Postgres itself refused -> request reached the DB. Anything
-          # else (paused project, 5xx, bad key) fails the run -> GitHub emails.
-          echo "$body" | grep -q '"code":"42501"'
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Authorization: Bearer $token"
